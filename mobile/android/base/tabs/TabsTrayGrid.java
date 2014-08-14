@@ -9,23 +9,23 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.mozilla.gecko.AboutPages;
+import org.mozilla.gecko.animation.PropertyAnimator.Property;
+import org.mozilla.gecko.animation.PropertyAnimator;
+import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
-import org.mozilla.gecko.Tabs;
-import org.mozilla.gecko.tabs.TabsTray;
 import org.mozilla.gecko.tabs.TabsAdapter;
-import org.mozilla.gecko.animation.PropertyAnimator;
-import org.mozilla.gecko.animation.PropertyAnimator.Property;
-import org.mozilla.gecko.animation.ViewHelper;
+import org.mozilla.gecko.tabs.TabsTray;
+import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
 
 import android.content.Context;
 import android.content.res.TypedArray;
-import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -33,18 +33,15 @@ import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.widget.AbsListView;
+import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
+import android.widget.GridView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.TextView;
 import android.widget.ListAdapter;
-import android.widget.AdapterView;
-import android.widget.GridView;
-import android.widget.AbsListView;
-
-
-import android.util.Log;
+import android.widget.TextView;
 
 class TabsTrayGrid extends GridView
                implements TabsTray,
@@ -79,8 +76,6 @@ class TabsTrayGrid extends GridView
         mContext = context;
 
         mPendingClosedTabs = new ArrayList<View>();
-
-        Log.d(LOGTAG, "MTEST USING GRID");
 
         setColumnWidth(20);
         setNumColumns(4);
