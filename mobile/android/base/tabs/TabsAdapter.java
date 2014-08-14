@@ -8,23 +8,22 @@ package org.mozilla.gecko.tabs;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.mozilla.gecko.tabs.TabsTray;
+import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
-import org.mozilla.gecko.animation.ViewHelper;
-import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.tabs.TabsTray.TabRow;
+import org.mozilla.gecko.tabs.TabsTray;
+import org.mozilla.gecko.Tabs;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
-import android.widget.Button;
-import android.widget.BaseAdapter;
 import android.view.View;
-
-import android.widget.ListAdapter;
-import android.widget.AdapterView;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.BaseAdapter;
+import android.widget.Button;
+import android.widget.ListAdapter;
 
 // Adapter to bind tabs into a list
 public abstract class TabsAdapter extends BaseAdapter implements Tabs.OnTabsChangedListener {

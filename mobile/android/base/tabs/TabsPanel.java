@@ -5,28 +5,28 @@
 
 package org.mozilla.gecko.tabs;
 
+import org.mozilla.gecko.animation.PropertyAnimator;
+import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.AppConstants.Versions;
 import org.mozilla.gecko.GeckoApp;
-import org.mozilla.gecko.GeckoAppShell;
-import org.mozilla.gecko.GeckoAppShell.AppStateListener;
 import org.mozilla.gecko.GeckoApplication;
+import org.mozilla.gecko.GeckoAppShell.AppStateListener;
+import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.LightweightTheme;
 import org.mozilla.gecko.LightweightThemeDrawable;
 import org.mozilla.gecko.R;
+import org.mozilla.gecko.tabs.TabsTray.TabsTrayType;
 import org.mozilla.gecko.Telemetry;
 import org.mozilla.gecko.TelemetryContract;
-import org.mozilla.gecko.animation.PropertyAnimator;
-import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.util.HardwareUtils;
-import org.mozilla.gecko.tabs.TabsTray.TabsTrayType;
 import org.mozilla.gecko.widget.GeckoPopupMenu;
 import org.mozilla.gecko.widget.IconTabWidget;
 
 import android.content.Context;
 import android.content.res.Resources;
-import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -138,9 +138,6 @@ public class TabsPanel extends LinearLayout
         ViewStub tabsTrayStub = (ViewStub) findViewById(R.id.normal_tabs);
         tabsTrayStub.setLayoutResource(trayType.getLayoutId());
         mPanelNormal = (PanelView) tabsTrayStub.inflate();
-
-        // mPanelNormal = (PanelView) findViewById(R.id.normal_tabs);
-        // mPanelNormal.setTabsPanel(this);
 
         mPanelPrivate = (PanelView) findViewById(R.id.private_tabs_panel);
         mPanelPrivate.setTabsPanel(this);

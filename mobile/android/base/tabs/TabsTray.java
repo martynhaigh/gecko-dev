@@ -5,15 +5,14 @@
 
 package org.mozilla.gecko.tabs;
 
-
 import android.view.View;
-import org.mozilla.gecko.tabs.TabsPanel;
-import org.mozilla.gecko.R;
+import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
+import org.mozilla.gecko.R;
+import org.mozilla.gecko.tabs.TabsPanel;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
-import android.view.ViewGroup;
 
 interface TabsTray {
     public void setIsPrivate(boolean isPrivate);
@@ -39,7 +38,7 @@ interface TabsTray {
         }
     }
 
-        // ViewHolder for a row in the list
+    // ViewHolder for a row in the list
     public static class TabRow {
         int id;
         TextView title;
