@@ -1181,6 +1181,10 @@ public class BrowserApp extends GeckoApp
     }
 
     private void updateSideBarState() {
+        if (NewTabletUI.isEnabled(this)) {
+            return;
+        }
+
         if (mMainLayoutAnimator != null)
             mMainLayoutAnimator.stop();
 
