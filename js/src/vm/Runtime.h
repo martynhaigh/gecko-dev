@@ -1004,6 +1004,21 @@ struct JSRuntime : public JS::shadow::Runtime,
     /* If true, new scripts must be created with PC counter information. */
     bool                profilingScripts;
 
+    /* Whether sampling should be enabled or not. */
+  private:
+    bool                suppressProfilerSampling;
+
+  public:
+    bool isProfilerSamplingEnabled() const {
+        return !suppressProfilerSampling;
+    }
+    void disableProfilerSampling() {
+        suppressProfilerSampling = true;
+    }
+    void enableProfilerSampling() {
+        suppressProfilerSampling = false;
+    }
+
     /* Had an out-of-memory error which did not populate an exception. */
     bool                hadOutOfMemory;
 
@@ -1266,7 +1281,7 @@ struct JSRuntime : public JS::shadow::Runtime,
         return liveRuntimesCount > 0;
     }
 
-    JSRuntime(JSRuntime *parentRuntime);
+    explicit JSRuntime(JSRuntime *parentRuntime);
     ~JSRuntime();
 
     bool init(uint32_t maxbytes, uint32_t maxNurseryBytes);
@@ -1370,7 +1385,7 @@ struct JSRuntime : public JS::shadow::Runtime,
     static const unsigned LARGE_ALLOCATION = 25 * 1024 * 1024;
 
     void *callocCanGC(size_t bytes) {
-        void *p = calloc_(bytes);
+        void *p = (void *)pod_calloc<uint8_t>(bytes);
         if (MOZ_LIKELY(!!p))
             return p;
         return onOutOfMemoryCanGC(reinterpret_cast<void *>(1), bytes);
@@ -1650,7 +1665,12 @@ class RuntimeAllocPolicy
   public:
     MOZ_IMPLICIT RuntimeAllocPolicy(JSRuntime *rt) : runtime(rt) {}
     void *malloc_(size_t bytes) { return runtime->malloc_(bytes); }
-    void *calloc_(size_t bytes) { return runtime->calloc_(bytes); }
+
+    template <typename T>
+    T *pod_calloc(size_t numElems) {
+        return runtime->pod_calloc<T>(numElems);
+    }
+
     void *realloc_(void *p, size_t bytes) { return runtime->realloc_(p, bytes); }
     void free_(void *p) { js_free(p); }
     void reportAllocOverflow() const {}
@@ -1663,7 +1683,7 @@ extern const JSSecurityCallbacks NullSecurityCallbacks;
 class AutoEnterIonCompilation
 {
   public:
-    AutoEnterIonCompilation(MOZ_GUARD_OBJECT_NOTIFIER_ONLY_PARAM) {
+    explicit AutoEnterIonCompilation(MOZ_GUARD_OBJECT_NOTIFIER_ONLY_PARAM) {
         MOZ_GUARD_OBJECT_NOTIFIER_INIT;
 
 #ifdef DEBUG
