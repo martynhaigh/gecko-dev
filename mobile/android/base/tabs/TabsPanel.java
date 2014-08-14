@@ -19,6 +19,7 @@ import org.mozilla.gecko.TelemetryContract;
 import org.mozilla.gecko.animation.PropertyAnimator;
 import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.util.HardwareUtils;
+import org.mozilla.gecko.tabs.TabsTray.TabsTrayType;
 import org.mozilla.gecko.widget.GeckoPopupMenu;
 import org.mozilla.gecko.widget.IconTabWidget;
 
@@ -32,6 +33,7 @@ import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewStub;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
@@ -131,8 +133,14 @@ public class TabsPanel extends LinearLayout
         mHeader = (RelativeLayout) findViewById(R.id.tabs_panel_header);
         mTabsContainer = (TabsListContainer) findViewById(R.id.tabs_container);
 
-        mPanelNormal = (PanelView) findViewById(R.id.normal_tabs);
-        mPanelNormal.setTabsPanel(this);
+        TabsTrayType trayType = TabsTrayType.GRID;
+
+        ViewStub tabsTrayStub = (ViewStub) findViewById(R.id.normal_tabs);
+        tabsTrayStub.setLayoutResource(trayType.getLayoutId());
+        mPanelNormal = (PanelView) tabsTrayStub.inflate();
+
+        // mPanelNormal = (PanelView) findViewById(R.id.normal_tabs);
+        // mPanelNormal.setTabsPanel(this);
 
         mPanelPrivate = (PanelView) findViewById(R.id.private_tabs_panel);
         mPanelPrivate.setTabsPanel(this);
