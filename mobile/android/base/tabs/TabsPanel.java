@@ -69,7 +69,7 @@ public class TabsPanel extends LinearLayout
     private final GeckoApp mActivity;
     private final LightweightTheme mTheme;
     private RelativeLayout mHeader;
-    private TabsListContainer mTabsContainer;
+    private PanelViewContainer mPanelsContainer;
     private PanelView mPanel;
     private PanelView mPanelNormal;
     private PanelView mPanelPrivate;
@@ -129,7 +129,7 @@ public class TabsPanel extends LinearLayout
 
     private void initialize() {
         mHeader = (RelativeLayout) findViewById(R.id.tabs_panel_header);
-        mTabsContainer = (TabsListContainer) findViewById(R.id.tabs_container);
+        mPanelsContainer = (PanelViewContainer) findViewById(R.id.tabs_container);
 
         mPanelNormal = (PanelView) findViewById(R.id.normal_tabs);
         mPanelNormal.setTabsPanel(this);
@@ -251,7 +251,7 @@ public class TabsPanel extends LinearLayout
         return mActivity.onOptionsItemSelected(item);
     }
 
-    private static int getTabContainerHeight(TabsListContainer listContainer) {
+    private static int getTabContainerHeight(PanelViewContainer listContainer) {
         Resources resources = listContainer.getContext().getResources();
 
         PanelView panelView = listContainer.getCurrentPanelView();
@@ -310,9 +310,9 @@ public class TabsPanel extends LinearLayout
         onLightweightThemeChanged();
     }
 
-    // Tabs List Container holds the ListView
-    static class TabsListContainer extends FrameLayout {
-        public TabsListContainer(Context context, AttributeSet attrs) {
+    // Panel View Container holds the ListView
+    static class PanelViewContainer extends FrameLayout {
+        public PanelViewContainer(Context context, AttributeSet attrs) {
             super(context, attrs);
         }
 
@@ -333,7 +333,7 @@ public class TabsPanel extends LinearLayout
         @Override
         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
             if (!GeckoAppShell.getGeckoInterface().hasTabsSideBar()) {
-                int heightSpec = MeasureSpec.makeMeasureSpec(getTabContainerHeight(TabsListContainer.this), MeasureSpec.EXACTLY);
+                int heightSpec = MeasureSpec.makeMeasureSpec(getTabContainerHeight(PanelViewContainer.this), MeasureSpec.EXACTLY);
                 super.onMeasure(widthMeasureSpec, heightSpec);
             } else {
                 super.onMeasure(widthMeasureSpec, heightMeasureSpec);
@@ -453,7 +453,7 @@ public class TabsPanel extends LinearLayout
                 dispatchLayoutChange(getWidth(), getHeight());
         } else {
             int actionBarHeight = mContext.getResources().getDimensionPixelSize(R.dimen.browser_toolbar_height);
-            int height = actionBarHeight + getTabContainerHeight(mTabsContainer);
+            int height = actionBarHeight + getTabContainerHeight(mPanelsContainer);
             dispatchLayoutChange(getWidth(), height);
         }
         mHeaderVisible = true;
@@ -511,12 +511,12 @@ public class TabsPanel extends LinearLayout
             final int tabsPanelWidth = getWidth();
             if (mVisible) {
                 ViewHelper.setTranslationX(mHeader, -tabsPanelWidth);
-                ViewHelper.setTranslationX(mTabsContainer, -tabsPanelWidth);
+                ViewHelper.setTranslationX(mPanelsContainer, -tabsPanelWidth);
                 // The footer view is only present on the sidebar
                 ViewHelper.setTranslationX(mFooter, -tabsPanelWidth);
             }
             final int translationX = (mVisible ? 0 : -tabsPanelWidth);
-            animator.attach(mTabsContainer, PropertyAnimator.Property.TRANSLATION_X, translationX);
+            animator.attach(mPanelsContainer, PropertyAnimator.Property.TRANSLATION_X, translationX);
             animator.attach(mHeader, PropertyAnimator.Property.TRANSLATION_X, translationX);
             animator.attach(mFooter, PropertyAnimator.Property.TRANSLATION_X, translationX);
 
@@ -524,13 +524,13 @@ public class TabsPanel extends LinearLayout
             final Resources resources = getContext().getResources();
             final int toolbarHeight = resources.getDimensionPixelSize(R.dimen.browser_toolbar_height);
             final int translationY = (mVisible ? 0 : -toolbarHeight);
-            animator.attach(mTabsContainer, PropertyAnimator.Property.ALPHA, 1.0f);
-            animator.attach(mTabsContainer, PropertyAnimator.Property.TRANSLATION_Y, translationY);
+            animator.attach(mPanelsContainer, PropertyAnimator.Property.ALPHA, 1.0f);
+            animator.attach(mPanelsContainer, PropertyAnimator.Property.TRANSLATION_Y, translationY);
             animator.attach(mHeader, PropertyAnimator.Property.TRANSLATION_Y, translationY);
         }
 
         mHeader.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        mTabsContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        mPanelsContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     }
 
     public void finishTabsAnimation() {
@@ -539,7 +539,7 @@ public class TabsPanel extends LinearLayout
         }
 
         mHeader.setLayerType(View.LAYER_TYPE_NONE, null);
-        mTabsContainer.setLayerType(View.LAYER_TYPE_NONE, null);
+        mPanelsContainer.setLayerType(View.LAYER_TYPE_NONE, null);
 
         // If the tray is now hidden, call hide() on current panel and unset it as the current panel
         // to avoid hide() being called again when the tray is opened next.
