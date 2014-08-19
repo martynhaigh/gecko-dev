@@ -26,16 +26,17 @@
 
     </RelativeLayout>
 
-    <view class="org.mozilla.gecko.tabs.TabsPanel$TabsListContainer"
+    <view class="org.mozilla.gecko.tabs.TabsPanel$PanelViewContainer"
           android:id="@+id/tabs_container"
           android:layout_width="match_parent"
           android:layout_height="0dip"
           android:layout_weight="1.0">
 
-        <ViewStub android:id="@+id/normal_tabs"
-                  style="@style/TabsList"
+        <org.mozilla.gecko.tabs.TabLayoutViewStub 
+                  android:id="@+id/normal_tabs"
                   android:layout_width="match_parent"
-                  android:layout_height="match_parent"/>
+                  android:layout_height="match_parent"
+                  gecko:tabs="tabs_normal"/>
 
         <org.mozilla.gecko.tabs.PrivateTabsPanel
                 android:id="@+id/private_tabs_panel"

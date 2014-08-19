@@ -8,17 +8,15 @@ package org.mozilla.gecko.tabs;
 import java.util.Locale;
 
 import org.mozilla.gecko.BrowserLocaleManager;
-import org.mozilla.gecko.NewTabletUI;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.tabs.TabsPanel.CloseAllPanelView;
-import org.mozilla.gecko.tabs.TabsTray.TabsTrayType;
 import org.mozilla.gecko.Tabs;
+import org.mozilla.gecko.tabs.TabLayoutViewStub;
 
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewStub;
 import android.widget.FrameLayout;
 
 /**
@@ -36,13 +34,9 @@ class PrivateTabsPanel extends FrameLayout implements CloseAllPanelView {
 
         LayoutInflater.from(context).inflate(R.layout.private_tabs_panel, this);
 
-        TabsTrayType trayType = NewTabletUI.isEnabled(context) ?
-                                TabsTrayType.GRID : TabsTrayType.LIST;
-
-        ViewStub privateTabsTrayStub = (ViewStub) findViewById(R.id.private_tabs_tray);
-        privateTabsTrayStub.setLayoutResource(trayType.getLayoutId());
+        TabLayoutViewStub privateTabsTrayStub = (TabLayoutViewStub) findViewById(R.id.private_tabs_tray);
         tabsTray = (TabsTray) privateTabsTrayStub.inflate();
-        tabsTray.setIsPrivate(true);
+        //tabsTray.setIsPrivate(true);
 
         final View emptyView = findViewById(R.id.private_tabs_empty);
         tabsTray.setEmptyView(emptyView);

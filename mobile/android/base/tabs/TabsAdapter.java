@@ -24,9 +24,11 @@ import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.ListAdapter;
+import android.util.Log;
 
 // Adapter to bind tabs into a list
 public abstract class TabsAdapter extends BaseAdapter implements Tabs.OnTabsChangedListener {
+    private static final String LOGTAG = "TabsAdapter";
     private Context mContext;
     private ArrayList<Tab> mTabs;
     private LayoutInflater mInflater;
@@ -53,6 +55,11 @@ public abstract class TabsAdapter extends BaseAdapter implements Tabs.OnTabsChan
     abstract boolean isPrivate();
     abstract int getOriginalSize();
     abstract void setItemChecked(int pos, boolean isSelected);
+
+    protected void onItemClicked(View v) {}
+    protected boolean shouldImplementClickHandler() {
+      return false;
+    }
 
     @Override
     public void onTabChanged(Tab tab, Tabs.TabEvents msg, Object data) {
@@ -136,6 +143,11 @@ public abstract class TabsAdapter extends BaseAdapter implements Tabs.OnTabsChan
     }
 
     @Override
+    public boolean isEnabled(int position) {
+        return true;
+    }
+
+    @Override
     public long getItemId(int position) {
         return position;
     }
@@ -213,6 +225,16 @@ public abstract class TabsAdapter extends BaseAdapter implements Tabs.OnTabsChan
 
         Tab tab = mTabs.get(position);
         assignValues(row, tab);
+
+        if (shouldImplementClickHandler()) {
+            convertView.setOnClickListener(new View.OnClickListener() {
+
+                @Override
+                public void onClick(View v) {
+                    onItemClicked(v);
+                }
+            });
+        }
 
         return convertView;
     }

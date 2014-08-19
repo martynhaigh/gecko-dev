@@ -14,14 +14,10 @@ import org.mozilla.gecko.R;
 import org.mozilla.gecko.tabs.TabsPanel;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
 
-interface TabsTray {
+interface TabsTray extends TabsPanel.PanelView{
     public void setIsPrivate(boolean isPrivate);
     public void setEmptyView(View view);
-    public void show();
-    public void hide();
     public void closeAll();
-    public boolean shouldExpand();
-    public void setTabsPanel(TabsPanel panel);
 
     public enum TabsTrayType {
         LIST, GRID;

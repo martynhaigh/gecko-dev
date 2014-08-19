@@ -8,7 +8,7 @@ package org.mozilla.gecko.tabs;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.mozilla.gecko.AboutPages;
+// import org.mozilla.gecko.AboutPages;
 import org.mozilla.gecko.animation.PropertyAnimator.Property;
 import org.mozilla.gecko.animation.PropertyAnimator;
 import org.mozilla.gecko.animation.ViewHelper;
@@ -20,30 +20,31 @@ import org.mozilla.gecko.tabs.TabsAdapter;
 import org.mozilla.gecko.tabs.TabsTray;
 import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
-import org.mozilla.gecko.widget.TabThumbnailWrapper;
+// import org.mozilla.gecko.widget.TabThumbnailWrapper;
 import org.mozilla.gecko.widget.TwoWayView;
 
 import android.content.Context;
 import android.content.res.TypedArray;
-import android.graphics.drawable.Drawable;
+// import android.graphics.drawable.Drawable;
 import android.graphics.Rect;
 import android.util.AttributeSet;
-import android.view.LayoutInflater;
+// import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewConfiguration;
-import android.view.ViewGroup;
+// import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.BaseAdapter;
-import android.widget.Button;
-import android.widget.ImageButton;
-import android.widget.ImageView;
+// import android.widget.BaseAdapter;
+// import android.widget.Button;
+// import android.widget.ImageButton;
+// import android.widget.ImageView;
 import android.widget.ListAdapter;
-import android.widget.TextView;
+// import android.widget.TextView;
 
 class TabsTrayList extends TwoWayView
                    implements TabsTray,
+                              TabsPanel.PanelView,
                               TabsPanel.CloseAllPanelView {
     private static final String LOGTAG = "Gecko" + TabsTrayList.class.getSimpleName();
 
@@ -76,9 +77,9 @@ class TabsTrayList extends TwoWayView
 
         setItemsCanFocus(true);
 
-        TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.TabsTray);
-        mIsPrivate = (a.getInt(R.styleable.TabsTray_tabs, 0x0) == 1);
-        a.recycle();
+        // TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.TabsTray);
+        // mIsPrivate = (a.getInt(R.styleable.TabsTray_tabs, 0x0) == 1);
+        // a.recycle();
 
         mTabsAdapter = new TabsTrayListAdapter(mContext, this);
         setAdapter(mTabsAdapter);

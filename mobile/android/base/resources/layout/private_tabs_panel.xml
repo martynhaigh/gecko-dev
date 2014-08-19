@@ -48,9 +48,9 @@
     <!-- Note: for an unknown reason, scrolling in the TabsTray
          does not work unless it is laid out after the empty view. -->
 
-    <ViewStub android:id="@+id/private_tabs_tray"
-              style="@style/TabsList"
+    <org.mozilla.gecko.tabs.TabLayoutViewStub android:id="@+id/private_tabs_tray"
               android:layout_width="match_parent"
-              android:layout_height="match_parent"/>
+              android:layout_height="match_parent"
+              gecko:tabs="tabs_private"/>
 
 </merge>

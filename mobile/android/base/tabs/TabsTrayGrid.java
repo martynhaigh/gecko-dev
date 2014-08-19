@@ -8,7 +8,7 @@ package org.mozilla.gecko.tabs;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.mozilla.gecko.AboutPages;
+// import org.mozilla.gecko.AboutPages;
 import org.mozilla.gecko.animation.PropertyAnimator.Property;
 import org.mozilla.gecko.animation.PropertyAnimator;
 import org.mozilla.gecko.animation.ViewHelper;
@@ -20,32 +20,34 @@ import org.mozilla.gecko.tabs.TabsAdapter;
 import org.mozilla.gecko.tabs.TabsTray;
 import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
-import org.mozilla.gecko.widget.TabThumbnailWrapper;
+// import org.mozilla.gecko.widget.TabThumbnailWrapper;
 
 import android.content.Context;
-import android.content.res.TypedArray;
-import android.graphics.drawable.Drawable;
+// import android.graphics.drawable.Drawable;
 import android.graphics.Rect;
 import android.util.AttributeSet;
-import android.view.LayoutInflater;
+// import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewConfiguration;
-import android.view.ViewGroup;
+// import android.view.ViewGroup;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
-import android.widget.BaseAdapter;
-import android.widget.Button;
+// import android.widget.BaseAdapter;
+// import android.widget.Button;
 import android.widget.GridView;
-import android.widget.ImageButton;
-import android.widget.ImageView;
+// import android.widget.ImageButton;
+// import android.widget.ImageView;
 import android.widget.ListAdapter;
-import android.widget.TextView;
+// import android.widget.TextView;
+
+import android.util.Log;
 
 class TabsTrayGrid extends GridView
-               implements TabsTray,
-                          TabsPanel.CloseAllPanelView {
+                   implements TabsTray,
+                              TabsPanel.PanelView,
+                              TabsPanel.CloseAllPanelView {
 
     private static final String LOGTAG = "Gecko" + TabsTrayGrid.class.getSimpleName();
 
@@ -59,8 +61,6 @@ class TabsTrayGrid extends GridView
     private List<View> mPendingClosedTabs;
     private int mCloseAnimationCount;
     private int mCloseAllAnimationCount;
-
-    private TabSwipeGestureListener mSwipeListener;
 
     // Time to animate non-flinged tabs of screen, in milliseconds
     private static final int ANIMATION_DURATION = 250;
@@ -85,18 +85,14 @@ class TabsTrayGrid extends GridView
         mTabsAdapter = new TabsGridAdapter(mContext, this);
         setAdapter(mTabsAdapter);
 
-        mSwipeListener = new TabSwipeGestureListener();
-        setOnTouchListener(mSwipeListener);
-        setOnScrollListener(mSwipeListener.makeScrollListener());
-
-        // setRecyclerListener(new RecyclerListener() {
-        //     @Override
-        //     public void onMovedToScrapHeap(View view) {
-        //         TabRow row = (TabRow) view.getTag();
-        //         row.thumbnail.setImageDrawable(null);
-        //         row.close.setVisibility(View.VISIBLE);
-        //     }
-        // });
+        setRecyclerListener(new RecyclerListener() {
+            @Override
+            public void onMovedToScrapHeap(View view) {
+                TabRow row = (TabRow) view.getTag();
+                row.thumbnail.setImageDrawable(null);
+                row.close.setVisibility(View.VISIBLE);
+            }
+        });
     }
 
     @Override
@@ -296,258 +292,6 @@ class TabsTrayGrid extends GridView
         animator.start();
     }
 
-    private class TabSwipeGestureListener implements View.OnTouchListener {
-        // same value the stock browser uses for after drag animation velocity in pixels/sec
-        // http://androidxref.com/4.0.4/xref/packages/apps/Browser/src/com/android/browser/NavTabScroller.java#61
-        private static final float MIN_VELOCITY = 750;
-
-        private int mSwipeThreshold;
-        private int mMinFlingVelocity;
-
-        private int mMaxFlingVelocity;
-        private VelocityTracker mVelocityTracker;
-
-        private int mListWidth = 1;
-        private int mListHeight = 1;
-
-        private View mSwipeView;
-        private Runnable mPendingCheckForTap;
-
-        private float mSwipeStartX;
-        private float mSwipeStartY;
-        private boolean mSwiping;
-        private boolean mEnabled;
-
-        public TabSwipeGestureListener() {
-            mEnabled = true;
-
-            ViewConfiguration vc = ViewConfiguration.get(TabsTrayGrid.this.getContext());
-            mSwipeThreshold = vc.getScaledTouchSlop();
-            mMinFlingVelocity = (int) (getContext().getResources().getDisplayMetrics().density * MIN_VELOCITY);
-            mMaxFlingVelocity = vc.getScaledMaximumFlingVelocity();
-        }
-
-        public void setEnabled(boolean enabled) {
-            mEnabled = enabled;
-        }
-
-        public AbsListView.OnScrollListener makeScrollListener() {
-            return new AbsListView.OnScrollListener() {
-                @Override
-                public void onScrollStateChanged(AbsListView view, int scrollState) {
-                    setEnabled(scrollState != AbsListView.OnScrollListener.SCROLL_STATE_TOUCH_SCROLL);
-                }
-
-                @Override
-                public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
-                }
-            };
-        }
-
-        @Override
-        public boolean onTouch(View view, MotionEvent e) {
-            if (!mEnabled)
-                return false;
-
-            if (mListWidth < 2 || mListHeight < 2) {
-                mListWidth = TabsTrayGrid.this.getWidth();
-                mListHeight = TabsTrayGrid.this.getHeight();
-            }
-
-            switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN: {
-                    // Check if we should set pressed state on the
-                    // touched view after a standard delay.
-                    triggerCheckForTap();
-
-                    final float x = e.getRawX();
-                    final float y = e.getRawY();
-
-                    // Find out which view is being touched
-                    mSwipeView = findViewAt(x, y);
-
-                    if (mSwipeView != null) {
-                        mSwipeStartX = e.getRawX();
-                        mSwipeStartY = e.getRawY();
-
-                        mVelocityTracker = VelocityTracker.obtain();
-                        mVelocityTracker.addMovement(e);
-                    }
-
-                    view.onTouchEvent(e);
-                    return true;
-                }
-
-                case MotionEvent.ACTION_UP: {
-                    if (mSwipeView == null)
-                        break;
-
-                    cancelCheckForTap();
-                    mSwipeView.setPressed(false);
-
-                    if (!mSwiping) {
-                        TabRow tab = (TabRow) mSwipeView.getTag();
-                        Tabs.getInstance().selectTab(tab.id);
-                        autoHidePanel();
-
-                        mVelocityTracker.recycle();
-                        mVelocityTracker = null;
-                        break;
-                    }
-
-                    mVelocityTracker.addMovement(e);
-                    mVelocityTracker.computeCurrentVelocity(1000, mMaxFlingVelocity);
-
-                    float velocityX = Math.abs(mVelocityTracker.getXVelocity());
-                    float velocityY = Math.abs(mVelocityTracker.getYVelocity());
-
-                    boolean dismiss = false;
-                    boolean dismissDirection = false;
-                    int dismissTranslation = 0;
-
-                    if (isVertical()) {
-                        float deltaX = ViewHelper.getTranslationX(mSwipeView);
-
-                        if (Math.abs(deltaX) > mListWidth / 2) {
-                            dismiss = true;
-                            dismissDirection = (deltaX > 0);
-                        } else if (mMinFlingVelocity <= velocityX && velocityX <= mMaxFlingVelocity
-                                && velocityY < velocityX) {
-                            dismiss = mSwiping && (deltaX * mVelocityTracker.getXVelocity() > 0);
-                            dismissDirection = (mVelocityTracker.getXVelocity() > 0);
-                        }
-
-                        dismissTranslation = (dismissDirection ? mListWidth : -mListWidth);
-                    } else {
-                        float deltaY = ViewHelper.getTranslationY(mSwipeView);
-
-                        if (Math.abs(deltaY) > mListHeight / 2) {
-                            dismiss = true;
-                            dismissDirection = (deltaY > 0);
-                        } else if (mMinFlingVelocity <= velocityY && velocityY <= mMaxFlingVelocity
-                                && velocityX < velocityY) {
-                            dismiss = mSwiping && (deltaY * mVelocityTracker.getYVelocity() > 0);
-                            dismissDirection = (mVelocityTracker.getYVelocity() > 0);
-                        }
-
-                        dismissTranslation = (dismissDirection ? mListHeight : -mListHeight);
-                     }
-
-                    if (dismiss)
-                        animateClose(mSwipeView, dismissTranslation);
-                    else
-                        animateCancel(mSwipeView);
-
-                    mVelocityTracker.recycle();
-                    mVelocityTracker = null;
-                    mSwipeView = null;
-
-                    mSwipeStartX = 0;
-                    mSwipeStartY = 0;
-                    mSwiping = false;
-
-                    break;
-                }
-
-                case MotionEvent.ACTION_MOVE: {
-                    if (mSwipeView == null || mVelocityTracker == null)
-                        break;
-
-                    mVelocityTracker.addMovement(e);
-
-                    final boolean isVertical = isVertical();
-
-                    float deltaX = e.getRawX() - mSwipeStartX;
-                    float deltaY = e.getRawY() - mSwipeStartY;
-                    float delta = (isVertical ? deltaX : deltaY);
-
-                    boolean isScrollingX = Math.abs(deltaX) > mSwipeThreshold;
-                    boolean isScrollingY = Math.abs(deltaY) > mSwipeThreshold;
-                    boolean isSwipingToClose = (isVertical ? isScrollingX : isScrollingY);
-
-                    // If we're actually swiping, make sure we don't
-                    // set pressed state on the swiped view.
-                    if (isScrollingX || isScrollingY)
-                        cancelCheckForTap();
-
-                    if (isSwipingToClose) {
-                        mSwiping = true;
-                        TabsTrayGrid.this.requestDisallowInterceptTouchEvent(true);
-
-                        TabRow tab = (TabRow) mSwipeView.getTag();
-                        tab.close.setVisibility(View.INVISIBLE);
-
-                        // Stops listview from highlighting the touched item
-                        // in the list when swiping.
-                        MotionEvent cancelEvent = MotionEvent.obtain(e);
-                        cancelEvent.setAction(MotionEvent.ACTION_CANCEL |
-                                (e.getActionIndex() << MotionEvent.ACTION_POINTER_INDEX_SHIFT));
-                        TabsTrayGrid.this.onTouchEvent(cancelEvent);
-                        cancelEvent.recycle();
-                    }
-
-                    if (mSwiping) {
-                        if (isVertical)
-                            ViewHelper.setTranslationX(mSwipeView, delta);
-                        else
-                            ViewHelper.setTranslationY(mSwipeView, delta);
-
-                        ViewHelper.setAlpha(mSwipeView, Math.max(0.1f, Math.min(1f,
-                                1f - 2f * Math.abs(delta) / (isVertical ? mListWidth : mListHeight))));
-
-                        return true;
-                    }
-
-                    break;
-                }
-            }
-
-            return false;
-        }
-
-        private View findViewAt(float rawX, float rawY) {
-            Rect rect = new Rect();
-
-            int[] listViewCoords = new int[2];
-            TabsTrayGrid.this.getLocationOnScreen(listViewCoords);
-
-            int x = (int) rawX - listViewCoords[0];
-            int y = (int) rawY - listViewCoords[1];
-
-            for (int i = 0; i < TabsTrayGrid.this.getChildCount(); i++) {
-                View child = TabsTrayGrid.this.getChildAt(i);
-                child.getHitRect(rect);
-
-                if (rect.contains(x, y))
-                    return child;
-            }
-
-            return null;
-        }
-
-        private void triggerCheckForTap() {
-            if (mPendingCheckForTap == null)
-                mPendingCheckForTap = new CheckForTap();
-
-            TabsTrayGrid.this.postDelayed(mPendingCheckForTap, ViewConfiguration.getTapTimeout());
-        }
-
-        private void cancelCheckForTap() {
-            if (mPendingCheckForTap == null)
-                return;
-
-            TabsTrayGrid.this.removeCallbacks(mPendingCheckForTap);
-        }
-
-        private class CheckForTap implements Runnable {
-            @Override
-            public void run() {
-                if (!mSwiping && mSwipeView != null && mEnabled)
-                    mSwipeView.setPressed(true);
-            }
-        }
-    }
-
     class TabsGridAdapter extends TabsAdapter {
 
         public TabsGridAdapter(Context context, AdapterView<ListAdapter> adapterView)  {
@@ -577,6 +321,18 @@ class TabsTrayGrid extends GridView
         @Override
         int getOriginalSize() {
             return mOriginalSize;
+        }
+
+        @Override
+        protected boolean shouldImplementClickHandler() {
+            return true;
+        }
+
+        @Override
+        protected void onItemClicked(View v) {
+            TabRow tab = (TabRow) v.getTag();
+            Tabs.getInstance().selectTab(tab.id);
+            TabsTrayGrid.this.autoHidePanel();
         }
 
     }
