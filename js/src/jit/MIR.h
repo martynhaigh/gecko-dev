@@ -686,12 +686,27 @@ class MDefinition : public MNode
 
   public:
     // Opcode testing and casts.
+    template<typename MIRType> bool is() const {
+        return op() == MIRType::classOpcode;
+    }
+    template<typename MIRType> MIRType *to() {
+        JS_ASSERT(is<MIRType>());
+        return static_cast<MIRType *>(this);
+    }
+    template<typename MIRType> const MIRType *to() const {
+        JS_ASSERT(is<MIRType>());
+        return static_cast<const MIRType *>(this);
+    }
 #   define OPCODE_CASTS(opcode)                                             \
     bool is##opcode() const {                                               \
-        return op() == Op_##opcode;                                         \
+        return is<M##opcode>();                                             \
     }                                                                       \
-    inline M##opcode *to##opcode();                                         \
-    inline const M##opcode *to##opcode() const;
+    M##opcode *to##opcode() {                                               \
+        return to<M##opcode>();                                             \
+    }                                                                       \
+    const M##opcode *to##opcode() const {                                   \
+        return to<M##opcode>();                                             \
+    }
     MIR_OPCODE_LIST(OPCODE_CASTS)
 #   undef OPCODE_CASTS
 
@@ -832,8 +847,9 @@ class MInstruction
 };
 
 #define INSTRUCTION_HEADER(opcode)                                          \
+    static const Opcode classOpcode = MDefinition::Op_##opcode;             \
     Opcode op() const {                                                     \
-        return MDefinition::Op_##opcode;                                    \
+        return classOpcode;                                                 \
     }                                                                       \
     const char *opName() const {                                            \
         return #opcode;                                                     \
@@ -1092,24 +1108,6 @@ class MStart : public MNullaryInstruction
 
     StartType startType() {
         return startType_;
-    }
-};
-
-class MPcOffset : public MNullaryInstruction
-{
-  private:
-    MPcOffset() {
-        setGuard();
-    }
-
-  public:
-    INSTRUCTION_HEADER(PcOffset)
-    static MPcOffset *New(TempAllocator &alloc) {
-        return new(alloc) MPcOffset();
-    }
-
-    AliasSet getAliasSet() const {
-        return AliasSet::None();
     }
 };
 
@@ -3114,7 +3112,11 @@ class MUnbox : public MUnaryInstruction, public BoxInputsPolicy
       : MUnaryInstruction(ins),
         mode_(mode)
     {
-        JS_ASSERT(ins->type() == MIRType_Value);
+        // Only allow unboxing a non MIRType_Value when input and output types
+        // don't match. This is often used to force a bailout. Boxing happens
+        // during type analysis.
+        JS_ASSERT_IF(ins->type() != MIRType_Value, type != ins->type());
+
         JS_ASSERT(type == MIRType_Boolean ||
                   type == MIRType_Int32   ||
                   type == MIRType_Double  ||
@@ -3841,7 +3843,9 @@ class MToInt32
 
 // Converts a value or typed input to a truncated int32, for use with bitwise
 // operations. This is an infallible ValueToECMAInt32.
-class MTruncateToInt32 : public MUnaryInstruction
+class MTruncateToInt32
+  : public MUnaryInstruction,
+    public ToInt32Policy
 {
     explicit MTruncateToInt32(MDefinition *def)
       : MUnaryInstruction(def)
@@ -3852,7 +3856,6 @@ class MTruncateToInt32 : public MUnaryInstruction
         // An object might have "valueOf", which means it is effectful.
         // ToInt32(symbol) throws.
         MOZ_ASSERT(def->type() != MIRType_Object);
-        MOZ_ASSERT(def->type() != MIRType_Symbol);
         if (def->mightBeType(MIRType_Object) || def->mightBeType(MIRType_Symbol))
             setGuard();
     }
@@ -3882,6 +3885,10 @@ class MTruncateToInt32 : public MUnaryInstruction
         return true;
     }
 #endif
+
+    TypePolicy *typePolicy() {
+        return this;
+    }
 
     ALLOW_CLONE(MTruncateToInt32)
 };
@@ -4394,7 +4401,6 @@ class MMinMax
     AliasSet getAliasSet() const {
         return AliasSet::None();
     }
-    MDefinition *foldsTo(TempAllocator &alloc);
     void computeRange(TempAllocator &alloc);
     bool writeRecoverData(CompactBufferWriter &writer) const;
     bool canRecoverOnBailout() const {
@@ -5569,7 +5575,7 @@ class MPhi MOZ_FINAL : public MDefinition, public InlineListNode<MPhi>
     // Use only if capacity has been reserved by reserveLength
     void addInput(MDefinition *ins);
 
-    // Appends a new input to the input vector. May call realloc_().
+    // Appends a new input to the input vector. May call pod_realloc().
     // Prefer reserveLength() and addInput() instead, where possible.
     bool addInputSlow(MDefinition *ins, bool *ptypeChange = nullptr);
 
@@ -6103,6 +6109,7 @@ class MStringReplace
     bool congruentTo(const MDefinition *ins) const {
         return congruentIfOperandsEqual(ins);
     }
+
     AliasSet getAliasSet() const {
         return AliasSet::None();
     }
@@ -6632,7 +6639,8 @@ class MTypedArrayElements
 
 // Checks whether a typed object is neutered.
 class MNeuterCheck
-  : public MUnaryInstruction
+  : public MUnaryInstruction,
+    public SingleObjectPolicy
 {
   private:
     explicit MNeuterCheck(MDefinition *object)
@@ -6662,6 +6670,10 @@ class MNeuterCheck
 
     AliasSet getAliasSet() const {
         return AliasSet::Load(AliasSet::ObjectFields);
+    }
+
+    TypePolicy *typePolicy() {
+        return this;
     }
 };
 
@@ -7557,13 +7569,13 @@ class MStoreTypedArrayElement
         return arrayType_;
     }
     bool isByteArray() const {
-        return (arrayType_ == Scalar::Int8 ||
-                arrayType_ == Scalar::Uint8 ||
-                arrayType_ == Scalar::Uint8Clamped);
+        return arrayType_ == Scalar::Int8 ||
+               arrayType_ == Scalar::Uint8 ||
+               arrayType_ == Scalar::Uint8Clamped;
     }
     bool isFloatArray() const {
-        return (arrayType_ == Scalar::Float32 ||
-                arrayType_ == Scalar::Float64);
+        return arrayType_ == Scalar::Float32 ||
+               arrayType_ == Scalar::Float64;
     }
     TypePolicy *typePolicy() {
         return this;
@@ -7630,13 +7642,13 @@ class MStoreTypedArrayElementHole
         return arrayType_;
     }
     bool isByteArray() const {
-        return (arrayType_ == Scalar::Int8 ||
-                arrayType_ == Scalar::Uint8 ||
-                arrayType_ == Scalar::Uint8Clamped);
+        return arrayType_ == Scalar::Int8 ||
+               arrayType_ == Scalar::Uint8 ||
+               arrayType_ == Scalar::Uint8Clamped;
     }
     bool isFloatArray() const {
-        return (arrayType_ == Scalar::Float32 ||
-                arrayType_ == Scalar::Float64);
+        return arrayType_ == Scalar::Float32 ||
+               arrayType_ == Scalar::Float64;
     }
     TypePolicy *typePolicy() {
         return this;
@@ -7693,8 +7705,8 @@ class MStoreTypedArrayElementStatic :
         return typedArray_->type();
     }
     bool isFloatArray() const {
-        return (viewType() == Scalar::Float32 ||
-                viewType() == Scalar::Float64);
+        return viewType() == Scalar::Float32 ||
+               viewType() == Scalar::Float64;
     }
 
     void *base() const;
@@ -11247,6 +11259,8 @@ class MAsmJSCall MOZ_FINAL : public MVariadicInstruction
     }
 };
 
+#undef INSTRUCTION_HEADER
+
 void MUse::init(MDefinition *producer, MNode *consumer)
 {
     MOZ_ASSERT(!consumer_, "Initializing MUse that already has a consumer");
@@ -11284,22 +11298,7 @@ void MUse::discardProducer()
     producer_ = nullptr;
 }
 
-#undef INSTRUCTION_HEADER
-
-// Implement opcode casts now that the compiler can see the inheritance.
-#define OPCODE_CASTS(opcode)                                                \
-    M##opcode *MDefinition::to##opcode()                                    \
-    {                                                                       \
-        JS_ASSERT(is##opcode());                                            \
-        return static_cast<M##opcode *>(this);                              \
-    }                                                                       \
-    const M##opcode *MDefinition::to##opcode() const                        \
-    {                                                                       \
-        JS_ASSERT(is##opcode());                                            \
-        return static_cast<const M##opcode *>(this);                        \
-    }
-MIR_OPCODE_LIST(OPCODE_CASTS)
-#undef OPCODE_CASTS
+// Implement cast functions now that the compiler can see the inheritance.
 
 MDefinition *MNode::toDefinition()
 {

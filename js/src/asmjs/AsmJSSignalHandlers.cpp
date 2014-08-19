@@ -21,7 +21,6 @@
 #include "mozilla/DebugOnly.h"
 
 #include "asmjs/AsmJSModule.h"
-#include "assembler/assembler/MacroAssembler.h"
 #include "vm/Runtime.h"
 
 using namespace js;
@@ -371,7 +370,11 @@ HandleSimulatorInterrupt(JSRuntime *rt, AsmJSActivation *activation, void *fault
 static uint8_t **
 ContextToPC(CONTEXT *context)
 {
+#ifdef JS_CODEGEN_NONE
+    MOZ_CRASH();
+#else
     return reinterpret_cast<uint8_t**>(&PC_sig(context));
+#endif
 }
 
 # if defined(JS_CODEGEN_X64)
