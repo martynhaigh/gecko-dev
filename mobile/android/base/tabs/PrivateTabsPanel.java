@@ -26,7 +26,7 @@ import android.widget.FrameLayout;
  */
 class PrivateTabsPanel extends FrameLayout implements CloseAllPanelView {
     private TabsPanel tabsPanel;
-    private TabsTrayList tabsTray;
+    private TabsTray tabsTray;
 
     public PrivateTabsPanel(Context context, AttributeSet attrs) {
         super(context, attrs);
