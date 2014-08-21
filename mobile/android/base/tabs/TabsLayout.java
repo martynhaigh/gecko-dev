@@ -15,7 +15,7 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-interface TabsTray extends TabsPanel.PanelView{
+interface TabsLayout extends TabsPanel.PanelView {
     public void setEmptyView(View view);
     public void closeAll();
 
