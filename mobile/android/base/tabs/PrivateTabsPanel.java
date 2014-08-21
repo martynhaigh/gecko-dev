@@ -32,10 +32,10 @@ class PrivateTabsPanel extends FrameLayout implements CloseAllPanelView {
         super(context, attrs);
 
         LayoutInflater.from(context).inflate(R.layout.private_tabs_panel, this);
-        tabsTray = (TabsListLayout) findViewById(R.id.private_tabs_tray);
+        tabsLayout = (TabsListLayout) findViewById(R.id.private_tabs_tray);
 
         final View emptyView = findViewById(R.id.private_tabs_empty);
-        tabsTray.setEmptyView(emptyView);
+        tabsLayout.setEmptyView(emptyView);
 
         final View learnMore = findViewById(R.id.private_tabs_learn_more);
         learnMore.setOnClickListener(new OnClickListener() {
@@ -55,28 +55,28 @@ class PrivateTabsPanel extends FrameLayout implements CloseAllPanelView {
     @Override
     public void setTabsPanel(TabsPanel panel) {
         tabsPanel = panel;
-        tabsTray.setTabsPanel(panel);
+        tabsLayout.setTabsPanel(panel);
     }
 
     @Override
     public void show() {
-        tabsTray.show();
+        tabsLayout.show();
         setVisibility(View.VISIBLE);
     }
 
     @Override
     public void hide() {
         setVisibility(View.GONE);
-        tabsTray.hide();
+        tabsLayout.hide();
     }
 
     @Override
     public boolean shouldExpand() {
-        return tabsTray.shouldExpand();
+        return tabsLayout.shouldExpand();
     }
 
     @Override
     public void closeAll() {
-        tabsTray.closeAll();
+        tabsLayout.closeAll();
     }
 }
