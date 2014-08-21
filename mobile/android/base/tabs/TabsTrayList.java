@@ -19,7 +19,6 @@ import org.mozilla.gecko.animation.PropertyAnimator.Property;
 import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.util.ThreadUtils;
 import org.mozilla.gecko.widget.TwoWayView;
-import org.mozilla.gecko.widget.TabThumbnailWrapper;
 
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -34,9 +33,6 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
-import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.TextView;
 
 class TabsTrayList extends TwoWayView
                    implements TabsTray,
@@ -123,23 +119,7 @@ class TabsTrayList extends TwoWayView
         mTabsPanel.autoHidePanel();
     }
 
-    // ViewHolder for a row in the list
-    private class TabRow {
-        int id;
-        TextView title;
-        ImageView thumbnail;
-        ImageButton close;
-        ViewGroup info;
-        TabThumbnailWrapper thumbnailWrapper;
 
-        public TabRow(View view) {
-            info = (ViewGroup) view;
-            title = (TextView) view.findViewById(R.id.title);
-            thumbnail = (ImageView) view.findViewById(R.id.thumbnail);
-            close = (ImageButton) view.findViewById(R.id.close);
-            thumbnailWrapper = (TabThumbnailWrapper) view.findViewById(R.id.wrapper);
-        }
-    }
 
     // Adapter to bind tabs into a list
     private class TabsAdapter extends BaseAdapter implements Tabs.OnTabsChangedListener {

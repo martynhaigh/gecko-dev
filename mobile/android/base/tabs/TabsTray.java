@@ -5,10 +5,35 @@
 
 package org.mozilla.gecko.tabs;
 
-import android.view.View;
+import org.mozilla.gecko.R;
 import org.mozilla.gecko.tabs.TabsPanel;
+import org.mozilla.gecko.widget.TabThumbnailWrapper;
+
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 interface TabsTray extends TabsPanel.PanelView{
     public void setEmptyView(View view);
     public void closeAll();
+
+    // ViewHolder for a row in the list
+    public static class TabRow {
+        int id;
+        TextView title;
+        ImageView thumbnail;
+        ImageButton close;
+        ViewGroup info;
+        TabThumbnailWrapper thumbnailWrapper;
+
+        public TabRow(View view) {
+            info = (ViewGroup) view;
+            title = (TextView) view.findViewById(R.id.title);
+            thumbnail = (ImageView) view.findViewById(R.id.thumbnail);
+            close = (ImageButton) view.findViewById(R.id.close);
+            thumbnailWrapper = (TabThumbnailWrapper) view.findViewById(R.id.wrapper);
+        }
+    }
 }
