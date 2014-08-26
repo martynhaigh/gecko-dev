@@ -35,9 +35,7 @@ import android.widget.BaseAdapter;
 import android.widget.Button;
 
 class TabsListLayout extends TwoWayView
-                     implements TabsLayout,
-                                TabsPanel.PanelView,
-                                TabsPanel.CloseAllPanelView {
+                     implements TabsLayout {
     private static final String LOGTAG = "Gecko" + TabsListLayout.class.getSimpleName();
 
     private Context mContext;
@@ -83,7 +81,7 @@ class TabsListLayout extends TwoWayView
         setRecyclerListener(new RecyclerListener() {
             @Override
             public void onMovedToScrapHeap(View view) {
-                TabRow row = (TabRow) view.getTag();
+                TabsLayoutItemView row = (TabsLayoutItemView) view.getTag();
                 row.thumbnail.setImageDrawable(null);
                 row.close.setVisibility(View.VISIBLE);
             }
@@ -136,7 +134,7 @@ class TabsListLayout extends TwoWayView
             mOnCloseClickListener = new Button.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    TabRow tab = (TabRow) v.getTag();
+                    TabsLayoutItemView tab = (TabsLayoutItemView) v.getTag();
                     final int pos = (isVertical() ? tab.info.getWidth() : 0 - tab.info.getHeight());
                     animateClose(tab.info, pos);
                 }
@@ -167,7 +165,7 @@ class TabsListLayout extends TwoWayView
                     if (view == null)
                         return;
 
-                    TabRow row = (TabRow) view.getTag();
+                    TabsLayoutItemView row = (TabsLayoutItemView) view.getTag();
                     assignValues(row, tab);
                     break;
             }
@@ -246,7 +244,7 @@ class TabsListLayout extends TwoWayView
             }
         }
 
-        private void assignValues(TabRow row, Tab tab) {
+        private void assignValues(TabsLayoutItemView row, Tab tab) {
             if (row == null || tab == null)
                 return;
 
@@ -286,15 +284,15 @@ class TabsListLayout extends TwoWayView
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            TabRow row;
+            TabsLayoutItemView row;
 
             if (convertView == null) {
                 convertView = mInflater.inflate(R.layout.tabs_row, null);
-                row = new TabRow(convertView);
+                row = new TabsLayoutItemView(convertView);
                 row.close.setOnClickListener(mOnCloseClickListener);
                 convertView.setTag(row);
             } else {
-                row = (TabRow) convertView.getTag();
+                row = (TabsLayoutItemView) convertView.getTag();
                 // If we're recycling this view, there's a chance it was transformed during
                 // the close animation. Remove any of those properties.
                 resetTransforms(convertView);
@@ -424,7 +422,7 @@ class TabsListLayout extends TwoWayView
         else
             animator.attach(view, Property.WIDTH, 1);
 
-        TabRow tab = (TabRow)view.getTag();
+        TabsLayoutItemView tab = (TabsLayoutItemView)view.getTag();
         final int tabId = tab.id;
 
         // Caching this assumes that all rows are the same height
@@ -461,7 +459,7 @@ class TabsListLayout extends TwoWayView
             public void onPropertyAnimationStart() { }
             @Override
             public void onPropertyAnimationEnd() {
-                TabRow tab = (TabRow) view.getTag();
+                TabsLayoutItemView tab = (TabsLayoutItemView) view.getTag();
                 tab.close.setVisibility(View.VISIBLE);
             }
         });
@@ -559,7 +557,7 @@ class TabsListLayout extends TwoWayView
                     mSwipeView.setPressed(false);
 
                     if (!mSwiping) {
-                        TabRow tab = (TabRow) mSwipeView.getTag();
+                        TabsLayoutItemView tab = (TabsLayoutItemView) mSwipeView.getTag();
                         Tabs.getInstance().selectTab(tab.id);
                         autoHidePanel();
 
@@ -647,7 +645,7 @@ class TabsListLayout extends TwoWayView
                         mSwiping = true;
                         TabsListLayout.this.requestDisallowInterceptTouchEvent(true);
 
-                        TabRow tab = (TabRow) mSwipeView.getTag();
+                        TabsLayoutItemView tab = (TabsLayoutItemView) mSwipeView.getTag();
                         tab.close.setVisibility(View.INVISIBLE);
 
                         // Stops listview from highlighting the touched item
