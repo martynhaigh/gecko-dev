@@ -43,7 +43,6 @@ class TabsListLayout extends TwoWayView
     private static final String LOGTAG = "Gecko" + TabsListLayout.class.getSimpleName();
 
     private Context mContext;
-
     private TabsPanel mTabsPanel;
 
     final private boolean mIsPrivate;
