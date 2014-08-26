@@ -39,10 +39,11 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 class TabsListLayout extends TwoWayView
-                     implements TabsLayout{
+                     implements TabsLayout {
     private static final String LOGTAG = "Gecko" + TabsListLayout.class.getSimpleName();
 
     private Context mContext;
+
     private TabsPanel mTabsPanel;
 
     final private boolean mIsPrivate;
