@@ -8,7 +8,6 @@ package org.mozilla.gecko.tabs;
 import android.view.View;
 import org.mozilla.gecko.tabs.TabsPanel;
 
-interface TabsLayout extends TabsPanel.PanelView {
+interface TabsLayout extends TabsPanel.CloseAllPanelView {
     public void setEmptyView(View view);
-    public void closeAll();
 }
