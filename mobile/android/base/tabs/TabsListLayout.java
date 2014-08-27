@@ -82,9 +82,9 @@ class TabsListLayout extends TwoWayView
         setRecyclerListener(new RecyclerListener() {
             @Override
             public void onMovedToScrapHeap(View view) {
-                TabsLayoutItemView row = (TabsLayoutItemView) view.getTag();
-                row.thumbnail.setImageDrawable(null);
-                row.close.setVisibility(View.VISIBLE);
+                TabsLayoutItemView item = (TabsLayoutItemView) view.getTag();
+                item.thumbnail.setImageDrawable(null);
+                item.close.setVisibility(View.VISIBLE);
             }
         });
     }
@@ -166,8 +166,8 @@ class TabsListLayout extends TwoWayView
                     if (view == null)
                         return;
 
-                    TabsLayoutItemView row = (TabsLayoutItemView) view.getTag();
-                    assignValues(row, tab);
+                    TabsLayoutItemView item = (TabsLayoutItemView) view.getTag();
+                    assignValues(item, tab);
                     break;
             }
         }
@@ -245,23 +245,23 @@ class TabsListLayout extends TwoWayView
             }
         }
 
-        private void assignValues(TabsLayoutItemView row, Tab tab) {
-            if (row == null || tab == null)
+        private void assignValues(TabsLayoutItemView item, Tab tab) {
+            if (item == null || tab == null)
                 return;
 
-            row.id = tab.getId();
+            item.id = tab.getId();
 
             Drawable thumbnailImage = tab.getThumbnail();
             if (thumbnailImage != null) {
-                row.thumbnail.setImageDrawable(thumbnailImage);
+                item.thumbnail.setImageDrawable(thumbnailImage);
             } else {
-                row.thumbnail.setImageResource(R.drawable.tab_thumbnail_default);
+                item.thumbnail.setImageResource(R.drawable.tab_thumbnail_default);
             }
-            if (row.thumbnailWrapper != null) {
-                row.thumbnailWrapper.setRecording(tab.isRecording());
+            if (item.thumbnailWrapper != null) {
+                item.thumbnailWrapper.setRecording(tab.isRecording());
             }
-            row.title.setText(tab.getDisplayTitle());
-            row.close.setTag(row);
+            item.title.setText(tab.getDisplayTitle());
+            item.close.setTag(item);
         }
 
         private void resetTransforms(View view) {
@@ -285,22 +285,22 @@ class TabsListLayout extends TwoWayView
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            TabsLayoutItemView row;
+            TabsLayoutItemView item;
 
             if (convertView == null) {
                 convertView = mInflater.inflate(R.layout.tabs_row, null);
-                row = new TabsLayoutItemView(convertView);
-                row.close.setOnClickListener(mOnCloseClickListener);
-                convertView.setTag(row);
+                item = new TabsLayoutItemView(convertView);
+                item.close.setOnClickListener(mOnCloseClickListener);
+                convertView.setTag(item);
             } else {
-                row = (TabsLayoutItemView) convertView.getTag();
+                item = (TabsLayoutItemView) convertView.getTag();
                 // If we're recycling this view, there's a chance it was transformed during
                 // the close animation. Remove any of those properties.
                 resetTransforms(convertView);
             }
 
             Tab tab = mTabs.get(position);
-            assignValues(row, tab);
+            assignValues(item, tab);
 
             return convertView;
         }
