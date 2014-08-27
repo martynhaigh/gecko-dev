@@ -61,7 +61,7 @@ public class TabsPanel extends LinearLayout
         public void closeAll();
     }
 
-    public static interface TabsTray extends CloseAllPanelView {
+    public static interface TabsLayout extends CloseAllPanelView {
         public void setEmptyView(View view);
     }
 
