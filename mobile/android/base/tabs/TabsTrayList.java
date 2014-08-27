@@ -14,7 +14,7 @@ import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.Tabs;
-import org.mozilla.gecko.tabs.TabsTray;
+import org.mozilla.gecko.tabs.TabsPanel.TabsTray;
 import org.mozilla.gecko.animation.PropertyAnimator;
 import org.mozilla.gecko.animation.PropertyAnimator.Property;
 import org.mozilla.gecko.animation.ViewHelper;
@@ -40,8 +40,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 class TabsTrayList extends TwoWayView
-                   implements TabsTray,
-                              TabsPanel.CloseAllPanelView {
+                   implements TabsTray {
     private static final String LOGTAG = "Gecko" + TabsTrayList.class.getSimpleName();
 
     private Context mContext;
