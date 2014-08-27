@@ -11,6 +11,7 @@ import org.mozilla.gecko.BrowserLocaleManager;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.tabs.TabsPanel.CloseAllPanelView;
+import org.mozilla.gecko.tabs.TabsPanel.TabsTray;
 
 import android.content.Context;
 import android.util.AttributeSet;

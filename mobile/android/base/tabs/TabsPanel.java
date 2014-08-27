@@ -61,6 +61,10 @@ public class TabsPanel extends LinearLayout
         public void closeAll();
     }
 
+    public static interface TabsTray extends CloseAllPanelView {
+        public void setEmptyView(View view);
+    }
+
     public static interface TabsLayoutChangeListener {
         public void onTabsLayoutChange(int width, int height);
     }
@@ -524,7 +528,12 @@ public class TabsPanel extends LinearLayout
             final Resources resources = getContext().getResources();
             final int toolbarHeight = resources.getDimensionPixelSize(R.dimen.browser_toolbar_height);
             final int translationY = (mVisible ? 0 : -toolbarHeight);
-            animator.attach(mTabsContainer, PropertyAnimator.Property.ALPHA, 1.0f);
+            if (mVisible) {
+                ViewHelper.setTranslationY(mHeader, -toolbarHeight);
+                ViewHelper.setTranslationY(mTabsContainer, -toolbarHeight);
+                ViewHelper.setAlpha(mTabsContainer, 0.0f);
+            }
+            animator.attach(mTabsContainer, PropertyAnimator.Property.ALPHA, mVisible ? 1.0f : 0.0f);
             animator.attach(mTabsContainer, PropertyAnimator.Property.TRANSLATION_Y, translationY);
             animator.attach(mHeader, PropertyAnimator.Property.TRANSLATION_Y, translationY);
         }
