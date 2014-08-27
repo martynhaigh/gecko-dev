@@ -393,7 +393,6 @@ gbjar.sources += [
     'tabs/RemoteTabsVerificationPanel.java',
     'tabs/TabCurve.java',
     'tabs/TabsPanel.java',
-    'tabs/TabsTray.java',
     'tabs/TabsTrayList.java',
     'TabsAccessor.java',
     'Telemetry.java',
