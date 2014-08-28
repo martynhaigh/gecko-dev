@@ -8,31 +8,29 @@ package org.mozilla.gecko.tabs;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.mozilla.gecko.AboutPages;
+import org.mozilla.gecko.animation.PropertyAnimator.Property;
+import org.mozilla.gecko.animation.PropertyAnimator;
+import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
-import org.mozilla.gecko.Tabs;
+import org.mozilla.gecko.tabs.TabsAdapter.TabsLayoutFactory;
+import org.mozilla.gecko.tabs.TabsAdapter;
 import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
-import org.mozilla.gecko.animation.PropertyAnimator;
-import org.mozilla.gecko.animation.PropertyAnimator.Property;
-import org.mozilla.gecko.animation.ViewHelper;
+import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
 import org.mozilla.gecko.widget.TwoWayView;
 
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Rect;
-import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
-import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
-import android.widget.BaseAdapter;
 import android.widget.Button;
 
 class TabsListLayout extends TwoWayView
@@ -86,7 +84,7 @@ class TabsListLayout extends TwoWayView
                         final int pos = (isVertical() ? item.info.getWidth() : 0 - item.info.getHeight());
                         animateClose(item.info, pos);
                     }
-            };
+                };
             }
         });
         setAdapter(mTabsAdapter);
@@ -239,90 +237,6 @@ class TabsListLayout extends TwoWayView
 
         mTabsAdapter.setTabs(tabData);
         updateSelectedPosition();
-    }
-
-
-    public static interface TabsLayoutFactory<T> {
-        public T createItemView(View view, ViewGroup parent);
-        public Button.OnClickListener createOnClickListener();
-    }
-
-    // Adapter to bind tabs into a list
-    private class TabsAdapter <T extends TabsLayoutItemView> extends BaseAdapter {
-        private Context mContext;
-        private ArrayList<Tab> mTabs;
-        private LayoutInflater mInflater;
-        private Button.OnClickListener mOnCloseClickListener;
-        private TabsLayoutFactory<T> mTabsLayoutFactory;
-
-        public TabsAdapter(Context context, TabsLayoutFactory<T> tabsLayoutFactory) {
-            mContext = context;
-            mInflater = LayoutInflater.from(mContext);
-            mOnCloseClickListener = tabsLayoutFactory.createOnClickListener();
-            mTabsLayoutFactory = tabsLayoutFactory;
-        }
-
-
-        public void setTabs (ArrayList<Tab> tabs) {
-            mTabs = tabs;
-            notifyDataSetChanged(); // Be sure to call this whenever mTabs changes.
-        }
-
-        public boolean removeTab (Tab tab) {
-            boolean tabRemoved = mTabs.remove(tab);
-            if (tabRemoved) {
-                notifyDataSetChanged(); // Be sure to call this whenever mTabs changes.
-            }
-            return tabRemoved;
-        }
-
-        public void clear() {
-            mTabs = null;
-            notifyDataSetChanged(); // Be sure to call this whenever mTabs changes.
-        }
-
-        @Override
-        public int getCount() {
-            return (mTabs == null ? 0 : mTabs.size());
-        }
-
-        @Override
-        public Tab getItem(int position) {
-            return mTabs.get(position);
-        }
-
-        @Override
-        public long getItemId(int position) {
-            return position;
-        }
-
-        private int getPositionForTab(Tab tab) {
-            if (mTabs == null || tab == null)
-                return -1;
-
-            return mTabs.indexOf(tab);
-        }
-
-        @Override
-        public View getView(int position, View convertView, ViewGroup parent) {
-            TabsLayoutItemView item;
-
-            if (convertView == null) {
-                convertView = mInflater.inflate(R.layout.tabs_row, null);
-                item = mTabsLayoutFactory.createItemView(convertView, parent);
-                item.setCloseOnClickListener(mOnCloseClickListener);
-                convertView.setTag(item);
-            } else {
-                item = (TabsLayoutItemView) convertView.getTag();
-                // If we're recycling this view, there's a chance it was transformed during
-                // the close animation. Remove any of those properties.
-                item.resetView();
-            }
-
-            item.assignValues(mTabs.get(position));
-
-            return convertView;
-        }
     }
 
     private boolean isVertical() {
