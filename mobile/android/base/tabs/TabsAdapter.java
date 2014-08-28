@@ -13,10 +13,10 @@ import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.tabs.TabsLayoutItemView;
 
 import android.content.Context;
-import android.widget.BaseAdapter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.BaseAdapter;
 import android.widget.Button;
 
 // Adapter to bind tabs into a list
@@ -86,7 +86,7 @@ public class TabsAdapter <T extends TabsLayoutItemView> extends BaseAdapter  {
         if (convertView == null) {
             convertView = mInflater.inflate(R.layout.tabs_row, null);
             item = mTabsLayoutFactory.createItemView(convertView, parent);
-            item.close.setOnClickListener(mOnCloseClickListener);
+            item.setCloseOnClickListener(mOnCloseClickListener);
             convertView.setTag(item);
         } else {
             item = (TabsLayoutItemView) convertView.getTag();
@@ -95,8 +95,7 @@ public class TabsAdapter <T extends TabsLayoutItemView> extends BaseAdapter  {
             item.resetView();
         }
 
-        Tab tab = mTabs.get(position);
-        item.assignValues(tab);
+        item.assignValues(mTabs.get(position));
 
         return convertView;
     }
