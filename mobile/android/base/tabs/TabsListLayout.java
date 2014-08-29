@@ -45,7 +45,7 @@ class TabsListLayout extends TwoWayView
 
     final private boolean mIsPrivate;
 
-    private TabsAdapter<TabsTrayLayoutItemView> mTabsAdapter;
+    private TabsAdapter<TabsListLayoutItemView> mTabsAdapter;
 
     private List<View> mPendingClosedTabs;
     private int mCloseAnimationCount;
@@ -73,9 +73,9 @@ class TabsListLayout extends TwoWayView
         mIsPrivate = (a.getInt(R.styleable.TabsTray_tabs, 0x0) == 1);
         a.recycle();
 
-        mTabsAdapter = new TabsAdapter<TabsTrayLayoutItemView>(mContext, new TabsLayoutFactory<TabsTrayLayoutItemView>() {
-            public TabsTrayLayoutItemView createItemView(View view, ViewGroup parent) {
-                return new TabsTrayLayoutItemView(view, parent);
+        mTabsAdapter = new TabsAdapter<TabsListLayoutItemView>(mContext, new TabsLayoutFactory<TabsListLayoutItemView>() {
+            public TabsListLayoutItemView createItemView(View view, ViewGroup parent) {
+                return new TabsListLayoutItemView(view, parent);
             }
         });
         setAdapter(mTabsAdapter);
@@ -94,11 +94,11 @@ class TabsListLayout extends TwoWayView
         });
     }
 
-    public static class TabsTrayLayoutItemView extends TabsLayoutItemView {
+    public static class TabsListLayoutItemView extends TabsLayoutItemView {
 
         TabsListLayout mTabsListLayout;
 
-        public TabsTrayLayoutItemView(View view, ViewGroup parent) {
+        public TabsListLayoutItemView(View view, ViewGroup parent) {
             super(view);
             mTabsListLayout = (TabsListLayout) parent;
         }
