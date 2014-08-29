@@ -14,6 +14,7 @@ namespace mp4_demuxer
 
 template <typename T> class Interval;
 class MoofParser;
+class Sample;
 
 class Index
 {
@@ -22,13 +23,16 @@ public:
         Stream* aSource, uint32_t aTrackId);
   ~Index();
 
+  void UpdateMoofIndex(const nsTArray<mozilla::MediaByteRange>& aByteRanges);
+  Microseconds GetEndCompositionIfBuffered(
+    const nsTArray<mozilla::MediaByteRange>& aByteRanges);
   void ConvertByteRangesToTimeRanges(
     const nsTArray<mozilla::MediaByteRange>& aByteRanges,
     nsTArray<Interval<Microseconds>>* aTimeRanges);
+  uint64_t GetEvictionOffset(Microseconds aTime);
 
 private:
-  mozilla::Monitor mMonitor;
-  nsTArray<stagefright::MediaSource::Indice> mIndex;
+  nsTArray<Sample> mIndex;
   nsAutoPtr<MoofParser> mMoofParser;
 };
 }

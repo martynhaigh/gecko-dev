@@ -59,7 +59,7 @@ public class MainActivity extends FragmentActivity implements AcceptsSearchQuery
     private View preSearch;
     private View postSearch;
 
-    private View suggestionsContainer;
+    private View suggestions;
     private SuggestionsFragment suggestionsFragment;
 
     private static final int SUGGESTION_TRANSITION_DURATION = 300;
@@ -109,21 +109,18 @@ public class MainActivity extends FragmentActivity implements AcceptsSearchQuery
                     onSearch(trimmedQuery);
                 }
             }
+
+            @Override
+            public void onFocusChange(boolean hasFocus) {
+                setEditState(hasFocus ? EditState.EDITING : EditState.WAITING);
+            }
         });
 
         preSearch = findViewById(R.id.presearch);
         postSearch = findViewById(R.id.postsearch);
 
-        suggestionsContainer = findViewById(R.id.suggestions_container);
+        suggestions = findViewById(R.id.suggestions);
         suggestionsFragment = (SuggestionsFragment) getSupportFragmentManager().findFragmentById(R.id.suggestions);
-
-        // Dismiss edit mode when the user taps outside of the suggestions.
-        findViewById(R.id.suggestions_container).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                setEditState(EditState.WAITING);
-            }
-        });
 
         animationText = (TextView) findViewById(R.id.animation_text);
         animationCard = findViewById(R.id.animation_card);
@@ -159,7 +156,7 @@ public class MainActivity extends FragmentActivity implements AcceptsSearchQuery
         preSearch = null;
         postSearch = null;
         suggestionsFragment = null;
-        suggestionsContainer = null;
+        suggestions = null;
         animationText = null;
         animationCard = null;
     }
@@ -181,9 +178,10 @@ public class MainActivity extends FragmentActivity implements AcceptsSearchQuery
         // Reset the activity in the presearch state if it was launched from a new intent.
         setSearchState(SearchState.PRESEARCH);
 
-        // Also clear any existing search term and enter editing mode.
-        editText.setText("");
+        // Enter editing mode and reset the query. We must reset the query after entering
+        // edit mode in order for the suggestions to update.
         setEditState(EditState.EDITING);
+        editText.setText("");
     }
 
     @Override
@@ -299,7 +297,7 @@ public class MainActivity extends FragmentActivity implements AcceptsSearchQuery
         this.editState = editState;
 
         editText.setActive(editState == EditState.EDITING);
-        suggestionsContainer.setVisibility(editState == EditState.EDITING ? View.VISIBLE : View.INVISIBLE);
+        suggestions.setVisibility(editState == EditState.EDITING ? View.VISIBLE : View.INVISIBLE);
     }
 
     private void setSearchState(SearchState searchState) {

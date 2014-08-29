@@ -33,7 +33,6 @@ import org.mozilla.gecko.TelemetryContract.Method;
 import org.mozilla.gecko.background.common.GlobalConstants;
 import org.mozilla.gecko.background.healthreport.HealthReportConstants;
 import org.mozilla.gecko.db.BrowserContract.SuggestedSites;
-import org.mozilla.gecko.home.HomePanelPicker;
 import org.mozilla.gecko.util.GeckoEventListener;
 import org.mozilla.gecko.util.HardwareUtils;
 import org.mozilla.gecko.util.ThreadUtils;
@@ -104,7 +103,6 @@ OnSharedPreferenceChangeListener
 
     // These match keys in resources/xml*/preferences*.xml
     private static final String PREFS_SEARCH_RESTORE_DEFAULTS = NON_PREF_PREFIX + "search.restore_defaults";
-    private static final String PREFS_HOME_ADD_PANEL = NON_PREF_PREFIX + "home.add_panel";
     private static final String PREFS_DATA_REPORTING_PREFERENCES = NON_PREF_PREFIX + "datareporting.preferences";
     private static final String PREFS_TELEMETRY_ENABLED = "toolkit.telemetry.enabled";
     private static final String PREFS_CRASHREPORTER_ENABLED = "datareporting.crashreporter.submitEnabled";
@@ -341,7 +339,9 @@ OnSharedPreferenceChangeListener
             int res = 0;
             if (intentExtras != null && intentExtras.containsKey(INTENT_EXTRA_RESOURCES)) {
                 // Fetch resource id from intent.
-                String resourceName = intentExtras.getString(INTENT_EXTRA_RESOURCES);
+                final String resourceName = intentExtras.getString(INTENT_EXTRA_RESOURCES);
+                Telemetry.sendUIEvent(TelemetryContract.Event.ACTION, Method.SETTINGS, resourceName);
+
                 if (resourceName != null) {
                     res = getResources().getIdentifier(resourceName, "xml", getPackageName());
                     if (res == 0) {
@@ -353,6 +353,7 @@ OnSharedPreferenceChangeListener
                 // No resource specified, or the resource was invalid; use the default preferences screen.
                 Log.e(LOGTAG, "Displaying default settings.");
                 res = R.xml.preferences;
+                Telemetry.startUISession(TelemetryContract.Session.SETTINGS);
             }
 
             // We don't include a title in the XML, so set it here, in a locale-aware fashion.
@@ -469,6 +470,8 @@ OnSharedPreferenceChangeListener
         if (NO_TRANSITIONS) {
             overridePendingTransition(0, 0);
         }
+
+        Telemetry.sendUIEvent(TelemetryContract.Event.CANCEL, Method.BACK, "settings");
     }
 
     @Override
@@ -478,6 +481,13 @@ OnSharedPreferenceChangeListener
             "Sanitize:Finished");
         if (mPrefsRequestId > 0) {
             PrefsHelper.removeObserver(mPrefsRequestId);
+        }
+
+        // The intent extras will be null if this is the top-level settings
+        // activity. In that case, we want to end the SETTINGS telmetry session.
+        // For HC+ versions of Android this is handled in GeckoPreferenceFragment.
+        if (Versions.preHC && getIntent().getExtras() == null) {
+            Telemetry.stopUISession(TelemetryContract.Session.SETTINGS);
         }
     }
 
@@ -561,21 +571,6 @@ OnSharedPreferenceChangeListener
                   setResult(RESULT_CODE_EXIT_SETTINGS);
                   finishChoosingTransition();
                   break;
-              }
-              break;
-
-          case HomePanelPicker.REQUEST_CODE_ADD_PANEL:
-              switch (resultCode) {
-                  case Activity.RESULT_OK:
-                      // Panel installed, refresh panels list.
-                      mPanelsPreferenceCategory.refresh();
-                      break;
-                  case Activity.RESULT_CANCELED:
-                      // Dialog was cancelled, do nothing.
-                      break;
-                  default:
-                      Log.w(LOGTAG, "Unhandled ADD_PANEL result code " + requestCode);
-                      break;
               }
               break;
         }
@@ -722,15 +717,7 @@ OnSharedPreferenceChangeListener
                         @Override
                         public boolean onPreferenceClick(Preference preference) {
                             GeckoPreferences.this.restoreDefaultSearchEngines();
-                            return true;
-                        }
-                    });
-                } else if (PREFS_HOME_ADD_PANEL.equals(key)) {
-                    pref.setOnPreferenceClickListener(new OnPreferenceClickListener() {
-                        @Override
-                        public boolean onPreferenceClick(Preference preference) {
-                            Intent dialogIntent = new Intent(GeckoPreferences.this, HomePanelPicker.class);
-                            startActivityForResultChoosingTransition(dialogIntent, HomePanelPicker.REQUEST_CODE_ADD_PANEL);
+                            Telemetry.sendUIEvent(TelemetryContract.Event.SEARCH_RESTORE_DEFAULTS, Method.LIST_ITEM);
                             return true;
                         }
                     });
@@ -790,6 +777,7 @@ OnSharedPreferenceChangeListener
         // Generated R.id.* apparently aren't constant expressions, so they can't be switched.
         if (itemId == R.id.restore_defaults) {
             restoreDefaultSearchEngines();
+            Telemetry.sendUIEvent(TelemetryContract.Event.SEARCH_RESTORE_DEFAULTS, Method.MENU);
             return true;
        }
 
@@ -1002,6 +990,9 @@ OnSharedPreferenceChangeListener
     public boolean onPreferenceChange(Preference preference, Object newValue) {
         final String prefName = preference.getKey();
         Log.i(LOGTAG, "Changed " + prefName + " = " + newValue);
+
+        Telemetry.sendUIEvent(TelemetryContract.Event.EDIT, Method.SETTINGS, prefName);
+
         if (PREFS_MP_ENABLED.equals(prefName)) {
             showDialog((Boolean) newValue ? DIALOG_CREATE_MASTER_PASSWORD : DIALOG_REMOVE_MASTER_PASSWORD);
 

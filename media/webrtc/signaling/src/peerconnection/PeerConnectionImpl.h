@@ -384,6 +384,14 @@ public:
   nsresult
   AddTrack(mozilla::dom::MediaStreamTrack& aTrack, DOMMediaStream& aStream);
 
+  NS_IMETHODIMP_TO_ERRORRESULT(ReplaceTrack, ErrorResult &rv,
+                               mozilla::dom::MediaStreamTrack& aThisTrack,
+                               mozilla::dom::MediaStreamTrack& aWithTrack,
+                               DOMMediaStream& aStream)
+  {
+    rv = ReplaceTrack(aThisTrack, aWithTrack, aStream);
+  }
+
   nsresult GetPeerIdentity(nsAString& peerIdentity)
   {
 #ifdef MOZILLA_INTERNAL_API
@@ -432,7 +440,7 @@ public:
     char *tmp;
     GetLocalDescription(&tmp);
     aSDP.AssignASCII(tmp);
-    delete tmp;
+    delete[] tmp;
   }
 
   NS_IMETHODIMP GetRemoteDescription(char** aSDP);
@@ -442,7 +450,7 @@ public:
     char *tmp;
     GetRemoteDescription(&tmp);
     aSDP.AssignASCII(tmp);
-    delete tmp;
+    delete[] tmp;
   }
 
   NS_IMETHODIMP SignalingState(mozilla::dom::PCImplSignalingState* aState);

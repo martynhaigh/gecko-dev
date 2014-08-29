@@ -197,13 +197,13 @@ loop.webapp = (function($, _, OT, webL10n) {
         var date = (new Date(callUrlInfo.urlCreationDate * 1000));
         var options = {year: "numeric", month: "long", day: "numeric"};
         var timestamp = date.toLocaleDateString(navigator.language, options);
-
         this.setState({urlCreationDateString: timestamp});
       }
     },
 
     componentWillUnmount: function() {
       window.removeEventListener("click", this.clickHandler);
+      localStorage.setItem("has-seen-tos", "true");
     },
 
     clickHandler: function(e) {
@@ -236,6 +236,10 @@ loop.webapp = (function($, _, OT, webL10n) {
         "native-dropdown-large-parent": true,
         "standalone-dropdown-menu": true,
         "visually-hidden": !this.state.showCallOptionsMenu
+      });
+      var tosClasses = React.addons.classSet({
+        "terms-service": true,
+        hide: (localStorage.getItem("has-seen-tos") === "true")
       });
 
       return (
@@ -289,7 +293,7 @@ loop.webapp = (function($, _, OT, webL10n) {
               <div className="flex-padding-1"></div>
             </div>
 
-            <p className="terms-service"
+            <p className={tosClasses}
                dangerouslySetInnerHTML={{__html: tosHTML}}></p>
           </div>
 

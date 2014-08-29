@@ -123,7 +123,6 @@ loop.panel = (function(_, mozL10n) {
             </a>
           ),
         });
-        navigator.mozLoop.setLoopCharPref('seenToS', 'seen');
         return <p className="terms-service"
                   dangerouslySetInnerHTML={{__html: tosHTML}}></p>;
       } else {
@@ -170,10 +169,6 @@ loop.panel = (function(_, mozL10n) {
     * Returns a random 5 character string used to identify
     * the conversation.
     * XXX this will go away once the backend changes
-    * @note:
-    * - When we get back a callUrl we use setLoopCharPref to store the token
-    *   (the last fragment of the URL) so that it can be used to ignore&block
-    *   the call. The preference is used by the conversation router.
     */
     conversationIdentifier: function() {
       return Math.random().toString(36).substring(5);
@@ -199,7 +194,6 @@ loop.panel = (function(_, mozL10n) {
           var token = callUrlData.callToken ||
                       callUrl.pathname.split('/').pop();
 
-          navigator.mozLoop.setLoopCharPref('loopToken', token);
           this.setState({pending: false, copied: false, callUrl: callUrl.href});
         } catch(e) {
           console.log(e);
@@ -212,7 +206,7 @@ loop.panel = (function(_, mozL10n) {
     _generateMailTo: function() {
       return encodeURI([
         "mailto:?subject=" + __("share_email_subject2") + "&",
-        "body=" + __("share_email_body", {callUrl: this.state.callUrl})
+        "body=" + __("share_email_body2", {callUrl: this.state.callUrl})
       ].join(""));
     },
 
@@ -234,11 +228,17 @@ loop.panel = (function(_, mozL10n) {
       // readOnly attr will suppress a warning regarding this issue
       // from the react lib.
       var cx = React.addons.classSet;
+      var inputCSSClass = cx({
+        "pending": this.state.pending,
+        // Used in functional testing, signals that
+        // call url was received from loop server
+         "callUrl": !this.state.pending
+      });
       return (
         <PanelLayout summary={__("share_link_header_text")}>
           <div className="invite">
             <input type="url" value={this.state.callUrl} readOnly="true"
-                   className={cx({pending: this.state.pending})} />
+                   className={inputCSSClass} />
             <p className="button-group url-actions">
               <button className="btn btn-email" disabled={!this.state.callUrl}
                 onClick={this.handleEmailButtonClick}

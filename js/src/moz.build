@@ -112,6 +112,7 @@ UNIFIED_SOURCES += [
     'builtin/SymbolObject.cpp',
     'builtin/TestingFunctions.cpp',
     'builtin/TypedObject.cpp',
+    'builtin/WeakSetObject.cpp',
     'devtools/sharkctl.cpp',
     'ds/LifoAlloc.cpp',
     'frontend/BytecodeCompiler.cpp',
@@ -374,12 +375,6 @@ else:
     SOURCES += [
         'jit/ExecutableAllocatorPosix.cpp',
     ]
-
-if CONFIG['ENABLE_ION']:
-    if CONFIG['JS_CODEGEN_X86'] or CONFIG['JS_CODEGEN_X64']:
-        SOURCES += [
-            'assembler/assembler/MacroAssemblerX86Common.cpp',
-        ]
 
 if CONFIG['JS_HAS_CTYPES']:
     SOURCES += [
