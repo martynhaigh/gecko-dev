@@ -35,6 +35,8 @@ public abstract class TabsLayoutItemView {
         thumbnail = (ImageView) view.findViewById(R.id.thumbnail);
         close = (ImageButton) view.findViewById(R.id.close);
         thumbnailWrapper = (TabThumbnailWrapper) view.findViewById(R.id.wrapper);
+
+        close.setOnClickListener(getCloseButtonClickListener());
     }
 
     protected void assignValues(Tab tab) {
@@ -56,10 +58,7 @@ public abstract class TabsLayoutItemView {
         close.setTag(this);
     }
 
-    public void setCloseOnClickListener(Button.OnClickListener listener) {
-        close.setOnClickListener(listener);
-    }
-
     public abstract void resetView();
+    protected abstract Button.OnClickListener getCloseButtonClickListener();
 
 }

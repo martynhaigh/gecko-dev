@@ -77,17 +77,6 @@ class TabsListLayout extends TwoWayView
             public TabsTrayLayoutItemView createItemView(View view, ViewGroup parent) {
                 return new TabsTrayLayoutItemView(view, parent);
             }
-
-            public Button.OnClickListener createOnClickListener() {
-                return new Button.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        TabsLayoutItemView item = (TabsLayoutItemView) v.getTag();
-                        final int pos = (isVertical() ? item.info.getWidth() : 0 - item.info.getHeight());
-                        animateClose(item.info, pos);
-                    }
-            };
-            }
         });
         setAdapter(mTabsAdapter);
 
@@ -132,6 +121,17 @@ class TabsListLayout extends TwoWayView
                     ViewHelper.setWidth(info, originalSize);
                 }
             }
+        }
+
+        protected Button.OnClickListener getCloseButtonClickListener() {
+            return new Button.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    TabsLayoutItemView item = (TabsLayoutItemView) v.getTag();
+                    final int pos = (mTabsListLayout.isVertical() ? item.info.getWidth() : 0 - item.info.getHeight());
+                    mTabsListLayout.animateClose(item.info, pos);
+                }
+            };
         }
 
     }
@@ -241,10 +241,8 @@ class TabsListLayout extends TwoWayView
         updateSelectedPosition();
     }
 
-
     public static interface TabsLayoutFactory<T> {
         public T createItemView(View view, ViewGroup parent);
-        public Button.OnClickListener createOnClickListener();
     }
 
     // Adapter to bind tabs into a list
@@ -252,13 +250,11 @@ class TabsListLayout extends TwoWayView
         private Context mContext;
         private ArrayList<Tab> mTabs;
         private LayoutInflater mInflater;
-        private Button.OnClickListener mOnCloseClickListener;
         private TabsLayoutFactory<T> mTabsLayoutFactory;
 
         public TabsAdapter(Context context, TabsLayoutFactory<T> tabsLayoutFactory) {
             mContext = context;
             mInflater = LayoutInflater.from(mContext);
-            mOnCloseClickListener = tabsLayoutFactory.createOnClickListener();
             mTabsLayoutFactory = tabsLayoutFactory;
         }
 
@@ -310,7 +306,6 @@ class TabsListLayout extends TwoWayView
             if (convertView == null) {
                 convertView = mInflater.inflate(R.layout.tabs_row, null);
                 item = mTabsLayoutFactory.createItemView(convertView, parent);
-                item.setCloseOnClickListener(mOnCloseClickListener);
                 convertView.setTag(item);
             } else {
                 item = (TabsLayoutItemView) convertView.getTag();
