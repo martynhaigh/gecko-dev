@@ -252,8 +252,6 @@ class TabsListLayout extends TwoWayView
             return mTabs.indexOf(tab);
         }
 
-        
-
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             TabsLayoutItemView item;
