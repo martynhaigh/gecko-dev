@@ -25,10 +25,6 @@ public class TabsLayoutItemView {
     ViewGroup info;
     TabThumbnailWrapper thumbnailWrapper;
 
-    public TabsLayoutItemView(View view, ViewGroup parent) {
-        this(view);
-    }
-
     protected TabsLayoutItemView(View view) {
         info = (ViewGroup) view;
         title = (TextView) view.findViewById(R.id.title);
