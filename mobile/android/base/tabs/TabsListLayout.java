@@ -258,9 +258,7 @@ class TabsListLayout extends TwoWayView
 
             if (convertView == null) {
                 convertView = mInflater.inflate(R.layout.tabs_row, null);
-                item = new TabsLayoutItemView(convertView);
-                item.close.setOnClickListener(mOnCloseClickListener);
-                convertView.setTag(item);
+                item = newView(convertView);
             } else {
                 item = (TabsLayoutItemView) convertView.getTag();
                 // If we're recycling this view, there's a chance it was transformed during
@@ -269,10 +267,22 @@ class TabsListLayout extends TwoWayView
             }
 
             Tab tab = mTabs.get(position);
-            item.assignValues(tab);
+            bindView(item, tab);
 
             return convertView;
         }
+
+        public TabsLayoutItemView newView(View convertView) {
+            TabsLayoutItemView item = new TabsLayoutItemView(convertView);
+            item.close.setOnClickListener(mOnCloseClickListener);
+            convertView.setTag(item);
+            return item;
+        }
+    
+        public void bindView(TabsLayoutItemView item, Tab tab) {
+            item.assignValues(tab);
+        }
+
     }
 
     private void resetTransforms(View view) {
