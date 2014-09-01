@@ -45,7 +45,7 @@ class TabsListLayout extends TwoWayView
 
     final private boolean mIsPrivate;
 
-    private TabsAdapter<TabsListLayoutItemView> mTabsAdapter;
+    private TabsAdapter mTabsAdapter;
 
     private List<View> mPendingClosedTabs;
     private int mCloseAnimationCount;
@@ -73,11 +73,7 @@ class TabsListLayout extends TwoWayView
         mIsPrivate = (a.getInt(R.styleable.TabsTray_tabs, 0x0) == 1);
         a.recycle();
 
-        mTabsAdapter = new TabsAdapter<TabsListLayoutItemView>(mContext, new TabsLayoutFactory<TabsListLayoutItemView>() {
-            public TabsListLayoutItemView createItemView(View view, ViewGroup parent) {
-                return new TabsListLayoutItemView(view, parent);
-            }
-        });
+        mTabsAdapter = new TabsAdapter(mContext);
         setAdapter(mTabsAdapter);
 
         mSwipeListener = new TabSwipeGestureListener();
@@ -92,52 +88,6 @@ class TabsListLayout extends TwoWayView
                 item.close.setVisibility(View.VISIBLE);
             }
         });
-    }
-
-    public static class TabsListLayoutItemView extends TabsLayoutItemView {
-
-        TabsListLayout mTabsListLayout;
-
-        public TabsListLayoutItemView(View view, ViewGroup parent) {
-            super(view);
-            mTabsListLayout = (TabsListLayout) parent;
-        }
-
-        public void resetView() {
-            ViewHelper.setAlpha(info, 1);
-
-            if (mTabsListLayout.isVertical()) {
-                ViewHelper.setTranslationX(info, 0);
-            } else {
-                ViewHelper.setTranslationY(info, 0);
-            }
-
-            // We only need to reset the height or width after individual tab close animations.
-            int originalSize = mTabsListLayout.getOriginalSize();
-            if (originalSize != 0) {
-                if (mTabsListLayout.isVertical()) {
-                    ViewHelper.setHeight(info, originalSize);
-                } else {
-                    ViewHelper.setWidth(info, originalSize);
-                }
-            }
-        }
-
-        protected Button.OnClickListener getCloseButtonClickListener() {
-            return new Button.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    TabsLayoutItemView item = (TabsLayoutItemView) v.getTag();
-                    final int pos = (mTabsListLayout.isVertical() ? item.info.getWidth() : 0 - item.info.getHeight());
-                    mTabsListLayout.animateClose(item.info, pos);
-                }
-            };
-        }
-
-    }
-
-    public int getOriginalSize() {
-        return mOriginalSize;
     }
 
     @Override
@@ -241,21 +191,24 @@ class TabsListLayout extends TwoWayView
         updateSelectedPosition();
     }
 
-    public static interface TabsLayoutFactory<T> {
-        public T createItemView(View view, ViewGroup parent);
-    }
-
     // Adapter to bind tabs into a list
-    private class TabsAdapter <T extends TabsLayoutItemView> extends BaseAdapter {
+    private class TabsAdapter extends BaseAdapter {
         private Context mContext;
         private ArrayList<Tab> mTabs;
         private LayoutInflater mInflater;
-        private TabsLayoutFactory<T> mTabsLayoutFactory;
+        private Button.OnClickListener mOnCloseClickListener;
 
-        public TabsAdapter(Context context, TabsLayoutFactory<T> tabsLayoutFactory) {
+        public TabsAdapter(Context context) {
             mContext = context;
             mInflater = LayoutInflater.from(mContext);
-            mTabsLayoutFactory = tabsLayoutFactory;
+            mOnCloseClickListener = new Button.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    TabsLayoutItemView item = (TabsLayoutItemView) v.getTag();
+                    final int pos = (isVertical() ? item.info.getWidth() : 0 - item.info.getHeight());
+                    animateClose(item.info, pos);
+                }
+            };
         }
 
 
@@ -305,19 +258,40 @@ class TabsListLayout extends TwoWayView
 
             if (convertView == null) {
                 convertView = mInflater.inflate(R.layout.tabs_row, null);
-                item = mTabsLayoutFactory.createItemView(convertView, parent);
+                item = new TabsLayoutItemView(convertView);
+                item.close.setOnClickListener(mOnCloseClickListener);
                 convertView.setTag(item);
             } else {
                 item = (TabsLayoutItemView) convertView.getTag();
                 // If we're recycling this view, there's a chance it was transformed during
                 // the close animation. Remove any of those properties.
-                item.resetView();
+                resetTransforms(convertView);
             }
 
             item.assignValues(mTabs.get(position));
 
             return convertView;
         }
+
+        private void resetTransforms(View view) {
+            ViewHelper.setAlpha(view, 1);
+
+            if (isVertical()) {
+                ViewHelper.setTranslationX(view, 0);
+            } else {
+                ViewHelper.setTranslationY(view, 0);
+            }
+
+            // We only need to reset the height or width after individual tab close animations.
+            if (mOriginalSize != 0) {
+                if (isVertical()) {
+                    ViewHelper.setHeight(view, mOriginalSize);
+                } else {
+                    ViewHelper.setWidth(view, mOriginalSize);
+                }
+            }
+        }
+
     }
 
     private boolean isVertical() {
