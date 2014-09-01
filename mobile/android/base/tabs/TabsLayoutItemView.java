@@ -29,7 +29,7 @@ public class TabsLayoutItemView {
         this(view);
     }
 
-    protected TabsLayoutItemView(View view) {
+    public TabsLayoutItemView(View view) {
         info = (ViewGroup) view;
         title = (TextView) view.findViewById(R.id.title);
         thumbnail = (ImageView) view.findViewById(R.id.thumbnail);
