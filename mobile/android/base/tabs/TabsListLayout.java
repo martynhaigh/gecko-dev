@@ -201,16 +201,16 @@ class TabsListLayout extends TwoWayView
         public TabsAdapter(Context context) {
             mContext = context;
             mInflater = LayoutInflater.from(mContext);
+
             mOnCloseClickListener = new Button.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    TabsLayoutItemView item = (TabsLayoutItemView) v.getTag();
-                    final int pos = (isVertical() ? item.info.getWidth() : 0 - item.info.getHeight());
-                    animateClose(item.info, pos);
+                    TabsLayoutItemView tab = (TabsLayoutItemView) v.getTag();
+                    final int pos = (isVertical() ? tab.info.getWidth() : 0 - tab.info.getHeight());
+                    animateClose(tab.info, pos);
                 }
             };
         }
-
 
         public void setTabs (ArrayList<Tab> tabs) {
             mTabs = tabs;
@@ -268,30 +268,30 @@ class TabsListLayout extends TwoWayView
                 resetTransforms(convertView);
             }
 
-            item.assignValues(mTabs.get(position));
+            Tab tab = mTabs.get(position);
+            item.assignValues(tab);
 
             return convertView;
         }
+    }
 
-        private void resetTransforms(View view) {
-            ViewHelper.setAlpha(view, 1);
+    private void resetTransforms(View view) {
+        ViewHelper.setAlpha(view, 1);
 
-            if (isVertical()) {
-                ViewHelper.setTranslationX(view, 0);
-            } else {
-                ViewHelper.setTranslationY(view, 0);
-            }
-
-            // We only need to reset the height or width after individual tab close animations.
-            if (mOriginalSize != 0) {
-                if (isVertical()) {
-                    ViewHelper.setHeight(view, mOriginalSize);
-                } else {
-                    ViewHelper.setWidth(view, mOriginalSize);
-                }
-            }
+        if (isVertical()) {
+            ViewHelper.setTranslationX(view, 0);
+        } else {
+            ViewHelper.setTranslationY(view, 0);
         }
 
+        // We only need to reset the height or width after individual tab close animations.
+        if (mOriginalSize != 0) {
+            if (isVertical()) {
+                ViewHelper.setHeight(view, mOriginalSize);
+            } else {
+                ViewHelper.setWidth(view, mOriginalSize);
+            }
+        }
     }
 
     private boolean isVertical() {

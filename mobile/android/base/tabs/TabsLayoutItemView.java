@@ -17,7 +17,7 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-public abstract class TabsLayoutItemView {
+public class TabsLayoutItemView {
     int id;
     TextView title;
     ImageView thumbnail;
