@@ -20,7 +20,6 @@ import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
 import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
 import org.mozilla.gecko.widget.TwoWayView;
-import org.mozilla.gecko.animation.ViewHelper;
 
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -254,27 +253,27 @@ class TabsListLayout extends TwoWayView
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-           final View view;
-           if (convertView == null) {
-               view = newView(position, parent);
-           } else {
-               view = convertView;
-           }
+            final View view;
+            if (convertView == null) {
+                view = newView(position, parent);
+            } else {
+                view = convertView;
+            }
 
-           final Tab tab = mTabs.get(position);
-           bindView(view, tab);
+            final Tab tab = mTabs.get(position);
+            bindView(view, tab);
 
-           return view;
+            return view;
         }
 
         View newView(int position, ViewGroup parent) {
-           final View view = mInflater.inflate(R.layout.tabs_row, parent, false);
+            final View view = mInflater.inflate(R.layout.tabs_row, parent, false);
 
-           final TabsLayoutItemView item = new TabsLayoutItemView(view);
-           item.close.setOnClickListener(mOnCloseClickListener);
+            final TabsLayoutItemView item = new TabsLayoutItemView(view);
+            item.close.setOnClickListener(mOnCloseClickListener);
 
-           view.setTag(item);
-           return view;
+            view.setTag(item);
+            return view;
         }
 
         void bindView(View view, Tab tab) {
