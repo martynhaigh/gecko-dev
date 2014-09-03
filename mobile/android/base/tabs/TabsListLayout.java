@@ -288,7 +288,7 @@ class TabsListLayout extends TwoWayView
             TabsLayoutItemView item;
 
             if (convertView == null) {
-                convertView = mInflater.inflate(R.layout.tabs_row, null);
+                convertView = mInflater.inflate(R.layout.tabs_layout_item_view, null);
                 item = new TabsLayoutItemView(convertView);
                 item.close.setOnClickListener(mOnCloseClickListener);
                 convertView.setTag(item);
