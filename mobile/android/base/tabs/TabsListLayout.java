@@ -9,16 +9,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.mozilla.gecko.AboutPages;
+import org.mozilla.gecko.animation.PropertyAnimator.Property;
+import org.mozilla.gecko.animation.PropertyAnimator;
+import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
-import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.tabs.TabsLayoutAdapter;
 import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
-import org.mozilla.gecko.animation.PropertyAnimator;
-import org.mozilla.gecko.animation.PropertyAnimator.Property;
-import org.mozilla.gecko.animation.ViewHelper;
+import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
 import org.mozilla.gecko.widget.TwoWayView;
 
@@ -29,8 +29,9 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
-import android.widget.Button;
+import android.view.ViewGroup;
 import android.view.ViewConfiguration;
+import android.widget.Button;
 
 class TabsListLayout extends TwoWayView
                      implements TabsLayout,
@@ -42,7 +43,7 @@ class TabsListLayout extends TwoWayView
 
     final private boolean mIsPrivate;
 
-    private TabsLayoutAdapter mTabsLayoutAdapter;
+    private TabsLayoutAdapter mTabsAdapter;
 
     private List<View> mPendingClosedTabs;
     private int mCloseAnimationCount;
@@ -70,8 +71,8 @@ class TabsListLayout extends TwoWayView
         mIsPrivate = (a.getInt(R.styleable.TabsTray_tabs, 0x0) == 1);
         a.recycle();
 
-        mTabsLayoutAdapter = new TabsListLayoutAdapter(mContext);
-        setAdapter(mTabsLayoutAdapter);
+        mTabsAdapter = new TabsListLayoutAdapter(mContext);
+        setAdapter(mTabsAdapter);
 
         mSwipeListener = new TabSwipeGestureListener();
         setOnTouchListener(mSwipeListener);
@@ -88,34 +89,42 @@ class TabsListLayout extends TwoWayView
     }
 
     private class TabsListLayoutAdapter extends TabsLayoutAdapter {
+        private Button.OnClickListener mOnClickListener;
         public TabsListLayoutAdapter (Context context) {
             super(context);
-        }
 
-        @Override
-        public TabsLayoutItemView newView(View convertView) {
-            TabsLayoutItemView item = super.newView(convertView);
-            item.close.setOnClickListener(new Button.OnClickListener() {
+            mOnClickListener = new Button.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     TabsLayoutItemView tab = (TabsLayoutItemView) v.getTag();
                     final int pos = (isVertical() ? tab.info.getWidth() : 0 - tab.info.getHeight());
                     animateClose(tab.info, pos);
                 }
-            });
-            return item;
+            };
         }
 
         @Override
-        public void bindView(View view, TabsLayoutItemView item, Tab tab) {
+        View newView(int position, ViewGroup parent) {
+            View view = super.newView(position, parent);
+
+            // This is nasty and once we change TabsLayoutItemView to an actual view
+            // we can get rid of it.
+            TabsLayoutItemView item = (TabsLayoutItemView) view.getTag();
+            item.close.setOnClickListener(mOnClickListener);
+
+            return view;
+        }
+
+        @Override
+        void bindView(View view, Tab tab) {
+            super.bindView(view, tab);
+
             // If we're recycling this view, there's a chance it was transformed during
             // the close animation. Remove any of those properties.
             TabsListLayout.this.resetTransforms(view);
-            super.bindView(view, item, tab);
         }
 
     }
-
 
     @Override
     public void setTabsPanel(TabsPanel panel) {
@@ -135,7 +144,7 @@ class TabsListLayout extends TwoWayView
         setVisibility(View.GONE);
         Tabs.unregisterOnTabsChangedListener(this);
         GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Tab:Screenshot:Cancel",""));
-        mTabsLayoutAdapter.clear();
+        mTabsAdapter.clear();
     }
 
     @Override
@@ -156,9 +165,9 @@ class TabsListLayout extends TwoWayView
                 break;
 
             case CLOSED:
-               if (tab.isPrivate() == mIsPrivate && mTabsLayoutAdapter.getCount() > 0) {
-                   if (mTabsLayoutAdapter.removeTab(tab)) {
-                       int selected = mTabsLayoutAdapter.getPositionForTab(Tabs.getInstance().getSelectedTab());
+               if (tab.isPrivate() == mIsPrivate && mTabsAdapter.getCount() > 0) {
+                   if (mTabsAdapter.removeTab(tab)) {
+                       int selected = mTabsAdapter.getPositionForTab(Tabs.getInstance().getSelectedTab());
                        updateSelectedStyle(selected);
                    }
                }
@@ -172,7 +181,7 @@ class TabsListLayout extends TwoWayView
             case THUMBNAIL:
             case TITLE:
             case RECORDING_CHANGE:
-                View view = getChildAt(mTabsLayoutAdapter.getPositionForTab(tab) - getFirstVisiblePosition());
+                View view = getChildAt(mTabsAdapter.getPositionForTab(tab) - getFirstVisiblePosition());
                 if (view == null)
                     return;
 
@@ -184,7 +193,7 @@ class TabsListLayout extends TwoWayView
 
     // Updates the selected position in the list so that it will be scrolled to the right place.
     private void updateSelectedPosition() {
-        int selected = mTabsLayoutAdapter.getPositionForTab(Tabs.getInstance().getSelectedTab());
+        int selected = mTabsAdapter.getPositionForTab(Tabs.getInstance().getSelectedTab());
         updateSelectedStyle(selected);
 
         if (selected != -1) {
@@ -198,7 +207,7 @@ class TabsListLayout extends TwoWayView
      * @param selected position of the selected tab
      */
     private void updateSelectedStyle(int selected) {
-        for (int i = 0; i < mTabsLayoutAdapter.getCount(); i++) {
+        for (int i = 0; i < mTabsAdapter.getCount(); i++) {
             setItemChecked(i, (i == selected));
         }
     }
@@ -214,7 +223,7 @@ class TabsListLayout extends TwoWayView
                 tabData.add(tab);
         }
 
-        mTabsLayoutAdapter.setTabs(tabData);
+        mTabsAdapter.setTabs(tabData);
         updateSelectedPosition();
     }
 
@@ -339,7 +348,7 @@ class TabsListLayout extends TwoWayView
             }
         });
 
-        if (mTabsLayoutAdapter.getCount() == 1)
+        if (mTabsAdapter.getCount() == 1)
             autoHidePanel();
 
         animator.start();

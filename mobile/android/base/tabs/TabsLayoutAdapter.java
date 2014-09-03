@@ -6,17 +6,15 @@
 package org.mozilla.gecko.tabs;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.R;
 
 import android.content.Context;
-import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
-import android.view.View;
 
 // Adapter to bind tabs into a list
 public class TabsLayoutAdapter extends BaseAdapter {
@@ -71,30 +69,26 @@ public class TabsLayoutAdapter extends BaseAdapter {
 
     @Override
     final public View getView(int position, View convertView, ViewGroup parent) {
-        final Context context = parent.getContext();
-        final Tab tab = mTabs.get(position);
-
-        final TabsLayoutItemView item;
-
+        final View view;
         if (convertView == null) {
-            convertView = mInflater.inflate(R.layout.tabs_row, null);
-            item = newView(convertView);
+            view = newView(position, parent);
         } else {
-            item = (TabsLayoutItemView) convertView.getTag();
+            view = convertView;
         }
-
-        bindView(convertView, item, tab);
-
-        return convertView;
+        final Tab tab = mTabs.get(position);
+        bindView(view, tab);
+        return view;
     }
 
-    public TabsLayoutItemView newView(View convertView) {
-        TabsLayoutItemView item = new TabsLayoutItemView(convertView);
-        convertView.setTag(item);
-        return item;
+    View newView(int position, ViewGroup parent) {
+        final View view = mInflater.inflate(R.layout.tabs_row, parent, false);
+        final TabsLayoutItemView item = new TabsLayoutItemView(view);
+        view.setTag(item);
+        return view;
     }
 
-    public void bindView(View view, TabsLayoutItemView item, Tab tab) {
+    void bindView(View view, Tab tab) {
+        TabsLayoutItemView item = (TabsLayoutItemView) view.getTag();
         item.assignValues(tab);
     }
 }

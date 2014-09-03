@@ -4,7 +4,6 @@
 
 package org.mozilla.gecko.tabs;
 
-import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
@@ -12,7 +11,6 @@ import org.mozilla.gecko.widget.TabThumbnailWrapper;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
