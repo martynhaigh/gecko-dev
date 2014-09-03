@@ -258,6 +258,10 @@ class TabsListLayout extends TwoWayView
                 view = newView(position, parent);
             } else {
                 view = convertView;
+
+                // If we're recycling this view, there's a chance it was transformed during
+                // the close animation. Remove any of those properties.
+                resetTransforms(view);
             }
 
             final Tab tab = mTabs.get(position);
@@ -279,9 +283,6 @@ class TabsListLayout extends TwoWayView
         void bindView(View view, Tab tab) {
             TabsLayoutItemView item = (TabsLayoutItemView) view.getTag();
             item.assignValues(tab);
-            // If we're recycling this view, there's a chance it was transformed during
-            // the close animation. Remove any of those properties.
-            resetTransforms(view);
         }
 
 
