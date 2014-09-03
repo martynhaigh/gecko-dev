@@ -19,6 +19,7 @@ import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
 import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
 import org.mozilla.gecko.widget.TwoWayView;
+import org.mozilla.gecko.animation.ViewHelper;
 
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -252,34 +253,37 @@ class TabsListLayout extends TwoWayView
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            TabsLayoutItemView item;
+           final View view;
+           if (convertView == null) {
+               view = newView(position, parent);
+           } else {
+               view = convertView;
+           }
 
-            if (convertView == null) {
-                convertView = mInflater.inflate(R.layout.tabs_row, null);
-                item = newView(convertView);
-            } else {
-                item = (TabsLayoutItemView) convertView.getTag();
-                // If we're recycling this view, there's a chance it was transformed during
-                // the close animation. Remove any of those properties.
-                resetTransforms(convertView);
-            }
+           final Tab tab = mTabs.get(position);
+           bindView(view, tab);
 
-            Tab tab = mTabs.get(position);
-            bindView(item, tab);
-
-            return convertView;
+           return view;
         }
 
-        public TabsLayoutItemView newView(View convertView) {
-            TabsLayoutItemView item = new TabsLayoutItemView(convertView);
-            item.close.setOnClickListener(mOnCloseClickListener);
-            convertView.setTag(item);
-            return item;
+        View newView(int position, ViewGroup parent) {
+           final View view = mInflater.inflate(R.layout.tabs_row, parent, false);
+
+           final TabsLayoutItemView item = new TabsLayoutItemView(view);
+           item.close.setOnClickListener(mOnCloseClickListener);
+
+           view.setTag(item);
+           return view;
         }
-    
-        public void bindView(TabsLayoutItemView item, Tab tab) {
+
+        void bindView(View view, Tab tab) {
+            TabsLayoutItemView item = (TabsLayoutItemView) view.getTag();
             item.assignValues(tab);
+            // If we're recycling this view, there's a chance it was transformed during
+            // the close animation. Remove any of those properties.
+            resetTransforms(view);
         }
+
 
     }
 
