@@ -36,7 +36,8 @@ import android.widget.ListAdapter;
 import android.util.Log;
 
 class TabsGridLayout extends GridView
-                     implements TabsLayout {
+                     implements TabsLayout,
+                                Tabs.OnTabsChangedListener {
 
     private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
 
@@ -45,7 +46,7 @@ class TabsGridLayout extends GridView
 
     private boolean mIsPrivate;
 
-    private TabsGridAdapter<TabsGridLayoutItemView> mTabsAdapter;
+    private TabsLayoutAdapter mTabsAdapter;
 
     private List<View> mPendingClosedTabs;
     private int mCloseAnimationCount;
@@ -71,22 +72,7 @@ class TabsGridLayout extends GridView
 
         //setItemsCanFocus(true);
 
-        mTabsAdapter = new TabsAdapter<TabsGridLayoutItemView>(mContext, new TabsLayoutFactory<TabsGridLayoutItemView>() {
-            public TabsGridLayoutItemView createItemView(View view, ViewGroup parent) {
-                return new TabsGridLayoutItemView(view, parent);
-            }
-
-            public Button.OnClickListener createOnClickListener() {
-                return new Button.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        TabsLayoutItemView item = (TabsLayoutItemView) v.getTag();
-                        Tabs.getInstance().selectTab(item.id);
-                        //TabsGridLayout.this.autoHidePanel();
-                    }
-                };
-            }
-        });
+        mTabsAdapter = new TabsGridLayoutAdapter(mContext);
         setAdapter(mTabsAdapter);
 
         setRecyclerListener(new RecyclerListener() {
@@ -99,25 +85,31 @@ class TabsGridLayout extends GridView
         });
     }
 
-    public static class TabsGridLayoutItemView extends TabsLayoutItemView {
+    private class TabsGridLayoutAdapter extends TabsLayoutAdapter {
 
-        TabsGridLayout mTabsListLayout;
-
-        public TabsGridLayoutItemView(View view, ViewGroup parent) {
-            super(view);
-            mTabsListLayout = (TabsGridLayout) parent;
+        public TabsGridLayoutAdapter (Context context) {
+            super(context);
         }
 
-        public void resetView() {
+        @Override
+        void bindView(View view, Tab tab) {
+            super.bindView(view, tab);
+
+            // If we're recycling this view, there's a chance it was transformed during
+            // the close animation. Remove any of those properties.
+            resetView(view);
+        }
+
+        public void resetView(View view) {
             ViewHelper.setAlpha(info, 1);
 
-            ViewHelper.setTranslationX(info, 0);
+            ViewHelper.setTranslationX(view, 0);
 
             // We only need to reset the height or width after individual tab close animations.
-            int originalSize = mTabsListLayout.getOriginalSize();
-            if (originalSize != 0) {
-                ViewHelper.setHeight(info, originalSize);
-            }
+            // int originalSize = mTabsListLayout.getOriginalSize();
+            // if (originalSize != 0) {
+            //     ViewHelper.setHeight(view, originalSize);
+            // }
         }
 
     }
@@ -147,11 +139,6 @@ class TabsGridLayout extends GridView
         GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Tab:Screenshot:Cancel",""));
         mTabsAdapter.clear();
     }
-
-    // @Override
-    // public boolean shouldExpand() {
-    //     return isVertical();
-    // }
 
     private void autoHidePanel() {
         mTabsPanel.autoHidePanel();

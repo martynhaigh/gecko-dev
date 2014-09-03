@@ -4,7 +4,6 @@
 
 package org.mozilla.gecko.tabs;
 
-import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
@@ -12,12 +11,11 @@ import org.mozilla.gecko.widget.TabThumbnailWrapper;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-public abstract class TabsLayoutItemView {
+public class TabsLayoutItemView {
     int id;
     TextView title;
     ImageView thumbnail;
@@ -25,11 +23,7 @@ public abstract class TabsLayoutItemView {
     ViewGroup info;
     TabThumbnailWrapper thumbnailWrapper;
 
-    public TabsLayoutItemView(View view, ViewGroup parent) {
-        this(view);
-    }
-
-    protected TabsLayoutItemView(View view) {
+    public TabsLayoutItemView(View view) {
         info = (ViewGroup) view;
         title = (TextView) view.findViewById(R.id.title);
         thumbnail = (ImageView) view.findViewById(R.id.thumbnail);
@@ -55,11 +49,4 @@ public abstract class TabsLayoutItemView {
         title.setText(tab.getDisplayTitle());
         close.setTag(this);
     }
-
-    public void setCloseOnClickListener(Button.OnClickListener listener) {
-        close.setOnClickListener(listener);
-    }
-
-    public abstract void resetView();
-
 }
