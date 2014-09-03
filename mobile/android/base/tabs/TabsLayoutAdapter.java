@@ -27,12 +27,12 @@ public class TabsLayoutAdapter extends BaseAdapter {
         mInflater = LayoutInflater.from(mContext);
     }
 
-    final public void setTabs (ArrayList<Tab> tabs) {
+    final void setTabs (ArrayList<Tab> tabs) {
         mTabs = tabs;
         notifyDataSetChanged(); // Be sure to call this whenever mTabs changes.
     }
 
-    final public boolean removeTab (Tab tab) {
+    final boolean removeTab (Tab tab) {
         boolean tabRemoved = mTabs.remove(tab);
         if (tabRemoved) {
             notifyDataSetChanged(); // Be sure to call this whenever mTabs changes.
@@ -40,7 +40,7 @@ public class TabsLayoutAdapter extends BaseAdapter {
         return tabRemoved;
     }
 
-    final public void clear() {
+    final void clear() {
         mTabs = null;
         notifyDataSetChanged(); // Be sure to call this whenever mTabs changes.
     }
@@ -60,7 +60,7 @@ public class TabsLayoutAdapter extends BaseAdapter {
         return position;
     }
 
-    final protected int getPositionForTab(Tab tab) {
+    final int getPositionForTab(Tab tab) {
         if (mTabs == null || tab == null)
             return -1;
 
