@@ -236,6 +236,8 @@ public class BrowserApp extends GeckoApp
         final View view;
         if (BrowserToolbar.class.getName().equals(name)) {
             view = BrowserToolbar.create(context, attrs);
+        } else if (TabsPanel.TabsLayoutView.class.getName().equals(name)) {
+            view = TabsPanel.create(context, attrs);
         } else {
             view = super.onCreateView(name, context, attrs);
         }
