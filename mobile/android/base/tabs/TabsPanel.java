@@ -50,21 +50,6 @@ public class TabsPanel extends LinearLayout
         REMOTE_TABS
     }
 
-    public enum TabsLayoutType {
-        LIST, GRID;
-
-        private int resId;
-
-        static {
-            LIST.resId = R.layout.tabs_tray_list;
-            GRID.resId = R.layout.tabs_tray_grid;
-        }
-
-        public int getLayoutId() {
-            return resId;
-        }
-    }
-
     public static interface PanelView {
         public void setTabsPanel(TabsPanel panel);
         public void show();
@@ -81,7 +66,7 @@ public class TabsPanel extends LinearLayout
     }
 
     public static View createTabsLayout(final Context context, final AttributeSet attrs) {
-       return new TabsListLayout(context, attrs);
+       return new TabsGridLayout(context, attrs);
     }
 
     public static interface TabsLayoutChangeListener {

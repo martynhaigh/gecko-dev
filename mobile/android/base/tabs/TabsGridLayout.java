@@ -16,8 +16,7 @@ import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
-import org.mozilla.gecko.tabs.TabsAdapter;
-import org.mozilla.gecko.tabs.TabsTray;
+import org.mozilla.gecko.tabs.TabsLayoutAdapter;
 import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
 
@@ -78,9 +77,9 @@ class TabsGridLayout extends GridView
         setRecyclerListener(new RecyclerListener() {
             @Override
             public void onMovedToScrapHeap(View view) {
-                TabRow row = (TabRow) view.getTag();
-                row.thumbnail.setImageDrawable(null);
-                row.close.setVisibility(View.VISIBLE);
+                TabsLayoutItemView item = (TabsLayoutItemView) view.getTag();
+                item.thumbnail.setImageDrawable(null);
+                item.close.setVisibility(View.VISIBLE);
             }
         });
     }
@@ -101,7 +100,7 @@ class TabsGridLayout extends GridView
         }
 
         public void resetView(View view) {
-            ViewHelper.setAlpha(info, 1);
+            ViewHelper.setAlpha(view, 1);
 
             ViewHelper.setTranslationX(view, 0);
 
@@ -114,7 +113,22 @@ class TabsGridLayout extends GridView
 
     }
 
-    @Override
+    private void refreshTabsData() {
+        // Store a different copy of the tabs, so that we don't have to worry about
+        // accidentally updating it on the wrong thread.
+        ArrayList<Tab> tabData = new ArrayList<Tab>();
+
+        Iterable<Tab> allTabs = Tabs.getInstance().getTabsInOrder();
+        for (Tab tab : allTabs) {
+            if (tab.isPrivate() == mIsPrivate)
+                tabData.add(tab);
+        }
+
+        mTabsAdapter.setTabs(tabData);
+        updateSelectedPosition();
+    }
+
+
     public void setIsPrivate(boolean isPrivate) {
         mIsPrivate = isPrivate;
     }
@@ -128,14 +142,14 @@ class TabsGridLayout extends GridView
     public void show() {
         setVisibility(View.VISIBLE);
         Tabs.getInstance().refreshThumbnails();
-        Tabs.registerOnTabsChangedListener(mTabsAdapter);
-        mTabsAdapter.refreshTabsData();
+        Tabs.registerOnTabsChangedListener(this);
+        refreshTabsData();
     }
 
     @Override
     public void hide() {
         setVisibility(View.GONE);
-        Tabs.unregisterOnTabsChangedListener(mTabsAdapter);
+        Tabs.unregisterOnTabsChangedListener(this);
         GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Tab:Screenshot:Cancel",""));
         mTabsAdapter.clear();
     }
@@ -144,6 +158,10 @@ class TabsGridLayout extends GridView
         mTabsPanel.autoHidePanel();
     }
 
+    @Override
+    public boolean shouldExpand() {
+        return true;
+    }
 
     @Override
     public void closeAll() {
@@ -166,11 +184,11 @@ class TabsGridLayout extends GridView
             final PropertyAnimator animator = new PropertyAnimator(ANIMATION_DURATION);
             animator.attach(view, Property.ALPHA, 0);
 
-            if (isVertical()) {
-                animator.attach(view, Property.TRANSLATION_X, view.getWidth());
-            } else {
-                animator.attach(view, Property.TRANSLATION_Y, view.getHeight());
-            }
+            // if (isVertical()) {
+            //     animator.attach(view, Property.TRANSLATION_X, view.getWidth());
+            // } else {
+            //     animator.attach(view, Property.TRANSLATION_Y, view.getHeight());
+            // }
 
             mCloseAllAnimationCount++;
 
@@ -218,10 +236,10 @@ class TabsGridLayout extends GridView
         PropertyAnimator animator = new PropertyAnimator(ANIMATION_DURATION);
         animator.attach(view, Property.ALPHA, 0);
 
-        if (isVertical())
+        //if (isVertical())
             animator.attach(view, Property.TRANSLATION_X, pos);
-        else
-            animator.attach(view, Property.TRANSLATION_Y, pos);
+        //else
+        //    animator.attach(view, Property.TRANSLATION_Y, pos);
 
         mCloseAnimationCount++;
         mPendingClosedTabs.add(view);
@@ -252,18 +270,18 @@ class TabsGridLayout extends GridView
     private void animateFinishClose(final View view) {
         PropertyAnimator animator = new PropertyAnimator(ANIMATION_DURATION);
 
-        final boolean isVertical = isVertical();
-        if (isVertical)
-            animator.attach(view, Property.HEIGHT, 1);
-        else
-            animator.attach(view, Property.WIDTH, 1);
+        //final boolean isVertical = isVertical();
+        // if (isVertical)
+             animator.attach(view, Property.HEIGHT, 1);
+        // else
+        //     animator.attach(view, Property.WIDTH, 1);
 
-        TabRow tab = (TabRow)view.getTag();
+        TabsLayoutItemView tab = (TabsLayoutItemView)view.getTag();
         final int tabId = tab.id;
 
         // Caching this assumes that all rows are the same height
         if (mOriginalSize == 0) {
-            mOriginalSize = (isVertical ? view.getHeight() : view.getWidth());
+            //mOriginalSize = (isVertical ? view.getHeight() : view.getWidth());
         }
 
         animator.addPropertyAnimationListener(new PropertyAnimator.PropertyAnimationListener() {
@@ -284,10 +302,10 @@ class TabsGridLayout extends GridView
         PropertyAnimator animator = new PropertyAnimator(ANIMATION_DURATION);
         animator.attach(view, Property.ALPHA, 1);
 
-        if (isVertical())
+        // if (isVertical())
             animator.attach(view, Property.TRANSLATION_X, 0);
-        else
-            animator.attach(view, Property.TRANSLATION_Y, 0);
+        // else
+        //     animator.attach(view, Property.TRANSLATION_Y, 0);
 
 
         animator.addPropertyAnimationListener(new PropertyAnimator.PropertyAnimationListener() {
@@ -295,7 +313,7 @@ class TabsGridLayout extends GridView
             public void onPropertyAnimationStart() { }
             @Override
             public void onPropertyAnimationEnd() {
-                TabRow tab = (TabRow) view.getTag();
+                TabsLayoutItemView tab = (TabsLayoutItemView) view.getTag();
                 tab.close.setVisibility(View.VISIBLE);
             }
         });
