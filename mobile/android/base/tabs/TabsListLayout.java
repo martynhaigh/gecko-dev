@@ -104,7 +104,7 @@ class TabsListLayout extends TwoWayView
         }
 
         @Override
-        View newView(int position, ViewGroup parent) {
+        public View newView(int position, ViewGroup parent) {
             View view = super.newView(position, parent);
 
             // This is nasty and once we change TabsLayoutItemView to an actual view
@@ -116,7 +116,7 @@ class TabsListLayout extends TwoWayView
         }
 
         @Override
-        void bindView(View view, Tab tab) {
+        public void bindView(View view, Tab tab) {
             super.bindView(view, tab);
 
             // If we're recycling this view, there's a chance it was transformed during
