@@ -65,7 +65,7 @@ public class TabsPanel extends LinearLayout
         public void setEmptyView(View view);
     }
 
-    public static View create(final Context context, final AttributeSet attrs) {
+    public static View createTabsLayout(final Context context, final AttributeSet attrs) {
        return new TabsListLayout(context, attrs);
     }
 
