@@ -32,6 +32,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewConfiguration;
 import android.widget.Button;
+import android.util.Log;
 
 class TabsListLayout extends TwoWayView
                      implements TabsLayout,
@@ -158,6 +159,7 @@ class TabsListLayout extends TwoWayView
 
     @Override
     public void onTabChanged(Tab tab, Tabs.TabEvents msg, Object data) {
+        Log.d("MTEST", "onTabChanged " + msg);
         switch (msg) {
             case ADDED:
                 // Refresh the list to make sure the new tab is added in the right position.

@@ -26,6 +26,7 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewConfiguration;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
@@ -43,7 +44,7 @@ class TabsGridLayout extends GridView
     private Context mContext;
     private TabsPanel mTabsPanel;
 
-    private boolean mIsPrivate;
+    private boolean mIsPrivate = false;
 
     private TabsLayoutAdapter mTabsAdapter;
 
@@ -99,6 +100,11 @@ class TabsGridLayout extends GridView
             resetView(view);
         }
 
+        @Override
+        public View newView(int position, ViewGroup parent) {
+            return super.newView(position, parent);
+        }
+
         public void resetView(View view) {
             ViewHelper.setAlpha(view, 1);
 
@@ -128,6 +134,63 @@ class TabsGridLayout extends GridView
         updateSelectedPosition();
     }
 
+    // Updates the selected position in the list so that it will be scrolled to the right place.
+    private void updateSelectedPosition() {
+        int selected = mTabsAdapter.getPositionForTab(Tabs.getInstance().getSelectedTab());
+        updateSelectedStyle(selected);
+
+        if (selected != -1) {
+            setSelection(selected);
+        }
+    }
+
+    
+    @Override
+    public void onTabChanged(Tab tab, Tabs.TabEvents msg, Object data) {
+        Log.d("MTEST", "onTabChanged " + msg);
+        switch (msg) {
+            case ADDED:
+                // Refresh the list to make sure the new tab is added in the right position.
+                refreshTabsData();
+                break;
+
+            case CLOSED:
+               if (tab.isPrivate() == mIsPrivate && mTabsAdapter.getCount() > 0) {
+                   if (mTabsAdapter.removeTab(tab)) {
+                       int selected = mTabsAdapter.getPositionForTab(Tabs.getInstance().getSelectedTab());
+                       updateSelectedStyle(selected);
+                   }
+               }
+               break;
+
+            case SELECTED:
+                // Update the selected position, then fall through...
+                updateSelectedPosition();
+            case UNSELECTED:
+                // We just need to update the style for the unselected tab...
+            case THUMBNAIL:
+            case TITLE:
+            case RECORDING_CHANGE:
+                View view = getChildAt(mTabsAdapter.getPositionForTab(tab) - getFirstVisiblePosition());
+                if (view == null)
+                    return;
+
+                TabsLayoutItemView item = (TabsLayoutItemView) view.getTag();
+                item.assignValues(tab);
+                break;
+        }
+    }
+
+    /**
+     * Updates the selected/unselected style for the tabs.
+     *
+     * @param selected position of the selected tab
+     */
+    private void updateSelectedStyle(int selected) {
+        for (int i = 0; i < mTabsAdapter.getCount(); i++) {
+            setItemChecked(i, (i == selected));
+        }
+    }
 
     public void setIsPrivate(boolean isPrivate) {
         mIsPrivate = isPrivate;
