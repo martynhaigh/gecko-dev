@@ -14,6 +14,7 @@ import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.LightweightTheme;
 import org.mozilla.gecko.LightweightThemeDrawable;
 import org.mozilla.gecko.R;
+import org.mozilla.gecko.NewTabletUI;
 import org.mozilla.gecko.Telemetry;
 import org.mozilla.gecko.TelemetryContract;
 import org.mozilla.gecko.animation.PropertyAnimator;
@@ -66,8 +67,8 @@ public class TabsPanel extends LinearLayout
     }
 
     public static View createTabsLayout(final Context context, final AttributeSet attrs) {
-       return new TabsListLayout(context, attrs);
-//       return new TabsGridLayout(context, attrs);
+       // return new TabsListLayout(context, attrs);
+      return new TabsGridLayout(context, attrs);
     }
 
     public static interface TabsLayoutChangeListener {
@@ -516,7 +517,7 @@ public class TabsPanel extends LinearLayout
             return;
         }
 
-        if (mIsSideBar) {
+        if (isSideBar()) {
             final int tabsPanelWidth = getWidth();
             if (mVisible) {
                 ViewHelper.setTranslationX(mHeader, -tabsPanelWidth);
