@@ -67,10 +67,10 @@ public class TabsPanel extends LinearLayout
     }
 
     public static View createTabsLayout(final Context context, final AttributeSet attrs) {
-        if (NewTabletUI.isEnabled(this)) {
-            return new TabsListLayout(context, attrs);
-        } else {
+        if (NewTabletUI.isEnabled(context)) {
             return new TabsGridLayout(context, attrs);
+        } else {
+            return new TabsListLayout(context, attrs);
         }
     }
 
