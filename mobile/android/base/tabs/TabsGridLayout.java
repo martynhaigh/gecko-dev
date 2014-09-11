@@ -61,9 +61,6 @@ class TabsGridLayout extends GridView
     private int mCloseAnimationCount;
     private int mCloseAllAnimationCount;
 
-    private final int VIEW_SIZE = 200;
-
-
     // Time to animate non-flinged tabs of screen, in milliseconds
     private static final int ANIMATION_DURATION = 250;
 
@@ -71,7 +68,7 @@ class TabsGridLayout extends GridView
     private static final int ANIMATION_CASCADE_DELAY = 75;
 
     private int mOriginalSize;
-
+    
     public TabsGridLayout(Context context, AttributeSet attrs) {
         super(context, attrs, R.attr.tabGridLayoutViewStyle);
         mContext = context;
@@ -85,13 +82,6 @@ class TabsGridLayout extends GridView
         mTabsAdapter = new TabsGridLayoutAdapter(mContext);
         setAdapter(mTabsAdapter);
 
-        // setColumnWidth(VIEW_SIZE);
-        // setNumColumns(2);
-
-        // mSwipeListener = new TabSwipeGestureListener();
-        // setOnTouchListener(mSwipeListener);
-        // setOnScrollListener(mSwipeListener.makeScrollListener());
-
         setRecyclerListener(new RecyclerListener() {
             @Override
             public void onMovedToScrapHeap(View view) {
@@ -100,55 +90,6 @@ class TabsGridLayout extends GridView
                 item.close.setVisibility(View.VISIBLE);
             }
         });
-        // getSpecs();
-    }
-
-    public View getParentView() {
-        ViewParent parent = this.getParent();
-        View r = null;
-        if (parent == null) {
-            Log.d("MTEST", "this.getParent() is null");
-        } else {
-            if (parent instanceof ViewGroup) {
-                ViewParent grandparent = ((ViewGroup) parent).getParent();
-                if (grandparent == null) {
-                    Log.d("MTEST", "((ViewGroup) this.getParent()).getParent() is null");
-                } else {
-                    r = (View) grandparent;
-
-                }
-            } else {
-                Log.d("MTEST", "this.getParent() is not a ViewGroup");
-            }
-        }
-        return r;
-    }
-
-    private void getSpecs() {
-        final View v = getParentView();
-        if(v != null) {
-            ViewTreeObserver vto = v.getViewTreeObserver();
-            vto.addOnGlobalLayoutListener(new OnGlobalLayoutListener() {
-
-                @Override
-                public void onGlobalLayout() {
-                    Log.d("MTEST", "Parent Height=" + TabsGridLayout.this.getMeasuredHeight() + " Width=" + TabsGridLayout.this.getMeasuredWidth());
-                    ViewTreeObserver obs = v.getViewTreeObserver();
-                    int width = TabsGridLayout.this.getMeasuredWidth();
-                    int colNum = (width / VIEW_SIZE);
-                    Log.d("MTEST", "Width:" + width);
-                    Log.d("MTEST", "minColNum:" + colNum);
-                    setNumColumns(colNum);
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                        obs.removeOnGlobalLayoutListener(this);
-                    } else {
-                        obs.removeGlobalOnLayoutListener(this);
-                    }
-                }
-
-            });
-        }
     }
 
     private class TabsGridLayoutAdapter extends TabsLayoutAdapter {
@@ -209,7 +150,6 @@ class TabsGridLayout extends GridView
         Tabs.getInstance().refreshThumbnails();
         Tabs.registerOnTabsChangedListener(this);
         refreshTabsData();
-        // getSpecs();
     }
 
     @Override
@@ -231,7 +171,6 @@ class TabsGridLayout extends GridView
 
     @Override
     public void onTabChanged(Tab tab, Tabs.TabEvents msg, Object data) {
-        Log.d("MTEST", "onTabChanged " + msg);
         switch (msg) {
             case ADDED:
                 // Refresh the list to make sure the new tab is added in the right position.
@@ -312,16 +251,12 @@ class TabsGridLayout extends GridView
 
         // We only need to reset the height or width after individual tab close animations.
         if (mOriginalSize != 0) {
-            if (isVertical()) {
-                ViewHelper.setHeight(view, mOriginalSize);
-            } else {
-                ViewHelper.setWidth(view, mOriginalSize);
-            }
+            ViewHelper.setHeight(view, mOriginalSize);
         }
     }
 
     private boolean isVertical() {
-        return true;//(getOrientation().compareTo(TwoWayView.Orientation.VERTICAL) == 0);
+        return true;
     }
 
     @Override
@@ -345,11 +280,7 @@ class TabsGridLayout extends GridView
             final PropertyAnimator animator = new PropertyAnimator(ANIMATION_DURATION);
             animator.attach(view, Property.ALPHA, 0);
 
-            if (isVertical()) {
-                animator.attach(view, Property.TRANSLATION_X, view.getWidth());
-            } else {
-                animator.attach(view, Property.TRANSLATION_Y, view.getHeight());
-            }
+            animator.attach(view, Property.TRANSLATION_X, view.getWidth());
 
             mCloseAllAnimationCount++;
 
@@ -397,10 +328,7 @@ class TabsGridLayout extends GridView
         PropertyAnimator animator = new PropertyAnimator(ANIMATION_DURATION);
         animator.attach(view, Property.ALPHA, 0);
 
-        if (isVertical())
-            animator.attach(view, Property.TRANSLATION_X, pos);
-        else
-            animator.attach(view, Property.TRANSLATION_Y, pos);
+        animator.attach(view, Property.TRANSLATION_X, pos);
 
         mCloseAnimationCount++;
         mPendingClosedTabs.add(view);
@@ -442,7 +370,7 @@ class TabsGridLayout extends GridView
 
         // Caching this assumes that all rows are the same height
         if (mOriginalSize == 0) {
-            mOriginalSize = (isVertical ? view.getHeight() : view.getWidth());
+            mOriginalSize = view.getHeight();
         }
 
         animator.addPropertyAnimationListener(new PropertyAnimator.PropertyAnimationListener() {
