@@ -57,7 +57,7 @@ class TabsGridLayout extends GridView
     private static final int ANIMATION_CASCADE_DELAY = 75;
 
     private int mOriginalSize;
-    
+
     public TabsGridLayout(Context context, AttributeSet attrs) {
         super(context, attrs, R.attr.tabGridLayoutViewStyle);
         mContext = context;
