@@ -66,7 +66,7 @@ public class TabsPanel extends LinearLayout
     }
 
     public static View createTabsLayout(final Context context, final AttributeSet attrs) {
-        return new TabsListLayout(context, attrs);
+       return new TabsListLayout(context, attrs);
     }
 
     public static interface TabsLayoutChangeListener {
@@ -463,7 +463,7 @@ public class TabsPanel extends LinearLayout
             }
         }
 
-        if (isSideBar()) {
+        if (mIsSideBar) {
             if (showAnimation)
                 dispatchLayoutChange(getWidth(), getHeight());
         } else {
