@@ -463,7 +463,7 @@ public class TabsPanel extends LinearLayout
             }
         }
 
-        if (mIsSideBar) {
+        if (isSideBar()) {
             if (showAnimation)
                 dispatchLayoutChange(getWidth(), getHeight());
         } else {
@@ -522,7 +522,7 @@ public class TabsPanel extends LinearLayout
             return;
         }
 
-        if (isSideBar()) {
+        if (mIsSideBar) {
             final int tabsPanelWidth = getWidth();
             if (mVisible) {
                 ViewHelper.setTranslationX(mHeader, -tabsPanelWidth);
