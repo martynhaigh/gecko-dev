@@ -602,14 +602,14 @@
     </style>
 
     <!-- TabsLayout Row -->
-    <style name="TabRowTextAppearance">
+    <style name="TabLayoutItemTextAppearance">
         <item name="android:textColor">#FFFFFFFF</item>
         <item name="android:singleLine">true</item>
         <item name="android:ellipsize">middle</item>
     </style>
 
     <!-- TabsLayout RemoteTabs Row Url -->
-    <style name="TabRowTextAppearance.Url">
+    <style name="TabLayoutItemTextAppearance.Url">
         <item name="android:textColor">#FFA4A7A9</item>
     </style>
 

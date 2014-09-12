@@ -3,7 +3,7 @@
    - License, v. 2.0. If a copy of the MPL was not distributed with this
    - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
-<org.mozilla.gecko.widget.TabRow xmlns:android="http://schemas.android.com/apk/res/android"
+<org.mozilla.gecko.widget.TabsLayoutItem xmlns:android="http://schemas.android.com/apk/res/android"
                                  style="@style/TabsItem"
                                  android:focusable="true"
                                  android:id="@+id/info"
@@ -39,7 +39,7 @@
                       android:layout_height="wrap_content"
                       android:layout_weight="1.0"
                       android:padding="4dip"
-                      style="@style/TabRowTextAppearance"
+                      style="@style/TabLayoutItemTextAppearance"
                       android:textSize="12sp"
                       android:textColor="#FF222222"
                       android:singleLine="true"
@@ -58,4 +58,4 @@
 
     </RelativeLayout>
 
-</org.mozilla.gecko.widget.TabRow>
+</org.mozilla.gecko.widget.TabsLayoutItem>

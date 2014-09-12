@@ -13,14 +13,14 @@
               android:paddingRight="4dp" >
 
     <org.mozilla.gecko.widget.AllCapsTextView android:id="@+id/client"
-                                              style="@style/TabRowTextAppearance"
+                                              style="@style/TabLayoutItemTextAppearance"
                                               android:layout_width="match_parent"
                                               android:layout_height="@dimen/remote_tab_group_row_height"
                                               android:textSize="18sp"
                                               android:textStyle="bold" />
 
     <TextView android:id="@+id/last_synced"
-              style="@style/TabRowTextAppearance.Url"
+              style="@style/TabLayoutItemTextAppearance.Url"
               android:layout_width="match_parent"
               android:layout_height="wrap_content"
               android:maxLength="1024"

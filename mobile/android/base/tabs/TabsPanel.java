@@ -328,7 +328,6 @@ public class TabsPanel extends LinearLayout
         onLightweightThemeChanged();
     }
 
-    // Tabs List Container holds the ListView
     static class TabsLayoutContainer extends FrameLayout {
         public TabsLayoutContainer(Context context, AttributeSet attrs) {
             super(context, attrs);

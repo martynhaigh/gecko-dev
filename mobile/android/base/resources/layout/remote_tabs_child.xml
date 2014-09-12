@@ -13,13 +13,13 @@
               android:paddingRight="4dp">
 
     <TextView android:id="@+id/title"
-              style="@style/TabRowTextAppearance"
+              style="@style/TabLayoutItemTextAppearance"
               android:layout_width="match_parent"
               android:layout_height="wrap_content"
               android:textSize="18sp" />
 
     <TextView android:id="@+id/url"
-              style="@style/TabRowTextAppearance.Url"
+              style="@style/TabLayoutItemTextAppearance.Url"
               android:layout_width="match_parent"
               android:layout_height="wrap_content"
               android:maxLength="1024"

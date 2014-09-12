@@ -11,13 +11,13 @@ import android.view.View;
 import android.widget.Checkable;
 import android.widget.LinearLayout;
 
-public class TabRow extends LinearLayout
+public class TabsLayoutItem extends LinearLayout
                     implements Checkable {
-    private static final String LOGTAG = "GeckoTabRow";
+    private static final String LOGTAG = "GeckoTabsLayoutItem";
     private static final int[] STATE_CHECKED = { android.R.attr.state_checked };
     private boolean mChecked;
 
-    public TabRow(Context context, AttributeSet attrs) {
+    public TabsLayoutItem(Context context, AttributeSet attrs) {
         super(context, attrs);
     }
 
