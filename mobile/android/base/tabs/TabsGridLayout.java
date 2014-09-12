@@ -64,8 +64,8 @@ class TabsGridLayout extends GridView
 
         mPendingClosedTabs = new ArrayList<View>();
 
-        TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.TabsTray);
-        mIsPrivate = (a.getInt(R.styleable.TabsTray_tabs, 0x0) == 1);
+        TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.TabsLayout);
+        mIsPrivate = (a.getInt(R.styleable.TabsLayout_tabs, 0x0) == 1);
         a.recycle();
 
         mTabsAdapter = new TabsGridLayoutAdapter(mContext);
