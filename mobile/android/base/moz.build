@@ -464,7 +464,6 @@ gbjar.sources += [
     'widget/GeckoViewFlipper.java',
     'widget/IconTabWidget.java',
     'widget/SquaredImageView.java',
-    'widget/TabRow.java',
     'widget/TabThumbnailWrapper.java',
     'widget/ThumbnailView.java',
     'widget/TwoWayView.java',
