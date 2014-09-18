@@ -20,17 +20,15 @@ import android.widget.TextView;
 
 public class TabsLayoutItemView extends LinearLayout
                                 implements Checkable {
-    private static final String LOGTAG = "GeckoTabRow";
+    private static final String LOGTAG = "Gecko" + TabsLayoutItemView.class.getSimpleName();
     private static final int[] STATE_CHECKED = { android.R.attr.state_checked };
     private boolean mChecked;
 
-    // yeah, it's a bit nasty having two different styles for the class members, but this'll be fixed once bug 1058574
-    // is addressed
-    int id;
-    TextView title;
-    ImageView thumbnail;
-    ImageButton close;
-    TabThumbnailWrapper thumbnailWrapper;
+    private int mId;
+    private TextView mTitle;
+    private ImageView mThumbnail;
+    private ImageButton mClose;
+    private TabThumbnailWrapper mThumbnailWrapper;
 
     public TabsLayoutItemView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -71,15 +69,15 @@ public class TabsLayoutItemView extends LinearLayout
         mChecked = !mChecked;
     }
 
-    public void populateChildReferences() {
-        title = (TextView) findViewById(R.id.title);
-        thumbnail = (ImageView) findViewById(R.id.thumbnail);
-        close = (ImageButton) findViewById(R.id.close);
-        thumbnailWrapper = (TabThumbnailWrapper) findViewById(R.id.wrapper);
+    private void populateChildReferences() {
+        mTitle = (TextView) findViewById(R.id.title);
+        mThumbnail = (ImageView) findViewById(R.id.thumbnail);
+        mClose = (ImageButton) findViewById(R.id.close);
+        mThumbnailWrapper = (TabThumbnailWrapper) findViewById(R.id.wrapper);
     }
 
     public void setCloseOnClickListener(OnClickListener mOnClickListener) {
-        close.setOnClickListener(mOnClickListener);
+        getCloseButton().setOnClickListener(mOnClickListener);
     }
 
     protected void assignValues(Tab tab)  {
@@ -87,18 +85,50 @@ public class TabsLayoutItemView extends LinearLayout
             return;
         }
 
-        id = tab.getId();
+        mId = tab.getId();
 
         Drawable thumbnailImage = tab.getThumbnail();
         if (thumbnailImage != null) {
-            thumbnail.setImageDrawable(thumbnailImage);
+            getThumbnail().setImageDrawable(thumbnailImage);
         } else {
-            thumbnail.setImageResource(R.drawable.tab_thumbnail_default);
+            getThumbnail().setImageResource(R.drawable.tab_thumbnail_default);
         }
-        if (thumbnailWrapper != null) {
-            thumbnailWrapper.setRecording(tab.isRecording());
+        if (getThumbnailWrapper() != null) {
+            getThumbnailWrapper().setRecording(tab.isRecording());
         }
-        title.setText(tab.getDisplayTitle());
-        close.setTag(this);
+        getTitle().setText(tab.getDisplayTitle());
+        getCloseButton().setTag(this);
+    }
+
+    public int getTabId() {
+        return mId;
+    }
+
+    public TextView getTitle() {
+        if (mTitle == null) {
+            populateChildReferences();
+        }
+        return mTitle;
+    }
+
+    public ImageView getThumbnail() {
+        if (mThumbnail == null) {
+            populateChildReferences();
+        }
+        return mThumbnail;
+    }
+
+    public ImageButton getCloseButton() {
+        if (mClose == null) {
+            populateChildReferences();
+        }
+        return mClose;
+    }
+
+    public TabThumbnailWrapper getThumbnailWrapper() {
+        if (mThumbnailWrapper == null) {
+            populateChildReferences();
+        }
+        return mThumbnailWrapper;
     }
 }

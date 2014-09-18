@@ -8,7 +8,6 @@ package org.mozilla.gecko.tabs;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.mozilla.gecko.AboutPages;
 import org.mozilla.gecko.animation.PropertyAnimator.Property;
 import org.mozilla.gecko.animation.PropertyAnimator;
 import org.mozilla.gecko.animation.ViewHelper;
@@ -16,7 +15,6 @@ import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
-import org.mozilla.gecko.tabs.TabsLayoutAdapter;
 import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
 import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
@@ -82,8 +80,8 @@ class TabsListLayout extends TwoWayView
             @Override
             public void onMovedToScrapHeap(View view) {
                 TabsLayoutItemView item = (TabsLayoutItemView) view;
-                item.thumbnail.setImageDrawable(null);
-                item.close.setVisibility(View.VISIBLE);
+                item.getThumbnail().setImageDrawable(null);
+                item.getCloseButton().setVisibility(View.VISIBLE);
             }
         });
     }
@@ -107,8 +105,6 @@ class TabsListLayout extends TwoWayView
         public View newView(int position, ViewGroup parent) {
             TabsLayoutItemView item = (TabsLayoutItemView) super.newView(position, parent);
 
-            // this is a big nasty, but we'll get rid of it in bug 1058574
-            item.populateChildReferences();
             item.setCloseOnClickListener(mOnClickListener);
 
             return item;
@@ -363,7 +359,7 @@ class TabsListLayout extends TwoWayView
             animator.attach(view, Property.WIDTH, 1);
 
         TabsLayoutItemView tab = (TabsLayoutItemView)view;
-        final int tabId = tab.id;
+        final int tabId = tab.getTabId();
 
         // Caching this assumes that all rows are the same height
         if (mOriginalSize == 0) {
@@ -400,7 +396,7 @@ class TabsListLayout extends TwoWayView
             @Override
             public void onPropertyAnimationEnd() {
                 TabsLayoutItemView tab = (TabsLayoutItemView) view;
-                tab.close.setVisibility(View.VISIBLE);
+                tab.getCloseButton().setVisibility(View.VISIBLE);
             }
         });
 
@@ -498,7 +494,7 @@ class TabsListLayout extends TwoWayView
 
                     if (!mSwiping) {
                         TabsLayoutItemView tab = (TabsLayoutItemView) mSwipeView;
-                        Tabs.getInstance().selectTab(tab.id);
+                        Tabs.getInstance().selectTab(tab.getTabId());
                         autoHidePanel();
 
                         mVelocityTracker.recycle();
@@ -586,7 +582,7 @@ class TabsListLayout extends TwoWayView
                         TabsListLayout.this.requestDisallowInterceptTouchEvent(true);
 
                         TabsLayoutItemView tab = (TabsLayoutItemView) mSwipeView;
-                        tab.close.setVisibility(View.INVISIBLE);
+                        tab.getCloseButton().setVisibility(View.INVISIBLE);
 
                         // Stops listview from highlighting the touched item
                         // in the list when swiping.
