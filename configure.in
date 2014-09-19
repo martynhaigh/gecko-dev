@@ -51,7 +51,7 @@ _SUBDIR_CONFIG_ARGS="$ac_configure_args"
 dnl Set the version number of the libs included with mozilla
 dnl ========================================================
 MOZJPEG=62
-MOZPNG=10610
+MOZPNG=10613
 NSPR_VERSION=4
 NSPR_MINVER=4.10.3
 NSS_VERSION=3
@@ -2060,6 +2060,9 @@ ia64*-hpux*)
         DLL_PREFIX=
         IMPORT_LIB_SUFFIX=dll.a
 
+        WIN32_CONSOLE_EXE_LDFLAGS=-mconsole
+        WIN32_GUI_EXE_LDFLAGS=-mwindows
+
         # We use mix of both POSIX and Win32 printf format across the tree, so format
         # warnings are useless on mingw.
         MOZ_C_SUPPORTS_WARNING(-Wno-, format, ac_c_has_wno_format)
@@ -2092,7 +2095,15 @@ ia64*-hpux*)
         MKCSHLIB='$(LD) -NOLOGO -DLL -OUT:$@ -PDB:$(LINK_PDBFILE) $(DSO_LDOPTS)'
         MKSHLIB_FORCE_ALL=
         MKSHLIB_UNFORCE_ALL=
-        DSO_LDOPTS=-SUBSYSTEM:WINDOWS
+        dnl Set subsystem version 5 for Windows XP.
+        if test "$CPU_ARCH" = "x86"; then
+            WIN32_SUBSYSTEM_VERSION=5.01
+        else
+            WIN32_SUBSYSTEM_VERSION=5.02
+        fi
+        WIN32_CONSOLE_EXE_LDFLAGS=-SUBSYSTEM:CONSOLE,$WIN32_SUBSYSTEM_VERSION
+        WIN32_GUI_EXE_LDFLAGS=-SUBSYSTEM:WINDOWS,$WIN32_SUBSYSTEM_VERSION
+        DSO_LDOPTS=-SUBSYSTEM:WINDOWS,$WIN32_SUBSYSTEM_VERSION
         _USE_CPP_INCLUDE_FLAG=1
         _DEFINES_CFLAGS='-FI $(DEPTH)/dist/include/mozilla-config.h -DMOZILLA_CLIENT'
         _DEFINES_CXXFLAGS='-FI $(DEPTH)/dist/include/mozilla-config.h -DMOZILLA_CLIENT'
@@ -2106,11 +2117,8 @@ ia64*-hpux*)
         if test "$_CC_SUITE" -ge "12"; then
             dnl VS2013+ requires -FS when parallel building by make -jN.
             dnl If nothing, compiler sometimes causes C1041 error.
-            dnl
-            dnl Visual Studio 2013 supports -Gw flags
-            dnl http://blogs.msdn.com/b/vcblog/archive/2013/09/11/introducing-gw-compiler-switch.aspx
-            CFLAGS="$CFLAGS -FS -Gw"
-            CXXFLAGS="$CXXFLAGS -FS -Gw"
+            CFLAGS="$CFLAGS -FS"
+            CXXFLAGS="$CXXFLAGS -FS"
         fi
         # khuey says we can safely ignore MSVC warning C4251
         # MSVC warning C4244 (implicit type conversion may lose data) warns
@@ -3822,6 +3830,7 @@ MOZ_ANDROID_BEAM=
 MOZ_LOCALE_SWITCHER=
 MOZ_ANDROID_SEARCH_ACTIVITY=
 MOZ_ANDROID_MLS_STUMBLER=
+MOZ_ANDROID_SHARE_OVERLAY=
 ACCESSIBILITY=1
 MOZ_TIME_MANAGER=
 MOZ_PAY=
@@ -3829,7 +3838,7 @@ MOZ_AUDIO_CHANNEL_MANAGER=
 NSS_NO_LIBPKIX=
 MOZ_CONTENT_SANDBOX=
 MOZ_GMP_SANDBOX=
-JSGC_USE_EXACT_ROOTING=1
+MOZ_SANDBOX=1
 JSGC_GENERATIONAL=
 
 case "$target_os" in
@@ -3892,6 +3901,11 @@ else
   if test "$MOZ_BUILD_APP" = "mobile" ; then
     AC_MSG_RESULT([none])
     AC_MSG_ERROR([--enable-application=mobile is no longer supported.])
+  fi
+  # Support comm-central.
+  if test -n "$EXTERNAL_SOURCE_DIR" ; then
+    MOZ_BUILD_APP="$EXTERNAL_SOURCE_DIR/$MOZ_BUILD_APP"
+    MOZ_BUILD_APP=`${PYTHON} -c "import os.path; print(os.path.relpath(\"${MOZ_BUILD_APP}\", \"${srcdir}\"))"`
   fi
   # We have a valid application only if it has a build.mk file in its top
   # directory.
@@ -4582,6 +4596,14 @@ AC_SUBST(MOZ_DISTRIBUTION_ID)
 
 
 dnl ========================================================
+dnl Google Play Services, placed here so it can depend on
+dnl values set by configure.sh above.
+dnl ========================================================
+
+MOZ_ANDROID_GOOGLE_PLAY_SERVICES
+
+
+dnl ========================================================
 dnl = Pango
 dnl ========================================================
 if test "$MOZ_ENABLE_GTK" -o "$MOZ_ENABLE_QT"
@@ -4836,6 +4858,13 @@ dnl = Include Mozilla Location Service Stumbler on Android
 dnl ========================================================
 if test -n "$MOZ_ANDROID_MLS_STUMBLER"; then
     AC_DEFINE(MOZ_ANDROID_MLS_STUMBLER)
+fi
+
+dnl ========================================================
+dnl = Include share overlay on Android
+dnl ========================================================
+if test -n "$MOZ_ANDROID_SHARE_OVERLAY"; then
+    AC_DEFINE(MOZ_ANDROID_SHARE_OVERLAY)
 fi
 
 dnl ========================================================
@@ -5605,6 +5634,24 @@ if test -n "${JAVA_BIN_PATH}" -o \
   if test -z "$KEYTOOL" -o "$KEYTOOL" = ":"; then
     AC_MSG_ERROR([The program keytool was not found.  Set \$JAVA_HOME to your Java SDK directory or use --with-java-bin-path={java-bin-dir}])
   fi
+
+  AC_MSG_CHECKING([for minimum required javac version >= 1.7])
+
+  dnl Javac spits out something like `javac 1.7.0`. This line cuts off the 'javac'
+  _javac_version=$($JAVAC -version 2>&1 | cut -d ' ' -f 2)
+
+  dnl Here, we extract the major (1) and minor (7) version numbers from the
+  dnl acquired version string.
+  _javac_major_version=$(echo $_javac_version | cut -d '.' -f 1)
+  _javac_minor_version=$(echo $_javac_version | cut -d '.' -f 2)
+
+  AC_MSG_RESULT([$_javac_version])
+
+  dnl Fail if we have a version other than 1.7.X
+  if test "$_javac_major_version" -ne "1" -o \
+       \( "$_javac_minor_version" -lt "7" \); then
+      AC_MSG_ERROR([javac 1.7 or higher is required.])
+  fi
 fi
 
 dnl ========================================================
@@ -6338,16 +6385,31 @@ fi
 AC_SUBST(NSS_NO_LIBPKIX)
 
 dnl ========================================================
+dnl = Sandboxing support
+dnl ========================================================
+MOZ_ARG_DISABLE_BOOL(sandbox,
+[  --disable-sandbox        Disable sandboxing support],
+    MOZ_SANDBOX=,
+    MOZ_SANDBOX=1)
+
+dnl ========================================================
 dnl = Content process sandboxing
 dnl ========================================================
 if test -n "$gonkdir"; then
-    MOZ_CONTENT_SANDBOX=1
+    MOZ_CONTENT_SANDBOX=$MOZ_SANDBOX
 fi
 
-MOZ_ARG_ENABLE_BOOL(content-sandbox,
-[  --enable-content-sandbox        Enable sandboxing support for content-processes],
-    MOZ_CONTENT_SANDBOX=1,
-    MOZ_CONTENT_SANDBOX=)
+case "$OS_TARGET:$NIGHTLY_BUILD" in
+WINNT:1)
+    MOZ_CONTENT_SANDBOX=$MOZ_SANDBOX
+    ;;
+*)
+    MOZ_ARG_ENABLE_BOOL(content-sandbox,
+    [  --enable-content-sandbox        Enable sandboxing support for content-processes],
+        MOZ_CONTENT_SANDBOX=1,
+        MOZ_CONTENT_SANDBOX=)
+    ;;
+esac
 
 if test -n "$MOZ_CONTENT_SANDBOX"; then
     AC_DEFINE(MOZ_CONTENT_SANDBOX)
@@ -6360,17 +6422,17 @@ dnl = Gecko Media Plugin sandboxing
 dnl ========================================================
 case $OS_TARGET in
 WINNT)
-    MOZ_GMP_SANDBOX=1
+    MOZ_GMP_SANDBOX=$MOZ_SANDBOX
     ;;
 Linux)
     case $CPU_ARCH in
     x86_64|x86)
-        MOZ_GMP_SANDBOX=1
+        MOZ_GMP_SANDBOX=$MOZ_SANDBOX
         ;;
     esac
     ;;
 Darwin)
-    MOZ_GMP_SANDBOX=1
+    MOZ_GMP_SANDBOX=$MOZ_SANDBOX
     ;;
 esac
 
@@ -6379,6 +6441,17 @@ if test -n "$MOZ_GMP_SANDBOX"; then
 fi
 
 AC_SUBST(MOZ_GMP_SANDBOX)
+
+if test -z "$MOZ_CONTENT_SANDBOX" -a -z "$MOZ_GMP_SANDBOX"; then
+    MOZ_SANDBOX=
+fi
+
+if test -n "$MOZ_SANDBOX"; then
+    AC_DEFINE(MOZ_SANDBOX)
+fi
+
+AC_SUBST(MOZ_SANDBOX)
+
 
 dnl ========================================================
 dnl =
@@ -6689,6 +6762,33 @@ AC_SUBST(MOZ_ALLOW_HEAP_EXECUTE_FLAGS)
 AC_SUBST(MOZ_OPTIMIZE_SIZE_TWEAK)
 AC_SUBST(MOZ_PGO)
 AC_SUBST(MOZ_PGO_OPTIMIZE_FLAGS)
+
+dnl ========================================================
+dnl = Enable NS_StackWalk.
+dnl ========================================================
+
+# On Windows, NS_StackWalk will only work correctly if we have frame pointers
+# available. That will only be true for non-optimized builds, debug builds or
+# builds with --enable-profiling in the .mozconfig (which is turned on in
+# Nightly by default.)
+case "$OS_TARGET" in
+WINNT)
+    if test -z "$MOZ_OPTIMIZE" -o -n "$MOZ_PROFILING" -o -n "$MOZ_DEBUG"; then
+        MOZ_STACKWALKING=1
+    else
+        MOZ_STACKWALKING=
+    fi
+    ;;
+*)
+    MOZ_STACKWALKING=1
+    ;;
+esac
+
+if test -n "$MOZ_STACKWALKING"; then
+    AC_DEFINE(MOZ_STACKWALKING)
+fi
+
+AC_SUBST(MOZ_STACKWALKING)
 
 dnl ========================================================
 dnl = Enable any treating of compile warnings as errors
@@ -7099,17 +7199,6 @@ if test -n "$JSGC_INCREMENTAL"; then
 fi
 
 dnl ========================================================
-dnl = Use exact stack rooting for GC
-dnl ========================================================
-MOZ_ARG_DISABLE_BOOL(exact-rooting,
-[  --disable-exact-rooting  Enable use of conservative stack scanning for GC],
-    JSGC_USE_EXACT_ROOTING= ,
-    JSGC_USE_EXACT_ROOTING=1 )
-if test -n "$JSGC_USE_EXACT_ROOTING"; then
-    AC_DEFINE(JSGC_USE_EXACT_ROOTING)
-fi
-
-dnl ========================================================
 dnl = Use generational GC
 dnl ========================================================
 MOZ_ARG_DISABLE_BOOL(gcgenerational,
@@ -7188,18 +7277,7 @@ dnl ========================================================
 dnl = Enable using the clang plugin to build
 dnl ========================================================
 
-MOZ_ARG_ENABLE_BOOL(clang-plugin,
-[  --enable-clang-plugin   Enable building with the mozilla clang plugin ],
-   ENABLE_CLANG_PLUGIN=1,
-   ENABLE_CLANG_PLUGIN= )
-if test -n "$ENABLE_CLANG_PLUGIN"; then
-    if test -z "$CLANG_CC"; then
-        AC_MSG_ERROR([Can't use clang plugin without clang.])
-    fi
-    AC_DEFINE(MOZ_CLANG_PLUGIN)
-fi
-
-AC_SUBST(ENABLE_CLANG_PLUGIN)
+MOZ_CONFIG_CLANG_PLUGIN
 
 dnl ========================================================
 dnl = Enable stripping of libs & executables
@@ -8285,6 +8363,12 @@ if test -n "$MOZ_SERVICES_SYNC"; then
   AC_DEFINE(MOZ_SERVICES_SYNC)
 fi
 
+dnl Build Services/CloudSync if required
+AC_SUBST(MOZ_SERVICES_CLOUDSYNC)
+if test -n "$MOZ_SERVICES_CLOUDSYNC"; then
+  AC_DEFINE(MOZ_SERVICES_CLOUDSYNC)
+fi
+
 dnl Build Captive Portal Detector if required
 AC_SUBST(MOZ_CAPTIVEDETECT)
 if test -n "$MOZ_CAPTIVEDETECT"; then
@@ -8393,6 +8477,7 @@ AC_SUBST(MOZ_ANDROID_BEAM)
 AC_SUBST(MOZ_LOCALE_SWITCHER)
 AC_SUBST(MOZ_DISABLE_GECKOVIEW)
 AC_SUBST(MOZ_ANDROID_SEARCH_ACTIVITY)
+AC_SUBST(MOZ_ANDROID_SHARE_OVERLAY)
 AC_SUBST(MOZ_ANDROID_MLS_STUMBLER)
 AC_SUBST(ENABLE_STRIP)
 AC_SUBST(PKG_SKIP_STRIP)
@@ -8693,6 +8778,8 @@ AC_SUBST(CC_VERSION)
 AC_SUBST(CXX_VERSION)
 AC_SUBST(MSMANIFEST_TOOL)
 AC_SUBST(NS_ENABLE_TSF)
+AC_SUBST(WIN32_CONSOLE_EXE_LDFLAGS)
+AC_SUBST(WIN32_GUI_EXE_LDFLAGS)
 
 AC_SUBST(MOZ_WAVE)
 AC_SUBST(MOZ_VORBIS)
@@ -8718,6 +8805,7 @@ AC_SUBST(VPX_X86_ASM)
 AC_SUBST(VPX_ARM_ASM)
 AC_SUBST(VPX_NEED_OBJ_INT_EXTRACT)
 AC_SUBST(MOZ_INSTRUMENT_EVENT_LOOP)
+AC_SUBST(MOZ_CODE_COVERAGE)
 AC_SUBST(LIBJPEG_TURBO_AS)
 AC_SUBST(LIBJPEG_TURBO_ASFLAGS)
 AC_SUBST(LIBJPEG_TURBO_X86_ASM)
@@ -9013,7 +9101,7 @@ if test -n "$_subconfigure_subdir"; then
   srcdir="$srcdir/.."
   _save_ac_configure_args="$ac_configure_args"
   ac_configure_args="$_subconfigure_config_args"
-  AC_OUTPUT_SUBDIRS("$_subconfigure_subdir")
+  AC_OUTPUT_SUBDIRS("$_subconfigure_subdir",$cache_file)
   ac_configure_args="$_save_ac_configure_args"
   srcdir="$_save_srcdir"
 fi
@@ -9046,11 +9134,6 @@ HOST_CXXFLAGS="$_SUBDIR_HOST_CXXFLAGS"
 HOST_LDFLAGS="$_SUBDIR_HOST_LDFLAGS"
 RC=
 
-if test -n "$ENABLE_CLANG_PLUGIN"; then
-    ac_configure_args="$_SUBDIR_CONFIG_ARGS"
-    AC_OUTPUT_SUBDIRS(build/clang-plugin)
-fi
-
 # Run the SpiderMonkey 'configure' script.
 dist=$MOZ_BUILD_ROOT/dist
 ac_configure_args="$_SUBDIR_CONFIG_ARGS"
@@ -9074,9 +9157,6 @@ if test -z "$JS_SHARED_LIBRARY" ; then
     if test -n "$MOZ_DISABLE_EXPORT_JS"; then
         ac_configure_args="$ac_configure_args --disable-export-js"
     fi
-fi
-if test -z "$JSGC_USE_EXACT_ROOTING" ; then
-    ac_configure_args="$ac_configure_args --disable-exact-rooting"
 fi
 if test -z "$JSGC_GENERATIONAL" ; then
     ac_configure_args="$ac_configure_args --disable-gcgenerational"

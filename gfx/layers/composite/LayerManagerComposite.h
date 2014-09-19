@@ -67,6 +67,10 @@ class TextRenderer;
 class CompositingRenderTarget;
 struct FPSState;
 
+static const int kVisualWarningTrigger = 200; // ms
+static const int kVisualWarningMax = 1000; // ms
+static const int kVisualWarningDuration = 150; // ms
+
 class LayerManagerComposite MOZ_FINAL : public LayerManager
 {
   typedef mozilla::gfx::DrawTarget DrawTarget;
@@ -239,6 +243,26 @@ public:
 
   TextRenderer* GetTextRenderer() { return mTextRenderer; }
 
+  /**
+   * Add an on frame warning.
+   * @param severity ranges from 0 to 1. It's used to compute the warning color.
+   */
+  void VisualFrameWarning(float severity) {
+    mozilla::TimeStamp now = TimeStamp::Now();
+    if (mWarnTime.IsNull() ||
+        severity > mWarningLevel ||
+        mWarnTime + TimeDuration::FromMilliseconds(kVisualWarningDuration) < now) {
+      mWarnTime = now;
+      mWarningLevel = severity;
+    }
+  }
+
+  void UnusedApzTransformWarning() {
+    mUnusedApzTransformWarning = true;
+  }
+
+  bool LastFrameMissedHWC() { return mLastFrameMissedHWC; }
+
 private:
   /** Region we're clipping our current drawing to. */
   nsIntRegion mClippingRegion;
@@ -277,6 +301,9 @@ private:
                                bool aInvertEffect,
                                float aContrastEffect);
 
+  float mWarningLevel;
+  mozilla::TimeStamp mWarnTime;
+  bool mUnusedApzTransformWarning;
   RefPtr<Compositor> mCompositor;
   UniquePtr<LayerProperties> mClonedLayerTreeProperties;
 
@@ -297,6 +324,10 @@ private:
   RefPtr<CompositingRenderTarget> mTwoPassTmpTarget;
   RefPtr<TextRenderer> mTextRenderer;
   bool mGeometryChanged;
+
+  // Testing property. If hardware composer is supported, this will return
+  // true if the last frame was deemed 'too complicated' to be rendered.
+  bool mLastFrameMissedHWC;
 };
 
 /**
@@ -337,9 +368,10 @@ public:
   virtual Layer* GetLayer() = 0;
 
   /**
-   * Perform a first pass over the layer tree to prepare intermediate surfaces.
-   * This allows us on to avoid framebuffer switches in the middle of our render
-   * which is inefficient. This must be called before RenderLayer.
+   * Perform a first pass over the layer tree to render all of the intermediate
+   * surfaces that we can. This allows us to avoid framebuffer switches in the
+   * middle of our render which is inefficient especially on mobile GPUs. This
+   * must be called before RenderLayer.
    */
   virtual void Prepare(const RenderTargetIntRect& aClipRect) {}
 

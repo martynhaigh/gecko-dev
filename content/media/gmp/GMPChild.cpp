@@ -9,6 +9,7 @@
 #include "GMPAudioDecoderChild.h"
 #include "GMPDecryptorChild.h"
 #include "GMPVideoHost.h"
+#include "nsDebugImpl.h"
 #include "nsIFile.h"
 #include "nsXULAppAPI.h"
 #include "gmp-video-decode.h"
@@ -24,7 +25,7 @@ using mozilla::dom::CrashReporterChild;
 #include <unistd.h> // for _exit()
 #endif
 
-#if defined(XP_WIN)
+#if defined(MOZ_SANDBOX) && defined(XP_WIN)
 #define TARGET_SANDBOX_EXPORTS
 #include "mozilla/sandboxTarget.h"
 #elif defined (MOZ_GMP_SANDBOX)
@@ -42,6 +43,7 @@ GMPChild::GMPChild()
   , mGetAPIFunc(nullptr)
   , mGMPMessageLoop(MessageLoop::current())
 {
+  nsDebugImpl::SetMultiprocessMode("GMP");
 }
 
 GMPChild::~GMPChild()
@@ -235,7 +237,7 @@ GMPChild::Init(const std::string& aPluginPath,
   return true;
 #endif
 
-#if defined(XP_WIN)
+#if defined(MOZ_SANDBOX) && defined(XP_WIN)
   mozilla::SandboxTarget::Instance()->StartSandbox();
 #endif
 

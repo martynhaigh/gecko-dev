@@ -179,18 +179,24 @@ loop.shared.views = (function(_, OT, l10n) {
 
     render: function() {
       /* jshint ignore:start */
-      var hangupButtonClasses = "btn btn-hangup";
       return (
         React.DOM.ul({className: "conversation-toolbar"}, 
-          React.DOM.li(null, React.DOM.button({className: hangupButtonClasses, 
-                      onClick: this.handleClickHangup, 
-                      title: l10n.get("hangup_button_title")})), 
-          React.DOM.li(null, MediaControlButton({action: this.handleToggleVideo, 
-                                  enabled: this.props.video.enabled, 
-                                  scope: "local", type: "video"})), 
-          React.DOM.li(null, MediaControlButton({action: this.handleToggleAudio, 
-                                  enabled: this.props.audio.enabled, 
-                                  scope: "local", type: "audio"}))
+          React.DOM.li({className: "conversation-toolbar-btn-box"}, 
+            React.DOM.button({className: "btn btn-hangup", onClick: this.handleClickHangup, 
+                    title: l10n.get("hangup_button_title")}, 
+              l10n.get("hangup_button_caption2")
+            )
+          ), 
+          React.DOM.li({className: "conversation-toolbar-btn-box"}, 
+            MediaControlButton({action: this.handleToggleVideo, 
+                                enabled: this.props.video.enabled, 
+                                scope: "local", type: "video"})
+          ), 
+          React.DOM.li({className: "conversation-toolbar-btn-box"}, 
+            MediaControlButton({action: this.handleToggleAudio, 
+                                enabled: this.props.audio.enabled, 
+                                scope: "local", type: "audio"})
+          )
         )
       );
       /* jshint ignore:end */
@@ -247,6 +253,25 @@ loop.shared.views = (function(_, OT, l10n) {
                                        this.stopPublishing);
 
       this.props.model.startSession();
+
+      /**
+       * OT inserts inline styles into the markup. Using a listener for
+       * resize events helps us trigger a full width/height on the element
+       * so that they update to the correct dimensions.
+       * */
+      window.addEventListener('orientationchange', this.updateVideoContainer);
+      window.addEventListener('resize', this.updateVideoContainer);
+    },
+
+    updateVideoContainer: function() {
+      var localStreamParent = document.querySelector('.local .OT_publisher');
+      var remoteStreamParent = document.querySelector('.remote .OT_subscriber');
+      if (localStreamParent) {
+        localStreamParent.style.width = "100%";
+      }
+      if (remoteStreamParent) {
+        remoteStreamParent.style.height = "100%";
+      }
     },
 
     componentWillUnmount: function() {
@@ -272,13 +297,7 @@ loop.shared.views = (function(_, OT, l10n) {
      */
     _streamCreated: function(event) {
       var incoming = this.getDOMNode().querySelector(".remote");
-      event.streams.forEach(function(stream) {
-        if (stream.connection.connectionId !==
-            this.props.model.session.connection.connectionId) {
-          this.props.model.session.subscribe(stream, incoming,
-                                             this.publisherConfig);
-        }
-      }, this);
+      this.props.model.subscribe(event.stream, incoming, this.publisherConfig);
     },
 
     /**
@@ -315,7 +334,7 @@ loop.shared.views = (function(_, OT, l10n) {
         });
       }.bind(this));
 
-      this.props.model.session.publish(this.publisher);
+      this.props.model.publish(this.publisher);
     },
 
     /**
@@ -345,18 +364,25 @@ loop.shared.views = (function(_, OT, l10n) {
     },
 
     render: function() {
+      var localStreamClasses = React.addons.classSet({
+        local: true,
+        "local-stream": true,
+        "local-stream-audio": !this.state.video.enabled
+      });
       /* jshint ignore:start */
       return (
-        React.DOM.div({className: "conversation"}, 
-          ConversationToolbar({video: this.state.video, 
-                               audio: this.state.audio, 
-                               publishStream: this.publishStream, 
-                               hangup: this.hangup}), 
-          React.DOM.div({className: "media nested"}, 
-            React.DOM.div({className: "video_wrapper remote_wrapper"}, 
-              React.DOM.div({className: "video_inner remote"})
+        React.DOM.div({className: "video-layout-wrapper"}, 
+          React.DOM.div({className: "conversation"}, 
+            React.DOM.div({className: "media nested"}, 
+              React.DOM.div({className: "video_wrapper remote_wrapper"}, 
+                React.DOM.div({className: "video_inner remote"})
+              ), 
+              React.DOM.div({className: localStreamClasses})
             ), 
-            React.DOM.div({className: "local"})
+            ConversationToolbar({video: this.state.video, 
+                                 audio: this.state.audio, 
+                                 publishStream: this.publishStream, 
+                                 hangup: this.hangup})
           )
         )
       );
@@ -381,7 +407,8 @@ loop.shared.views = (function(_, OT, l10n) {
       var backButton = React.DOM.div(null);
       if (this.props.reset) {
         backButton = (
-          React.DOM.button({className: "back", type: "button", onClick: this.props.reset}, 
+          React.DOM.button({className: "fx-embedded-btn-back", type: "button", 
+                  onClick: this.props.reset}, 
             "« ", l10n.get("feedback_back_button")
           )
         );
@@ -541,8 +568,9 @@ loop.shared.views = (function(_, OT, l10n) {
       return (
         FeedbackLayout({title: l10n.get("feedback_thank_you_heading")}, 
           React.DOM.p({className: "info thank-you"}, 
-            l10n.get("feedback_window_will_close_in", {
-              countdown: this.state.countdown
+            l10n.get("feedback_window_will_close_in2", {
+              countdown: this.state.countdown,
+              num: this.state.countdown
             }))
         )
       );
@@ -608,7 +636,7 @@ loop.shared.views = (function(_, OT, l10n) {
         default:
           return (
             FeedbackLayout({title: 
-              l10n.get("feedback_call_experience_heading")}, 
+              l10n.get("feedback_call_experience_heading2")}, 
               React.DOM.div({className: "faces"}, 
                 React.DOM.button({className: "face face-happy", 
                         onClick: this.handleHappyClick}), 
@@ -624,133 +652,55 @@ loop.shared.views = (function(_, OT, l10n) {
   /**
    * Notification view.
    */
-  var NotificationView = BaseView.extend({
-    template: _.template([
-      '<div class="alert alert-<%- level %>">',
-      '  <button class="close"></button>',
-      '  <p class="message"><%- message %></p>',
-      '</div>'
-    ].join("")),
+  var NotificationView = React.createClass({
+    displayName: 'NotificationView',
+    mixins: [Backbone.Events],
 
-    events: {
-      "click .close": "dismiss"
-    },
-
-    dismiss: function(event) {
-      event.preventDefault();
-      this.$el.addClass("fade-out");
-      setTimeout(function() {
-        this.collection.remove(this.model);
-        this.remove();
-      }.bind(this), 500); // XXX make timeout value configurable
+    propTypes: {
+      notification: React.PropTypes.object.isRequired,
+      key: React.PropTypes.number.isRequired
     },
 
     render: function() {
-      this.$el.html(this.template(this.model.toJSON()));
-      return this;
+      var notification = this.props.notification;
+      return (
+        React.DOM.div({key: this.props.key, 
+             className: "alert alert-" + notification.get("level")}, 
+          React.DOM.span({className: "message"}, notification.get("message"))
+        )
+      );
     }
   });
 
   /**
    * Notification list view.
    */
-  var NotificationListView = Backbone.View.extend({
-    /**
-     * Constructor.
-     *
-     * Available options:
-     * - {loop.shared.models.NotificationCollection} collection Notifications
-     *                                                          collection
-     *
-     * @param  {Object} options Options object
-     */
-    initialize: function(options) {
-      options = options || {};
-      if (!options.collection) {
-        this.collection = new sharedModels.NotificationCollection();
-      }
-      this.listenTo(this.collection, "reset add remove", this.render);
+  var NotificationListView = React.createClass({displayName: 'NotificationListView',
+    mixins: [Backbone.Events],
+
+    propTypes: {
+      notifications: React.PropTypes.object.isRequired
     },
 
-    /**
-     * Clears the notification stack.
-     */
-    clear: function() {
-      this.collection.reset();
+    componentDidMount: function() {
+      this.listenTo(this.props.notifications, "reset add remove", function() {
+        this.forceUpdate();
+      }.bind(this));
     },
 
-    /**
-     * Adds a new notification to the stack, triggering rendering of it.
-     *
-     * @param  {Object|NotificationModel} notification Notification data.
-     */
-    notify: function(notification) {
-      this.collection.add(notification);
+    componentWillUnmount: function() {
+      this.stopListening(this.props.notifications);
     },
 
-    /**
-     * Adds a new notification to the stack using an l10n message identifier,
-     * triggering rendering of it.
-     *
-     * @param  {String} messageId L10n message id
-     * @param  {String} level     Notification level
-     */
-    notifyL10n: function(messageId, level) {
-      this.notify({
-        message: l10n.get(messageId),
-        level: level
-      });
-    },
-
-    /**
-     * Adds a warning notification to the stack and renders it.
-     *
-     * @return {String} message
-     */
-    warn: function(message) {
-      this.notify({level: "warning", message: message});
-    },
-
-    /**
-     * Adds a l10n warning notification to the stack and renders it.
-     *
-     * @param  {String} messageId L10n message id
-     */
-    warnL10n: function(messageId) {
-      this.warn(l10n.get(messageId));
-    },
-
-    /**
-     * Adds an error notification to the stack and renders it.
-     *
-     * @return {String} message
-     */
-    error: function(message) {
-      this.notify({level: "error", message: message});
-    },
-
-    /**
-     * Adds a l10n rror notification to the stack and renders it.
-     *
-     * @param  {String} messageId L10n message id
-     */
-    errorL10n: function(messageId) {
-      this.error(l10n.get(messageId));
-    },
-
-    /**
-     * Renders this view.
-     *
-     * @return {loop.shared.views.NotificationListView}
-     */
     render: function() {
-      this.$el.html(this.collection.map(function(notification) {
-        return new NotificationView({
-          model: notification,
-          collection: this.collection
-        }).render().$el;
-      }.bind(this)));
-      return this;
+      return (
+        React.DOM.div({id: "messages"}, 
+          this.props.notifications.map(function(notification, key) {
+            return NotificationView({key: key, notification: notification});
+          })
+        
+        )
+      );
     }
   });
 
@@ -790,8 +740,7 @@ loop.shared.views = (function(_, OT, l10n) {
     FeedbackView: FeedbackView,
     MediaControlButton: MediaControlButton,
     NotificationListView: NotificationListView,
-    NotificationView: NotificationView,
     UnsupportedBrowserView: UnsupportedBrowserView,
     UnsupportedDeviceView: UnsupportedDeviceView
   };
-})(_, window.OT, document.webL10n || document.mozL10n);
+})(_, window.OT, navigator.mozL10n || document.mozL10n);

@@ -173,6 +173,13 @@ CompositorOGL::CleanupResources()
     mQuadVBO = 0;
   }
 
+  // On the main thread the Widget will be destroyed soon and calling MakeCurrent
+  // after that could cause a crash (at least with GLX, see bug 1059793), unless
+  // context is marked as destroyed.
+  // There may be some textures still alive that will try to call MakeCurrent on
+  // the context so let's make sure it is marked destroyed now.
+  mGLContext->MarkDestroyed();
+
   mGLContext = nullptr;
 }
 
@@ -474,8 +481,8 @@ DecomposeIntoNoRepeatRects(const Rect& aRect,
 
   // If we are dealing with wrapping br.x and br.y are greater than 1.0 so
   // wrap them here as well.
-  br = Point(xwrap ? WrapTexCoord(br.x) : br.x.value,
-             ywrap ? WrapTexCoord(br.y) : br.y.value);
+  br = Point(xwrap ? WrapTexCoord(br.x) : br.x,
+             ywrap ? WrapTexCoord(br.y) : br.y);
 
   // If we wrap around along the x axis, we will draw first from
   // tl.x .. 1.0 and then from 0.0 .. br.x (which we just wrapped above).
@@ -581,12 +588,16 @@ CompositorOGL::PrepareViewport(const gfx::IntSize& aSize,
   Matrix viewMatrix;
   if (mGLContext->IsOffscreen()) {
     // In case of rendering via GL Offscreen context, disable Y-Flipping
-    viewMatrix.Translate(-1.0, -1.0);
-    viewMatrix.Scale(2.0f / float(aSize.width), 2.0f / float(aSize.height));
+    viewMatrix.PreTranslate(-1.0, -1.0);
+    viewMatrix.PreScale(2.0f / float(aSize.width), 2.0f / float(aSize.height));
   } else {
-    viewMatrix.Translate(-1.0, 1.0);
-    viewMatrix.Scale(2.0f / float(aSize.width), 2.0f / float(aSize.height));
-    viewMatrix.Scale(1.0f, -1.0f);
+    viewMatrix.PreTranslate(-1.0, 1.0);
+    viewMatrix.PreScale(2.0f / float(aSize.width), 2.0f / float(aSize.height));
+    viewMatrix.PreScale(1.0f, -1.0f);
+  }
+
+  if (!mTarget) {
+    viewMatrix.PreTranslate(mRenderOffset.x, mRenderOffset.y);
   }
 
   viewMatrix = aWorldTransform * viewMatrix;
@@ -710,15 +721,6 @@ CompositorOGL::BeginFrame(const nsIntRegion& aInvalidRegion,
     rect = gfx::Rect(0, 0, mSurfaceSize.width, mSurfaceSize.height);
   } else {
     rect = gfx::Rect(aRenderBounds.x, aRenderBounds.y, aRenderBounds.width, aRenderBounds.height);
-    // If render bounds is not updated explicitly, try to infer it from widget
-    if (rect.width == 0 || rect.height == 0) {
-      // FIXME/bug XXXXXX this races with rotation changes on the main
-      // thread, and undoes all the care we take with layers txns being
-      // sent atomically with rotation changes
-      nsIntRect intRect;
-      mWidget->GetClientBounds(intRect);
-      rect = gfx::Rect(0, 0, intRect.width, intRect.height);
-    }
   }
 
   rect = aTransform.TransformBounds(rect);
@@ -754,17 +756,8 @@ CompositorOGL::BeginFrame(const nsIntRegion& aInvalidRegion,
   TexturePoolOGL::Fill(gl());
 #endif
 
-  // Make sure the render offset is respected. We ignore this when we have a
-  // target to stop tests failing - this is only used by the Android browser
-  // UI for its dynamic toolbar.
-  IntPoint origin;
-  if (!mTarget) {
-    origin = -TruncatedToInt(mRenderOffset.ToUnknownPoint());
-  }
-
   mCurrentRenderTarget =
     CompositingRenderTargetOGL::RenderTargetForWindow(this,
-                                                      origin,
                                                       IntSize(width, height),
                                                       aTransform);
   mCurrentRenderTarget->BindRenderTarget();
@@ -1023,11 +1016,12 @@ CompositorOGL::DrawQuad(const Rect& aRect,
 
   MOZ_ASSERT(mFrameInProgress, "frame not started");
 
-  IntRect intClipRect;
-  aClipRect.ToIntRect(&intClipRect);
+  Rect clipRect = aClipRect;
   if (!mTarget) {
-    intClipRect.MoveBy(mRenderOffset.x, mRenderOffset.y);
+    clipRect.MoveBy(mRenderOffset.x, mRenderOffset.y);
   }
+  IntRect intClipRect;
+  clipRect.ToIntRect(&intClipRect);
 
   gl()->fScissor(intClipRect.x, FlipY(intClipRect.y + intClipRect.height),
                  intClipRect.width, intClipRect.height);
@@ -1218,8 +1212,8 @@ CompositorOGL::DrawQuad(const Rect& aRect,
       // Drawing is always flipped, but when copying between surfaces we want to avoid
       // this, so apply a flip here to cancel the other one out.
       Matrix transform;
-      transform.Translate(0.0, 1.0);
-      transform.Scale(1.0f, -1.0f);
+      transform.PreTranslate(0.0, 1.0);
+      transform.PreScale(1.0f, -1.0f);
       program->SetTextureTransform(Matrix4x4::From2D(transform));
       program->SetTextureUnit(0);
 
@@ -1493,8 +1487,7 @@ CompositorOGL::CopyToTarget(DrawTarget* aTarget, const nsIntPoint& aTopLeft, con
 
   RefPtr<DataSourceSurface> source =
         Factory::CreateDataSourceSurface(rect.Size(), gfx::SurfaceFormat::B8G8R8A8);
-  if (!source) {
-    NS_WARNING("Failed to create SourceSurface.");
+  if (NS_WARN_IF(!source)) {
     return;
   }
 
@@ -1503,8 +1496,8 @@ CompositorOGL::CopyToTarget(DrawTarget* aTarget, const nsIntPoint& aTopLeft, con
   // Map from GL space to Cairo space and reverse the world transform.
   Matrix glToCairoTransform = aTransform;
   glToCairoTransform.Invert();
-  glToCairoTransform.Scale(1.0, -1.0);
-  glToCairoTransform.Translate(0.0, -height);
+  glToCairoTransform.PreScale(1.0, -1.0);
+  glToCairoTransform.PreTranslate(0.0, -height);
 
   glToCairoTransform.PostTranslate(-aTopLeft.x, -aTopLeft.y);
 

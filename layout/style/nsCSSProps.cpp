@@ -728,6 +728,8 @@ const KTableValue nsCSSProps::kAppearanceKTable[] = {
   eCSSKeyword__moz_window_button_box,         NS_THEME_WINDOW_BUTTON_BOX,
   eCSSKeyword__moz_window_button_box_maximized, NS_THEME_WINDOW_BUTTON_BOX_MAXIMIZED,
   eCSSKeyword__moz_win_exclude_glass,         NS_THEME_WIN_EXCLUDE_GLASS,
+  eCSSKeyword__moz_mac_vibrancy_light,        NS_THEME_MAC_VIBRANCY_LIGHT,
+  eCSSKeyword__moz_mac_vibrancy_dark,         NS_THEME_MAC_VIBRANCY_DARK,
   eCSSKeyword_UNKNOWN,-1
 };
 
@@ -1428,6 +1430,15 @@ const KTableValue nsCSSProps::kContextPatternKTable[] = {
   eCSSKeyword_context_fill, NS_COLOR_CONTEXT_FILL,
   eCSSKeyword_context_stroke, NS_COLOR_CONTEXT_STROKE,
   eCSSKeyword_UNKNOWN,-1
+};
+
+const KTableValue nsCSSProps::kObjectFitKTable[] = {
+  eCSSKeyword_fill,       NS_STYLE_OBJECT_FIT_FILL,
+  eCSSKeyword_contain,    NS_STYLE_OBJECT_FIT_CONTAIN,
+  eCSSKeyword_cover,      NS_STYLE_OBJECT_FIT_COVER,
+  eCSSKeyword_none,       NS_STYLE_OBJECT_FIT_NONE,
+  eCSSKeyword_scale_down, NS_STYLE_OBJECT_FIT_SCALE_DOWN,
+  eCSSKeyword_UNKNOWN,    -1
 };
 
 const KTableValue nsCSSProps::kOrientKTable[] = {

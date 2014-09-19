@@ -284,7 +284,7 @@ static const char kGrandTotalsStr[] = "Grand Totals";
 // Counting Class
 class ReflowCounter {
 public:
-  ReflowCounter(ReflowCountMgr * aMgr = nullptr);
+  explicit ReflowCounter(ReflowCountMgr * aMgr = nullptr);
   ~ReflowCounter();
 
   void ClearTotals();
@@ -315,7 +315,7 @@ protected:
 // Counting Class
 class IndiReflowCounter {
 public:
-  IndiReflowCounter(ReflowCountMgr * aMgr = nullptr)
+  explicit IndiReflowCounter(ReflowCountMgr * aMgr = nullptr)
     : mFrame(nullptr),
       mCount(0),
       mMgr(aMgr),
@@ -440,7 +440,7 @@ struct nsCallbackEventRequest
 class nsAutoCauseReflowNotifier
 {
 public:
-  nsAutoCauseReflowNotifier(PresShell* aShell)
+  explicit nsAutoCauseReflowNotifier(PresShell* aShell)
     : mShell(aShell)
   {
     mShell->WillCauseReflow();
@@ -463,7 +463,7 @@ public:
 class MOZ_STACK_CLASS nsPresShellEventCB : public EventDispatchingCallback
 {
 public:
-  nsPresShellEventCB(PresShell* aPresShell) : mPresShell(aPresShell) {}
+  explicit nsPresShellEventCB(PresShell* aPresShell) : mPresShell(aPresShell) {}
 
   virtual void HandleEvent(EventChainPostVisitor& aVisitor) MOZ_OVERRIDE
   {
@@ -513,7 +513,7 @@ public:
 class nsBeforeFirstPaintDispatcher : public nsRunnable
 {
 public:
-  nsBeforeFirstPaintDispatcher(nsIDocument* aDocument)
+  explicit nsBeforeFirstPaintDispatcher(nsIDocument* aDocument)
   : mDocument(aDocument) {}
 
   // Fires the "before-first-paint" event so that interested parties (right now, the
@@ -2134,7 +2134,7 @@ PresShell::SetIgnoreFrameDestruction(bool aIgnore)
   if (mDocument) {
     // We need to tell the ImageLoader to drop all its references to frames
     // because they're about to go away and it won't get notifications of that.
-    mDocument->StyleImageLoader()->ClearFrames();
+    mDocument->StyleImageLoader()->ClearFrames(mPresContext);
   }
   mIgnoreFrameDestruction = aIgnore;
 }
@@ -3747,7 +3747,7 @@ PresShell::GetRectVisibility(nsIFrame* aFrame,
 class PaintTimerCallBack MOZ_FINAL : public nsITimerCallback
 {
 public:
-  PaintTimerCallBack(PresShell* aShell) : mShell(aShell) {}
+  explicit PaintTimerCallBack(PresShell* aShell) : mShell(aShell) {}
 
   NS_DECL_ISUPPORTS
 
@@ -5005,16 +5005,14 @@ PresShell::CreateRangePaintInfo(nsIDOMRange* aRange,
 
   info = new RangePaintInfo(range, ancestorFrame);
 
-  nsRect ancestorRect = ancestorFrame->GetVisualOverflowRect();
-
   // get a display list containing the range
   info->mBuilder.SetIncludeAllOutOfFlows();
   if (aForPrimarySelection) {
     info->mBuilder.SetSelectedFramesOnly();
   }
-  info->mBuilder.EnterPresShell(ancestorFrame, ancestorRect);
+  info->mBuilder.EnterPresShell(ancestorFrame);
   ancestorFrame->BuildDisplayListForStackingContext(&info->mBuilder,
-                                                    ancestorRect, &info->mList);
+      ancestorFrame->GetVisualOverflowRect(), &info->mList);
 
 #ifdef DEBUG
   if (gDumpRangePaintList) {
@@ -5025,7 +5023,7 @@ PresShell::CreateRangePaintInfo(nsIDOMRange* aRange,
 
   nsRect rangeRect = ClipListToRange(&info->mBuilder, &info->mList, range);
 
-  info->mBuilder.LeavePresShell(ancestorFrame, ancestorRect);
+  info->mBuilder.LeavePresShell(ancestorFrame);
 
 #ifdef DEBUG
   if (gDumpRangePaintList) {
@@ -6074,10 +6072,10 @@ public:
     nsDisplayList list;
     nsAutoTArray<nsIFrame*, 100> outFrames;
     nsDisplayItem::HitTestState hitTestState;
+    builder.EnterPresShell(mFrame);
     nsRect bounds = mShell->GetPresContext()->GetVisibleArea();
-    builder.EnterPresShell(mFrame, bounds);
     mFrame->BuildDisplayListForStackingContext(&builder, bounds, &list);
-    builder.LeavePresShell(mFrame, bounds);
+    builder.LeavePresShell(mFrame);
     list.HitTest(&builder, bounds, &hitTestState, &outFrames);
     list.DeleteAll();
     for (int32_t i = outFrames.Length() - 1; i >= 0; --i) {
@@ -6915,7 +6913,8 @@ PresShell::HandleEvent(nsIFrame* aFrame,
       // document that is being captured.
       retargetEventDoc = capturingContent->GetCrossShadowCurrentDoc();
 #ifdef ANDROID
-    } else if (aEvent->mClass == eTouchEventClass) {
+    } else if (aEvent->mClass == eTouchEventClass ||
+              (aEvent->AsMouseEvent() && aEvent->AsMouseEvent()->inputSource == nsIDOMMouseEvent::MOZ_SOURCE_TOUCH)) {
       retargetEventDoc = GetTouchEventTargetDocument();
 #endif
     }
@@ -7584,6 +7583,7 @@ PresShell::HandleEventInternal(WidgetEvent* aEvent, nsEventStatus* aStatus)
         isHandlingUserInput = true;
         break;
       case NS_TOUCH_START: {
+        isHandlingUserInput = true;
         WidgetTouchEvent* touchEvent = aEvent->AsTouchEvent();
         // if there is only one touch in this touchstart event, assume that it is
         // the start of a new touch session and evict any old touches in the
@@ -7608,8 +7608,10 @@ PresShell::HandleEventInternal(WidgetEvent* aEvent, nsEventStatus* aStatus)
         }
         break;
       }
-      case NS_TOUCH_CANCEL:
-      case NS_TOUCH_END: {
+      case NS_TOUCH_END:
+        isHandlingUserInput = true;
+        // Fall through to touchcancel code
+      case NS_TOUCH_CANCEL: {
         // Remove the changed touches
         // need to make sure we only remove touches that are ending here
         WidgetTouchEvent* touchEvent = aEvent->AsTouchEvent();
@@ -8742,6 +8744,11 @@ PresShell::DoReflow(nsIFrame* target, bool aInterruptible)
   PROFILER_LABEL_PRINTF("PresShell", "DoReflow",
     js::ProfileEntry::Category::GRAPHICS, "(%s)", docURL.get());
 
+  nsDocShell* docShell = static_cast<nsDocShell*>(GetPresContext()->GetDocShell());
+  if (docShell) {
+    docShell->AddProfileTimelineMarker("Reflow", TRACING_INTERVAL_START);
+  }
+
   if (mReflowContinueTimer) {
     mReflowContinueTimer->Cancel();
     mReflowContinueTimer = nullptr;
@@ -8776,6 +8783,7 @@ PresShell::DoReflow(nsIFrame* target, bool aInterruptible)
   LogicalSize reflowSize(wm, size.ISize(wm), NS_UNCONSTRAINEDSIZE);
   nsHTMLReflowState reflowState(mPresContext, target, rcx, reflowSize,
                                 nsHTMLReflowState::CALLER_WILL_INIT);
+  reflowState.mOrthogonalLimit = size.BSize(wm);
 
   if (rootFrame == target) {
     reflowState.Init(mPresContext);
@@ -8904,6 +8912,9 @@ PresShell::DoReflow(nsIFrame* target, bool aInterruptible)
   }
 #endif
 
+  if (docShell) {
+    docShell->AddProfileTimelineMarker("Reflow", TRACING_INTERVAL_END);
+  }
   return !interrupted;
 }
 

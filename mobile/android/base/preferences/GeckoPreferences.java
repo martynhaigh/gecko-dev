@@ -115,6 +115,7 @@ OnSharedPreferenceChangeListener
     private static final String PREFS_DEVTOOLS_REMOTE_ENABLED = "devtools.debugger.remote-enabled";
     private static final String PREFS_DISPLAY_REFLOW_ON_ZOOM = "browser.zoom.reflowOnZoom";
     private static final String PREFS_SYNC = NON_PREF_PREFIX + "sync";
+    private static final String PREFS_STUMBLER_ENABLED = AppConstants.ANDROID_PACKAGE_NAME + ".STUMBLER_PREF";
 
     // This isn't a Gecko pref, even if it looks like one.
     private static final String PREFS_BROWSER_LOCALE = "locale";
@@ -680,7 +681,9 @@ OnSharedPreferenceChangeListener
                     preferences.removePreference(pref);
                     i--;
                     continue;
-                } else if (AppConstants.RELEASE_BUILD && PREFS_GEO_REPORTING.equals(key)) {
+                } else if (AppConstants.RELEASE_BUILD &&
+                            (PREFS_GEO_REPORTING.equals(key) ||
+                             PREFS_GEO_LEARN_MORE.equals(key))) {
                     // We don't build wifi/cell tower collection in release builds, so hide the UI.
                     preferences.removePreference(pref);
                     i--;
@@ -857,6 +860,34 @@ OnSharedPreferenceChangeListener
     }
 
     /**
+     * Broadcast the provided value as the value of the
+     * <code>PREFS_STUMBLER_ENABLED</code> pref.
+     */
+    public static void broadcastStumblerPref(final Context context, final boolean value) {
+       Intent intent = new Intent(PREFS_STUMBLER_ENABLED)
+                .putExtra("pref", PREFS_GEO_REPORTING)
+                .putExtra("branch", GeckoSharedPrefs.APP_PREFS_NAME)
+                .putExtra("enabled", value)
+                .putExtra("moz_mozilla_api_key", AppConstants.MOZ_STUMBLER_API_KEY);
+       if (GeckoAppShell.getGeckoInterface() != null) {
+           intent.putExtra("user_agent", GeckoAppShell.getGeckoInterface().getDefaultUAString());
+       }
+       if (!AppConstants.MOZILLA_OFFICIAL) {
+           intent.putExtra("is_debug", true);
+       }
+       broadcastAction(context, intent);
+    }
+
+    /**
+     * Broadcast the current value of the
+     * <code>PREFS_STUMBLER_ENABLED</code> pref.
+     */
+    public static void broadcastStumblerPref(final Context context) {
+        final boolean value = getBooleanPref(context, PREFS_GEO_REPORTING, true);
+        broadcastStumblerPref(context, value);
+    }
+
+    /**
      * Return the value of the named preference in the default preferences file.
      *
      * This corresponds to the storage that backs preferences.xml.
@@ -1018,6 +1049,7 @@ OnSharedPreferenceChangeListener
             // repeated background upload attempts.
             broadcastHealthReportUploadPref(this, ((Boolean) newValue).booleanValue());
         } else if (PREFS_GEO_REPORTING.equals(prefName)) {
+            broadcastStumblerPref(this, ((Boolean) newValue).booleanValue());
             // Translate boolean value to int for geo reporting pref.
             newValue = ((Boolean) newValue) ? 1 : 0;
         } else if (handlers.containsKey(prefName)) {

@@ -8,7 +8,7 @@
 /*****************************************************************************/
 
 #include <stdint.h>
-const PRTime gPreloadListExpirationTime = INT64_C(1419675456115000);
+const PRTime gPreloadListExpirationTime = INT64_C(1420884435199000);
 
 class nsSTSPreload
 {
@@ -18,7 +18,6 @@ class nsSTSPreload
 };
 
 static const nsSTSPreload kSTSPreloadList[] = {
-  { "accounts.firefox.com", true },
   { "accounts.google.com", true },
   { "aclu.org", false },
   { "activiti.alfresco.com", false },
@@ -30,6 +29,7 @@ static const nsSTSPreload kSTSPreloadList[] = {
   { "aladdinschools.appspot.com", false },
   { "alexsexton.com", true },
   { "alpha.irccloud.com", false },
+  { "ansdell.net", true },
   { "anycoin.me", true },
   { "apadvantage.com", true },
   { "api.intercom.io", false },
@@ -79,6 +79,7 @@ static const nsSTSPreload kSTSPreloadList[] = {
   { "bugzilla.mozilla.org", true },
   { "business.lookout.com", false },
   { "bytepark.de", true },
+  { "ca.gparent.org", false },
   { "carezone.com", false },
   { "cartouche24.eu", true },
   { "celltek-server.de", true },
@@ -151,7 +152,7 @@ static const nsSTSPreload kSTSPreloadList[] = {
   { "fairbill.com", true },
   { "faq.lookout.com", false },
   { "feedbin.com", false },
-  { "ferienhaus-polchow-ruegen.de", true },
+  { "ferienhaus-polchow-ruegen.de", false },
   { "fiken.no", true },
   { "firemail.io", true },
   { "fischer-its.com", true },

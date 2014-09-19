@@ -970,6 +970,13 @@ pref("gecko.handlerService.allowRegisterFromDifferentHost", false);
 #ifdef MOZ_SAFE_BROWSING
 pref("browser.safebrowsing.enabled", true);
 pref("browser.safebrowsing.malware.enabled", true);
+pref("browser.safebrowsing.downloads.enabled", true);
+// Remote lookups are only enabled for Windows in Nightly and Aurora
+#if defined(XP_WIN) && !defined(RELEASE_BUILD)
+pref("browser.safebrowsing.downloads.remote.enabled", true);
+#else
+pref("browser.safebrowsing.downloads.remote.enabled", false);
+#endif
 pref("browser.safebrowsing.debug", false);
 
 pref("browser.safebrowsing.updateURL", "https://safebrowsing.google.com/safebrowsing/downloads?client=SAFEBROWSING_ID&appver=%VERSION%&pver=2.2&key=%GOOGLE_API_KEY%");
@@ -983,10 +990,7 @@ pref("browser.safebrowsing.reportMalwareErrorURL", "http://%LOCALE%.malware-erro
 
 pref("browser.safebrowsing.malware.reportURL", "https://safebrowsing.google.com/safebrowsing/diagnostic?client=%NAME%&hl=%LOCALE%&site=");
 
-// Turn off remote lookups in beta and stable channel.
-#ifndef RELEASE_BUILD
 pref("browser.safebrowsing.appRepURL", "https://sb-ssl.google.com/safebrowsing/clientreport/download?key=%GOOGLE_API_KEY%");
-#endif
 
 #ifdef MOZILLA_OFFICIAL
 // Normally the "client ID" sent in updates is appinfo.name, but for
@@ -1127,13 +1131,6 @@ pref("browser.zoom.updateBackgroundTabs", true);
 // The breakpad report server to link to in about:crashes
 pref("breakpad.reportURL", "https://crash-stats.mozilla.com/report/index/");
 
-#ifndef RELEASE_BUILD
-// Override submission of plugin hang reports to a different processing server
-// for the smaller-volume nightly/aurora populations.
-pref("toolkit.crashreporter.pluginHangSubmitURL",
-     "https://hang-reports.mozilla.org/submit");
-#endif
-
 // URL for "Learn More" for Crash Reporter
 pref("toolkit.crashreporter.infoURL",
      "https://www.mozilla.org/legal/privacy/firefox.html#crash-reporter");
@@ -1179,6 +1176,23 @@ pref("browser.tabs.remote", true);
 pref("browser.tabs.remote", false);
 #endif
 pref("browser.tabs.remote.autostart", false);
+
+#if defined(MOZ_CONTENT_SANDBOX) && defined(XP_WIN)
+// This controls whether the content process on Windows is sandboxed.
+// You also need to be using remote tabs, see above.
+// on = full sandbox enabled
+// warn = warn only sandbox enabled
+// anything else = sandbox disabled
+// This will probably require a restart.
+pref("browser.tabs.remote.sandbox", "off");
+
+#if defined(MOZ_STACKWALKING)
+// This controls the depth of stack trace that is logged when the warn only
+// sandbox reports that a resource access request has been blocked.
+// This does not require a restart to take effect.
+pref("browser.tabs.remote.sandbox.warnOnlyStackTraceDepth", 0);
+#endif
+#endif
 
 // This pref governs whether we attempt to work around problems caused by
 // plugins using OS calls to manipulate the cursor while running out-of-
@@ -1263,6 +1277,7 @@ pref("services.sync.prefs.sync.privacy.clearOnShutdown.siteSettings", true);
 pref("services.sync.prefs.sync.privacy.donottrackheader.enabled", true);
 pref("services.sync.prefs.sync.privacy.donottrackheader.value", true);
 pref("services.sync.prefs.sync.privacy.sanitize.sanitizeOnShutdown", true);
+pref("services.sync.prefs.sync.privacy.trackingprotection.enabled", true);
 pref("services.sync.prefs.sync.security.OCSP.enabled", true);
 pref("services.sync.prefs.sync.security.OCSP.require", true);
 pref("services.sync.prefs.sync.security.default_personal_cert", true);
@@ -1302,6 +1317,7 @@ pref("devtools.toolbox.splitconsoleHeight", 100);
 
 // Toolbox Button preferences
 pref("devtools.command-button-pick.enabled", true);
+pref("devtools.command-button-frames.enabled", false);
 pref("devtools.command-button-splitconsole.enabled", true);
 pref("devtools.command-button-paintflashing.enabled", false);
 pref("devtools.command-button-tilt.enabled", false);
@@ -1354,8 +1370,9 @@ pref("devtools.debugger.ui.variables-sorting-enabled", true);
 pref("devtools.debugger.ui.variables-only-enum-visible", false);
 pref("devtools.debugger.ui.variables-searchbox-visible", false);
 
-// Enable the Profiler
+// Enable the Profiler and the Timeline
 pref("devtools.profiler.enabled", true);
+pref("devtools.timeline.enabled", false);
 
 // The default Profiler UI settings
 pref("devtools.profiler.ui.show-platform-data", false);
@@ -1389,6 +1406,9 @@ pref("devtools.scratchpad.recentFilesMax", 10);
 pref("devtools.scratchpad.showTrailingSpace", false);
 pref("devtools.scratchpad.enableCodeFolding", true);
 pref("devtools.scratchpad.enableAutocompletion", true);
+
+// Enable the Storage Inspector
+pref("devtools.storage.enabled", false);
 
 // Enable the Style Editor.
 pref("devtools.styleeditor.enabled", true);
@@ -1531,10 +1551,10 @@ pref("browser.newtabpage.rows", 3);
 pref("browser.newtabpage.columns", 5);
 
 // directory tiles download URL
-pref("browser.newtabpage.directory.source", "https://tiles.up.mozillalabs.com/v2/links/fetch");
+pref("browser.newtabpage.directory.source", "https://tiles.services.mozilla.com/v2/links/fetch");
 
 // endpoint to send newtab click and view pings
-pref("browser.newtabpage.directory.ping", "https://tiles.up.mozillalabs.com/v2/links/");
+pref("browser.newtabpage.directory.ping", "https://tiles.services.mozilla.com/v2/links/");
 
 // Enable the DOM fullscreen API.
 pref("full-screen-api.enabled", true);
@@ -1571,11 +1591,15 @@ pref("shumway.disabled", true);
 // (This is intentionally on the high side; see bug 746055.)
 pref("image.mem.max_decoded_image_kb", 256000);
 
-// Enable by default on nightly and aurora.
-#ifndef RELEASE_BUILD
+// Enable by default development builds up until early beta
+#ifdef EARLY_BETA_OR_EARLIER
 pref("loop.enabled", true);
+pref("loop.throttled", false);
 #else
-pref("loop.enabled", false);
+pref("loop.enabled", true);
+pref("loop.throttled", true);
+pref("loop.soft_start_ticket_number", -1);
+pref("loop.soft_start_hostname", "soft-start.loop-dev.stage.mozaws.net");
 #endif
 
 pref("loop.server", "https://loop.services.mozilla.com");
