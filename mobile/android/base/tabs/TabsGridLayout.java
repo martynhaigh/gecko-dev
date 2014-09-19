@@ -6,7 +6,6 @@
 package org.mozilla.gecko.tabs;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.GeckoAppShell;
@@ -41,13 +40,9 @@ class TabsGridLayout extends GridView
 
     private TabsLayoutAdapter mTabsAdapter;
 
-    private List<View> mPendingClosedTabs;
-
     public TabsGridLayout(Context context, AttributeSet attrs) {
         super(context, attrs, R.attr.tabGridLayoutViewStyle);
         mContext = context;
-
-        mPendingClosedTabs = new ArrayList<>();
 
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.TabsTray);
         mIsPrivate = (a.getInt(R.styleable.TabsTray_tabs, 0x0) == 1);
@@ -84,7 +79,6 @@ class TabsGridLayout extends GridView
             };
 
             mSelectClickListener = new View.OnClickListener() {
-
                 @Override
                 public void onClick(View v) {
                     TabsLayoutItemView tab = (TabsLayoutItemView) v.getTag();
@@ -207,7 +201,7 @@ class TabsGridLayout extends GridView
     private void refreshTabsData() {
         // Store a different copy of the tabs, so that we don't have to worry about
         // accidentally updating it on the wrong thread.
-        ArrayList<Tab> tabData = new ArrayList<Tab>();
+        ArrayList<Tab> tabData = new ArrayList<>();
 
         Iterable<Tab> allTabs = Tabs.getInstance().getTabsInOrder();
         for (Tab tab : allTabs) {
@@ -222,32 +216,17 @@ class TabsGridLayout extends GridView
     public void resetTransforms(View view) {
         ViewHelper.setAlpha(view, 1);
         ViewHelper.setTranslationX(view, 0);
-
-//
-//        // We only need to reset the height or width after individual tab close animations.
-//        if (mOriginalSize != 0) {
-//            ViewHelper.setHeight(view, mOriginalSize);
-//        }
     }
-
-
 
     @Override
     public void closeAll() {
 
-        // Just close the panel if there are no tabs to close.
+        autoHidePanel();
+
         if (getChildCount() == 0) {
-            autoHidePanel();
             return;
         }
 
-        // Hide the panel after the animation is done.
-        autoHidePanel();
-
-        // Re-enable the view after the animation is done.
-        TabsGridLayout.this.setEnabled(true);
-
-        // Then actually close all the tabs.
         final Iterable<Tab> tabs = Tabs.getInstance().getTabsInOrder();
         for (Tab tab : tabs) {
             // In the normal panel we want to close all tabs (both private and normal),
