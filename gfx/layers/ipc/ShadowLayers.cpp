@@ -154,7 +154,7 @@ private:
   Transaction& operator=(const Transaction&);
 };
 struct AutoTxnEnd {
-  AutoTxnEnd(Transaction* aTxn) : mTxn(aTxn) {}
+  explicit AutoTxnEnd(Transaction* aTxn) : mTxn(aTxn) {}
   ~AutoTxnEnd() { mTxn->End(); }
   Transaction* mTxn;
 };
@@ -432,6 +432,16 @@ ShadowLayerForwarder::UseComponentAlphaTextures(CompositableClient* aCompositabl
                                             nullptr, aTextureOnWhite->GetIPDLActor()));
 }
 
+#ifdef MOZ_WIDGET_GONK
+void
+ShadowLayerForwarder::UseOverlaySource(CompositableClient* aCompositable,
+                                       const OverlaySource& aOverlay)
+{
+  MOZ_ASSERT(aCompositable);
+  mTxn->AddEdit(OpUseOverlaySource(nullptr, aCompositable->GetIPDLActor(), aOverlay));
+}
+#endif
+
 void
 ShadowLayerForwarder::SendFenceHandle(AsyncTransactionTracker* aTracker,
                                         PTextureChild* aTexture,
@@ -519,6 +529,7 @@ ShadowLayerForwarder::EndTransaction(InfallibleTArray<EditReply>* aReplies,
                                      bool aScheduleComposite,
                                      uint32_t aPaintSequenceNumber,
                                      bool aIsRepeatTransaction,
+                                     const mozilla::TimeStamp& aTransactionStart,
                                      bool* aSent)
 {
   *aSent = false;
@@ -597,10 +608,7 @@ ShadowLayerForwarder::EndTransaction(InfallibleTArray<EditReply>* aReplies,
     common.maskLayerParent() = nullptr;
     common.animations() = mutant->GetAnimations();
     common.invalidRegion() = mutant->GetInvalidRegion();
-    common.metrics() = mutant->GetFrameMetrics();
-    common.scrollParentId() = mutant->GetScrollHandoffParentId();
-    common.backgroundColor() = mutant->GetBackgroundColor();
-    common.contentDescription() = mutant->GetContentDescription();
+    common.metrics() = mutant->GetAllFrameMetrics();
     attrs.specific() = null_t();
     mutant->FillSpecificAttributes(attrs.specific());
 
@@ -644,7 +652,8 @@ ShadowLayerForwarder::EndTransaction(InfallibleTArray<EditReply>* aReplies,
         !mShadowManager->IPCOpen() ||
         !mShadowManager->SendUpdate(cset, aId, targetConfig, mIsFirstPaint,
                                     aScheduleComposite, aPaintSequenceNumber,
-                                    aIsRepeatTransaction, aReplies)) {
+                                    aIsRepeatTransaction, aTransactionStart,
+                                    aReplies)) {
       MOZ_LAYERS_LOG(("[LayersForwarder] WARNING: sending transaction failed!"));
       return false;
     }
@@ -657,7 +666,7 @@ ShadowLayerForwarder::EndTransaction(InfallibleTArray<EditReply>* aReplies,
         !mShadowManager->IPCOpen() ||
         !mShadowManager->SendUpdateNoSwap(cset, aId, targetConfig, mIsFirstPaint,
                                           aScheduleComposite, aPaintSequenceNumber,
-                                          aIsRepeatTransaction)) {
+                                          aIsRepeatTransaction, aTransactionStart)) {
       MOZ_LAYERS_LOG(("[LayersForwarder] WARNING: sending transaction failed!"));
       return false;
     }

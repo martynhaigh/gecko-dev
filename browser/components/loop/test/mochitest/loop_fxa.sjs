@@ -8,6 +8,7 @@
 "use strict";
 
 const REQUIRED_PARAMS = ["client_id", "content_uri", "oauth_uri", "profile_uri", "state"];
+const HAWK_TOKEN_LENGTH = 64;
 
 Components.utils.import("resource://gre/modules/NetUtil.jsm");
 
@@ -15,15 +16,25 @@ Components.utils.import("resource://gre/modules/NetUtil.jsm");
  * Entry point for HTTP requests.
  */
 function handleRequest(request, response) {
-  switch (request.queryString) {
-    case "/setup_params":
+  // Look at the query string but ignore past the encoded ? when deciding on the handler.
+  switch (request.queryString.replace(/%3F.*/,"")) {
+    case "/setup_params": // Test-only
       setup_params(request, response);
       return;
     case "/fxa-oauth/params":
       params(request, response);
       return;
+    case encodeURIComponent("/oauth/authorization"):
+      oauth_authorization(request, response);
+      return;
     case "/fxa-oauth/token":
       token(request, response);
+      return;
+    case "/registration":
+      registration(request, response);
+      return;
+    case "/get_registration": // Test-only
+      get_registration(request, response);
       return;
   }
   response.setStatusLine(request.httpVersion, 404, "Not Found");
@@ -43,6 +54,7 @@ function setup_params(request, response) {
   response.setHeader("Content-Type", "text/plain", false);
   if (request.method == "DELETE") {
     setSharedState("/fxa-oauth/params", "");
+    setSharedState("/registration", "");
     response.write("Params deleted");
     return;
   }
@@ -72,9 +84,13 @@ function params(request, response) {
     return;
   }
 
-  let origin = request.scheme + "://" + request.host + ":" + request.port;
-
   let params = JSON.parse(getSharedState("/fxa-oauth/params") || "{}");
+
+  if (params.test_error && params.test_error == "params_401") {
+    response.setStatusLine(request.httpVersion, 401, "Unauthorized");
+    response.write("401 Unauthorized");
+    return;
+  }
 
   // Warn if required parameters are missing.
   for (let paramName of REQUIRED_PARAMS) {
@@ -90,6 +106,16 @@ function params(request, response) {
 }
 
 /**
+ * GET /oauth/authorization endpoint for the test params.
+ *
+ * Redirect to a test page that uses WebChannel to complete the web flow.
+ */
+function oauth_authorization(request, response) {
+  response.setStatusLine(request.httpVersion, 302, "Found");
+  response.setHeader("Location", "browser_fxa_oauth.html");
+}
+
+/**
  * POST /fxa-oauth/token
  *
  * Validate the state parameter with the server session state and if it matches, exchange the code
@@ -99,6 +125,13 @@ function params(request, response) {
  */
 function token(request, response) {
   let params = JSON.parse(getSharedState("/fxa-oauth/params") || "{}");
+
+  if (params.test_error && params.test_error == "token_401") {
+    response.setStatusLine(request.httpVersion, 401, "Unauthorized");
+    response.write("401 Unauthorized");
+    return;
+  }
+
   let body = NetUtil.readInputStreamToString(request.bodyInputStream,
                                              request.bodyInputStream.available());
   let payload = JSON.parse(body);
@@ -110,9 +143,36 @@ function token(request, response) {
 
   let tokenData = {
     access_token: payload.code + "_access_token",
-    scopes: "",
+    scope: "profile",
     token_type: "bearer",
   };
   response.setHeader("Content-Type", "application/json; charset=utf-8", false);
   response.write(JSON.stringify(tokenData, null, 2));
+}
+
+/**
+ * POST /registration
+ *
+ * Mock Loop registration endpoint which simply returns the simplePushURL with
+ * padding as the hawk session token.
+ */
+function registration(request, response) {
+  let body = NetUtil.readInputStreamToString(request.bodyInputStream,
+                                             request.bodyInputStream.available());
+  let payload = JSON.parse(body);
+  setSharedState("/registration", body);
+  let pushURL = payload.simplePushURL;
+  // Pad the pushURL with "X" to the token length to simulate a token
+  let padding = new Array(HAWK_TOKEN_LENGTH - pushURL.length).fill("X").join("");
+  response.setHeader("hawk-session-token", pushURL + padding, false);
+}
+
+/**
+ * GET /get_registration
+ *
+ * Used for testing purposes to check if registration succeeded by returning the POST body.
+ */
+function get_registration(request, response) {
+  response.setHeader("Content-Type", "application/json; charset=utf-8", false);
+  response.write(getSharedState("/registration"));
 }

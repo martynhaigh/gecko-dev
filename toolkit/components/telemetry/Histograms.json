@@ -82,22 +82,6 @@
     "kind": "boolean",
     "description": "blocklist.xml has been loaded synchronously"
   },
-  "COMPARTMENT_DONATED_NODE": {
-    "expires_in_version": "never",
-    "kind": "boolean",
-    "description": "When a compartment is destroyed, we record whether one of its nodes was ever adopted into another compartment"
-  },
-  "COMPARTMENT_ADOPTED_NODE": {
-    "expires_in_version": "never",
-    "kind": "boolean",
-    "description": "When a compartment is destroyed, we record whether it had ever adopted a node from another compartment"
-  },
-  "COMPARTMENT_LIVING_ADOPTERS": {
-    "expires_in_version": "never",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "The number of living compartments for which COMPARTMENT_ADOPTED_NODE is true"
-  },
   "CYCLE_COLLECTOR": {
     "expires_in_version": "never",
     "kind": "exponential",
@@ -334,6 +318,12 @@
     "kind": "flag",
     "description": "Has seen location error"
   },
+  "JS_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 10,
+    "description": "Use of SpiderMonkey's deprecated language extensions in web content: ForEach, DestructuringForIn, LegacyGenerator, ExpressionClosure"
+  },
   "TELEMETRY_PING": {
     "expires_in_version": "never",
     "kind": "exponential",
@@ -518,6 +508,7 @@
     "cpp_guard": "XP_WIN"
   },
   "EARLY_GLUESTARTUP_READ_OPS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "linear",
     "high": "100",
@@ -526,6 +517,7 @@
     "cpp_guard": "XP_WIN"
   },
   "EARLY_GLUESTARTUP_READ_TRANSFER": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "50 * 1024",
@@ -535,6 +527,7 @@
     "cpp_guard": "XP_WIN"
   },
   "GLUESTARTUP_READ_OPS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "linear",
     "high": "100",
@@ -543,6 +536,7 @@
     "cpp_guard": "XP_WIN"
   },
   "GLUESTARTUP_READ_TRANSFER": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "50 * 1024",
@@ -552,6 +546,7 @@
     "cpp_guard": "XP_WIN"
   },
   "EARLY_GLUESTARTUP_HARD_FAULTS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "linear",
     "high": "100",
@@ -560,6 +555,7 @@
     "cpp_guard": "XP_UNIX"
   },
   "GLUESTARTUP_HARD_FAULTS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "500",
@@ -726,6 +722,7 @@
     "description": "Startup cache age (hours)"
   },
   "STARTUP_CACHE_INVALID": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "flag",
     "description": "Was the disk startup cache file detected as invalid"
@@ -853,6 +850,7 @@
     "description": "WebGL canvas used"
   },
   "TOTAL_CONTENT_PAGE_LOAD_TIME": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "low": 100,
@@ -2384,6 +2382,7 @@
     "description": "How many speculative connections are made needlessly"
   },
   "FIND_PLUGINS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "3000",
@@ -2741,6 +2740,7 @@
     "description": "SQLite write (bytes)"
   },
   "MOZ_STORAGE_ASYNC_REQUESTS_MS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "32768",
@@ -2749,6 +2749,7 @@
     "description": "mozStorage async requests completion (ms)"
   },
   "MOZ_STORAGE_ASYNC_REQUESTS_SUCCESS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "boolean",
     "description": "mozStorage async requests success"
@@ -2973,6 +2974,7 @@
     "description": "PLACES: Number of tags"
   },
   "PLACES_FOLDERS_COUNT": {
+    "alert_emails": ["places-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "200",
@@ -3079,6 +3081,19 @@
     "n_buckets" : 100,
     "description": "PLACES: Size of favicon files without a specific file type probe, loaded from the web (Bytes)"
   },
+  "LINK_ICON_SIZES_ATTR_USAGE": {
+    "expires_in_version" : "never",
+    "kind": "enumerated",
+    "n_values": 4,
+    "description": "The possible types of the 'sizes' attribute for <link rel=icon>. 0: Attribute not specified, 1: 'any', 2: Integer dimensions, 3: Invalid value."
+  },
+  "LINK_ICON_SIZES_ATTR_DIMENSION": {
+    "expires_in_version" : "never",
+    "kind": "linear",
+    "high": 513,
+    "n_buckets" : 64,
+    "description": "The width dimension of the 'sizes' attribute for <link rel=icon>."
+  },
   "FENNEC_DISTRIBUTION_REFERRER_INVALID": {
     "expires_in_version": "never",
     "kind": "flag",
@@ -3143,6 +3158,7 @@
     "description": "PLACES: Database filesize (MB)"
   },
   "PLACES_DATABASE_JOURNALSIZE_MB": {
+    "alert_emails": ["places-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "50",
@@ -3183,6 +3199,33 @@
     "extended_statistics_ok": true,
     "description": "PLACES: Time for first autocomplete result if > 50ms (ms)"
   },
+  "PLACES_AUTOCOMPLETE_6_FIRST_RESULTS_TIME_MS": {
+    "expires_in_version": "never",
+    "kind": "exponential",
+    "low": 50,
+    "high": "1000",
+    "n_buckets": 30,
+    "extended_statistics_ok": true,
+    "description": "PLACES: Time for the 6 first autocomplete results (ms)"
+  },
+  "HISTORY_LASTVISITED_TREE_QUERY_TIME_MS": {
+    "expires_in_version": "never",
+    "kind": "exponential",
+    "low": 50,
+    "high": "2000",
+    "n_buckets": 30,
+    "extended_statistics_ok": true,
+    "description": "PLACES: Time to load the sidebar history tree sorted by last visit (ms)"
+  },
+  "PLACES_HISTORY_LIBRARY_SEARCH_TIME_MS": {
+    "expires_in_version": "never",
+    "kind": "exponential",
+    "low": 50,
+    "high": "1000",
+    "n_buckets": 30,
+    "extended_statistics_ok": true,
+    "description": "PLACES: Time to search the history library (ms)"
+  },
   "PLACES_AUTOCOMPLETE_URLINLINE_DOMAIN_QUERY_TIME_MS": {
     "expires_in_version": "never",
     "kind": "exponential",
@@ -3220,6 +3263,7 @@
     "description": "PLACES: Number of bookmarks annotations"
   },
   "PLACES_ANNOS_BOOKMARKS_SIZE_KB": {
+    "alert_emails": ["places-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "low": 10,
@@ -3238,6 +3282,7 @@
     "description": "PLACES: Number of pages annotations"
   },
   "PLACES_ANNOS_PAGES_SIZE_KB": {
+    "alert_emails": ["places-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "low": 10,
@@ -3247,6 +3292,7 @@
     "description": "PLACES: Size of pages annotations (KB)"
   },
   "PLACES_FRECENCY_CALC_TIME_MS": {
+    "alert_emails": ["places-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "100",
@@ -3291,9 +3337,15 @@
     "description": "Updater: The interval in days between the previous and the current background update check when the check was timer initiated"
   },
   "UPDATER_STATUS_CODES": {
-    "expires_in_version": "never",
+    "expires_in_version": "35",
     "kind": "enumerated",
     "n_values": 50,
+    "description": "Updater: the status of the latest update performed"
+  },
+  "UPDATER_ALL_STATUS_CODES": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 200,
     "description": "Updater: the status of the latest update performed"
   },
   "UPDATER_UPDATES_ENABLED": {
@@ -3398,6 +3450,7 @@
     "description": "Firefox: Time taken to kick off image compression of the canvas that will be used during swiping through history (ms)."
   },
   "FX_TAB_ANIM_OPEN_MS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "3000",
@@ -3405,6 +3458,7 @@
     "description": "Firefox: Time taken by the tab opening animation in milliseconds"
   },
   "FX_TAB_ANIM_CLOSE_MS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "3000",
@@ -3443,6 +3497,7 @@
     "description": "Average paint duration during any tab open/close animation (excluding tabstrip scroll)"
   },
   "FX_TAB_SWITCH_UPDATE_MS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "1000",
@@ -3523,6 +3578,7 @@
     "description": "THUMBNAILS: Thumbnail found"
   },
   "EVENTLOOP_UI_LAG_EXP_MS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "low": 50,
@@ -3596,6 +3652,7 @@
     "description": "Session restore: Duration of the longest uninterruptible operation while collecting data in the content process (ms)"
   },
   "FX_SESSION_RESTORE_SERIALIZE_DATA_MS": {
+    "alert_emails": ["session-restore-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "1000",
@@ -4053,14 +4110,6 @@
     "kind": "boolean",
     "description": "True when we had to wait for a pending preload on first access to localStorage data, false otherwise"
   },
-  "LOCALDOMSTORAGE_GETALLKEYS_MS": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "high": "3000",
-    "n_buckets": 10,
-    "extended_statistics_ok": true,
-    "description": "Time to return a list of all keys in domain's LocalStorage (ms)"
-  },
   "LOCALDOMSTORAGE_GETALLKEYS_BLOCKING_MS": {
     "expires_in_version": "never",
     "kind": "exponential",
@@ -4068,14 +4117,6 @@
     "n_buckets": 10,
     "extended_statistics_ok": true,
     "description": "Time to block before we return a list of all keys in domain's LocalStorage (ms)"
-  },
-  "LOCALDOMSTORAGE_GETKEY_MS": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "high": "3000",
-    "n_buckets": 10,
-    "extended_statistics_ok": true,
-    "description": "Time to return a key name in domain's LocalStorage (ms)"
   },
   "LOCALDOMSTORAGE_GETKEY_BLOCKING_MS": {
     "expires_in_version": "never",
@@ -4085,14 +4126,6 @@
     "extended_statistics_ok": true,
     "description": "Time to block before we return a key name in domain's LocalStorage (ms)"
   },
-  "LOCALDOMSTORAGE_GETLENGTH_MS": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "high": "3000",
-    "n_buckets": 10,
-    "extended_statistics_ok": true,
-    "description": "Time to return number of keys in domain's LocalStorage (ms)"
-  },
   "LOCALDOMSTORAGE_GETLENGTH_BLOCKING_MS": {
     "expires_in_version": "never",
     "kind": "exponential",
@@ -4100,14 +4133,6 @@
     "n_buckets": 10,
     "extended_statistics_ok": true,
     "description": "Time to block before we return number of keys in domain's LocalStorage (ms)"
-  },
-  "LOCALDOMSTORAGE_GETVALUE_MS": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "high": "3000",
-    "n_buckets": 10,
-    "extended_statistics_ok": true,
-    "description": "Time to return a value for a key in LocalStorage (ms)"
   },
   "LOCALDOMSTORAGE_GETVALUE_BLOCKING_MS": {
     "expires_in_version": "never",
@@ -4117,14 +4142,6 @@
     "extended_statistics_ok": true,
     "description": "Time to block before we return a value for a key in LocalStorage (ms)"
   },
-  "LOCALDOMSTORAGE_SETVALUE_MS": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "high": "3000",
-    "n_buckets": 10,
-    "extended_statistics_ok": true,
-    "description": "Time to set a single key's value in LocalStorage (ms)"
-  },
   "LOCALDOMSTORAGE_SETVALUE_BLOCKING_MS": {
     "expires_in_version": "never",
     "kind": "exponential",
@@ -4133,14 +4150,6 @@
     "extended_statistics_ok": true,
     "description": "Time to block before we set a single key's value in LocalStorage (ms)"
   },
-  "LOCALDOMSTORAGE_REMOVEKEY_MS": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "high": "3000",
-    "n_buckets": 10,
-    "extended_statistics_ok": true,
-    "description": "Time to remove a single key from LocalStorage (ms)"
-  },
   "LOCALDOMSTORAGE_REMOVEKEY_BLOCKING_MS": {
     "expires_in_version": "never",
     "kind": "exponential",
@@ -4148,14 +4157,6 @@
     "n_buckets": 10,
     "extended_statistics_ok": true,
     "description": "Time to block before we remove a single key from LocalStorage (ms)"
-  },
-  "LOCALDOMSTORAGE_CLEAR_MS": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "high": "3000",
-    "n_buckets": 10,
-    "extended_statistics_ok": true,
-    "description": "Time to clear LocalStorage for all domains (ms)"
   },
   "LOCALDOMSTORAGE_CLEAR_BLOCKING_MS": {
     "expires_in_version": "never",
@@ -4218,6 +4219,7 @@
     "description": "DOM storage: size of values stored in sessionStorage"
   },
   "RANGE_CHECKSUM_ERRORS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "3000",
@@ -4226,6 +4228,7 @@
     "description": "Number of histograms with range checksum errors"
   },
   "BUCKET_ORDER_ERRORS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "3000",
@@ -4234,6 +4237,7 @@
     "description": "Number of histograms with bucket order errors"
   },
   "TOTAL_COUNT_HIGH_ERRORS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "3000",
@@ -4242,6 +4246,7 @@
     "description": "Number of histograms with total count high errors"
   },
   "TOTAL_COUNT_LOW_ERRORS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "exponential",
     "high": "3000",
@@ -4301,84 +4306,6 @@
     "kind": "enumerated",
     "n_values": 10,
     "description": "Track click count on about:newtab tiles per index (0-8). For non-default row or column configurations all clicks into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_LINK0_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "Track impression count of directory link #0 per index (0-8). Grid configurations showing 9+ tiles fall into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_LINK1_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "Track impression count of directory link #1 per index (0-8). Grid configurations showing 9+ tiles fall into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_LINK2_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "Track impression count of directory link #2 per index (0-8). Grid configurations showing 9+ tiles fall into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_LINK3_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "Track impression count of directory link #3 per index (0-8). Grid configurations showing 9+ tiles fall into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_LINK4_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "Track impression count of directory link #4 per index (0-8). Grid configurations showing 9+ tiles fall into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_LINK5_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "Track impression count of directory link #5 per index (0-8). Grid configurations showing 9+ tiles fall into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_LINK6_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "Track impression count of directory link #6 per index (0-8). Grid configurations showing 9+ tiles fall into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_LINK7_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "Track impression count of directory link #7 per index (0-8). Grid configurations showing 9+ tiles fall into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_LINK8_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 10,
-    "description": "Track impression count of directory link #8 per index (0-8). Grid configurations showing 9+ tiles fall into the '9' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_AFFILIATE_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 11,
-    "description": "Number of affiliate directory links shown on about:newtab. For non-default row or column configurations, extra links fall into the '10' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_ORGANIC_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 11,
-    "description": "Number of organic directory links shown on about:newtab. For non-default row or column configurations, extra links fall into the '10' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_SPONSORED_SHOWN": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 11,
-    "description": "Number of sponsored directory links shown on about:newtab. For non-default row or column configurations, extra links fall into the '10' bucket."
-  },
-  "NEWTAB_PAGE_DIRECTORY_TYPE_CLICKED": {
-    "expires_in_version": "35",
-    "kind": "enumerated",
-    "n_values": 3,
-    "description": "Track click count on about:newtab directory links per type (sponsored, affiliate, organic)."
   },
   "PANORAMA_INITIALIZATION_TIME_MS": {
     "expires_in_version": "never",
@@ -4467,14 +4394,6 @@
     "description": "Time to update the visited link set (ms)",
     "cpp_guard": "ANDROID"
   },
-  "FENNEC_LOWMEM_TAB_COUNT": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "high": 100,
-    "n_buckets": 30,
-    "description": "How many tabs were open when a low-memory event was received",
-    "cpp_guard": "ANDROID"
-  },
   "FENNEC_RESTORING_ACTIVITY": {
     "expires_in_version": "never",
     "kind": "flag",
@@ -4522,26 +4441,6 @@
     "high": "5000",
     "n_buckets": 20,
     "description": "Time for the Java UI to load (ms)",
-    "cpp_guard": "ANDROID"
-  },
-  "FENNEC_TAB_EXPIRED": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "low": 10,
-    "high": 604800,
-    "n_buckets": 20,
-    "extended_statistics_ok": true,
-    "description": "How long (in seconds) a tab was inactive before it was expired",
-    "cpp_guard": "ANDROID"
-  },
-  "FENNEC_TAB_ZOMBIFIED": {
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "low": 10,
-    "high": 604800,
-    "n_buckets": 20,
-    "extended_statistics_ok": true,
-    "description": "How long (in seconds) a tab was inactive when it was OOM-zombified",
     "cpp_guard": "ANDROID"
   },
   "FENNEC_TOPSITES_LOADER_TIME_MS": {
@@ -4598,6 +4497,7 @@
     "description": "Whether enablePrivilege has ever been called during the current session"
   },
   "READ_SAVED_PING_SUCCESS": {
+    "alert_emails": ["perf-telemetry-alerts@mozilla.com"],
     "expires_in_version": "never",
     "kind": "boolean",
     "description": "Successfully reading a saved ping file"
@@ -6665,5 +6565,34 @@
     "high": "10000000",
     "n_buckets": 10,
     "description": "Sidebar showing: seconds that the sidebar has been opened"
+  },
+  "BR_9_2_1_SUBJECT_ALT_NAMES": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 8,
+    "description": "Baseline Requirements section 9.2.1: subject alternative names extension (0: ok, 1 or more: error)"
+  },
+  "BR_9_2_2_SUBJECT_COMMON_NAME": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 8,
+    "description": "Baseline Requirements section 9.2.2: subject common name field (0: present, in subject alt. names; 1: not present; 2: not present in subject alt. names)"
+  },
+  "TRACKING_PROTECTION_ENABLED": {
+    "expires_in_version": "never",
+    "kind": "boolean",
+    "description": "Whether or not a session has tracking protection enabled"
+  },
+  "TRACKING_PROTECTION_SHIELD": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 4,
+    "description": "Tracking protection shield (0 = not shown, 1 = blocked, 2 = loaded, 3 = due to mixed content"
+  },
+  "TRACKING_PROTECTION_EVENTS": {
+    "expires_in_version": "never",
+    "kind": "enumerated",
+    "n_values": 3,
+    "description": "Doorhanger shown = 0, Disable = 1, Enable = 2"
   }
 }

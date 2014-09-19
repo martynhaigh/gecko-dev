@@ -11,6 +11,12 @@ var gMainPane = {
    */
   init: function ()
   {
+    function setEventListener(aId, aEventType, aCallback)
+    {
+      document.getElementById(aId)
+              .addEventListener(aEventType, aCallback.bind(gMainPane));
+    }
+
 #ifdef HAVE_SHELL_SERVICE
     this.updateSetDefaultBrowser();
 #ifdef XP_WIN
@@ -54,14 +60,8 @@ var gMainPane = {
 
     this.updateBrowserStartupLastSession();
 
-    // Notify observers that the UI is now ready
-    Components.classes["@mozilla.org/observer-service;1"]
-              .getService(Components.interfaces.nsIObserverService)
-              .notifyObservers(window, "main-pane-loaded", null);
-
 #ifdef XP_WIN
     // Functionality for "Show tabs in taskbar" on Windows 7 and up.
-
     try {
       let sysInfo = Cc["@mozilla.org/system-info;1"].
                     getService(Ci.nsIPropertyBag2);
@@ -69,9 +69,29 @@ var gMainPane = {
       let showTabsInTaskbar = document.getElementById("showTabsInTaskbar");
       showTabsInTaskbar.hidden = ver < 6.1;
     } catch (ex) {}
-
 #endif
 
+    setEventListener("browser.privatebrowsing.autostart", "change",
+                     gMainPane.updateBrowserStartupLastSession);
+    setEventListener("browser.download.dir", "change",
+                     gMainPane.displayDownloadDirPref);
+#ifdef HAVE_SHELL_SERVICE
+    setEventListener("setDefaultButton", "command",
+                     gMainPane.setDefaultBrowser);
+#endif
+    setEventListener("useCurrent", "command",
+                     gMainPane.setHomePageToCurrent);
+    setEventListener("useBookmark", "command",
+                     gMainPane.setHomePageToBookmark);
+    setEventListener("restoreDefaultHomePage", "command",
+                     gMainPane.restoreDefaultHomePage);
+    setEventListener("chooseFolder", "command",
+                     gMainPane.chooseFolder);
+
+    // Notify observers that the UI is now ready
+    Components.classes["@mozilla.org/observer-service;1"]
+              .getService(Components.interfaces.nsIObserverService)
+              .notifyObservers(window, "main-pane-loaded", null);
   },
 
   // HOME PAGE

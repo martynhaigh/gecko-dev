@@ -60,6 +60,9 @@ public:
   // nsIScrollObserver
   virtual void ScrollPositionChanged() MOZ_OVERRIDE;
 
+  bool OnMouseButtonEvent(nsPresContext* aPresContext,
+                          WidgetMouseEvent* aMouseEvent);
+
   void Init(nsIWidget* aWidget, nsPresContext* aPresContext,
             nsIContent* aContent);
   void Destroy();
@@ -217,7 +220,6 @@ private:
   uint32_t mPreAttrChangeLength;
   int64_t mPreCharacterDataChangeLength;
 
-  bool mIsEditorInTransaction;
   bool mIsSelectionChangeEventPending;
   bool mSelectionChangeCausedOnlyByComposition;
   bool mIsPositionChangeEventPending;

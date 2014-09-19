@@ -65,11 +65,6 @@ public:
   // Can be called on any thread.
   virtual void NotifyDecodedFrames(uint32_t aParsed, uint32_t aDecoded) = 0;
 
-  // Returns the end time of the last sample in the media. Note that a media
-  // can have a non-zero start time, so the end time may not necessarily be
-  // the same as the duration (i.e. duration is (end_time - start_time)).
-  virtual int64_t GetEndMediaTime() const = 0;
-
   // Return the duration of the media in microseconds.
   virtual int64_t GetMediaDuration() = 0;
 
@@ -119,8 +114,15 @@ public:
   // required to begin playback have been acquired. Can be called on any thread.
   virtual void NotifyWaitingForResourcesStatusChanged() = 0;
 
-  // Called by Reader if the current audio track can be offloaded
-  virtual void SetCanOffloadAudio(bool aCanOffloadAudio) {}
+  // Called by the reader's MediaResource as data arrives over the network.
+  // Must be called on the main thread.
+  virtual void NotifyDataArrived(const char* aBuffer, uint32_t aLength, int64_t aOffset) = 0;
+
+  // Set by Reader if the current audio track can be offloaded
+  virtual void SetPlatformCanOffloadAudio(bool aCanOffloadAudio) {}
+
+  // Called by Decoder/State machine to check audio offload condtions are met
+  virtual bool CheckDecoderCanOffloadAudio() { return false; }
 
   // Called from HTMLMediaElement when owner document activity changes
   virtual void SetElementVisibility(bool aIsVisible) {}
@@ -174,7 +176,7 @@ class MetadataEventRunner : public nsRunnable
 class RemoveMediaTracksEventRunner : public nsRunnable
 {
 public:
-  RemoveMediaTracksEventRunner(AbstractMediaDecoder* aDecoder)
+  explicit RemoveMediaTracksEventRunner(AbstractMediaDecoder* aDecoder)
     : mDecoder(aDecoder)
   {}
 

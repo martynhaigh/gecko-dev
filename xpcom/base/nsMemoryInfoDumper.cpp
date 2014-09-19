@@ -124,7 +124,8 @@ private:
   const bool mDumpChildProcesses;
 };
 
-NS_IMPL_ISUPPORTS_INHERITED(GCAndCCLogDumpRunnable, nsRunnable, nsIDumpGCAndCCLogsCallback)
+NS_IMPL_ISUPPORTS_INHERITED(GCAndCCLogDumpRunnable, nsRunnable,
+                            nsIDumpGCAndCCLogsCallback)
 
 } // anonymous namespace
 
@@ -178,10 +179,9 @@ void doGCCCDump(const uint8_t aRecvSig)
   LOG("SignalWatcher(sig %d) dispatching GC/CC log runnable.", aRecvSig);
   // Dump GC and CC logs (from the main thread).
   nsRefPtr<GCAndCCLogDumpRunnable> runnable =
-    new GCAndCCLogDumpRunnable(
-      /* identifier = */ EmptyString(),
-      /* allTraces = */ true,
-      /* dumpChildProcesses = */ true);
+    new GCAndCCLogDumpRunnable(/* identifier = */ EmptyString(),
+                               /* allTraces = */ true,
+                               /* dumpChildProcesses = */ true);
   NS_DispatchToMainThread(runnable);
 }
 
@@ -195,7 +195,8 @@ void
 doMemoryReport(const nsCString& aInputStr)
 {
   bool minimize = aInputStr.EqualsLiteral("minimize memory report");
-  LOG("FifoWatcher(command:%s) dispatching memory report runnable.", aInputStr.get());
+  LOG("FifoWatcher(command:%s) dispatching memory report runnable.",
+      aInputStr.get());
   nsRefPtr<DumpMemoryInfoToTempDirRunnable> runnable =
     new DumpMemoryInfoToTempDirRunnable(/* identifier = */ EmptyString(),
                                         /* anonymize = */ false,
@@ -314,7 +315,8 @@ EnsureNonEmptyIdentifier(nsAString& aIdentifier)
 // Use XPCOM refcounting to fire |onFinish| when all reference-holders
 // (remote dump actors or the |DumpGCAndCCLogsToFile| activation itself)
 // have gone away.
-class nsDumpGCAndCCLogsCallbackHolder MOZ_FINAL : public nsIDumpGCAndCCLogsCallback
+class nsDumpGCAndCCLogsCallbackHolder MOZ_FINAL
+  : public nsIDumpGCAndCCLogsCallback
 {
 public:
   NS_DECL_ISUPPORTS
@@ -612,12 +614,6 @@ nsMemoryInfoDumper::DumpMemoryInfoToTempDir(const nsAString& aIdentifier,
   nsString identifier(aIdentifier);
   EnsureNonEmptyIdentifier(identifier);
 
-#ifdef MOZ_DMD
-  // Clear DMD's reportedness state before running the memory reporters, to
-  // avoid spurious twice-reported warnings.
-  dmd::ClearReports();
-#endif
-
   // Open a new file named something like
   //
   //   incomplete-memory-report-<identifier>-<pid>.json.gz
@@ -675,7 +671,7 @@ nsMemoryInfoDumper::DumpMemoryInfoToTempDir(const nsAString& aIdentifier,
                                finishReport, nullptr,
                                aAnonymize,
                                aMinimizeMemoryUsage,
-                               identifier);
+                               /* DMDident = */ identifier);
   return rv;
 }
 
@@ -709,6 +705,15 @@ nsMemoryInfoDumper::OpenDMDFile(const nsAString& aIdentifier, int aPid,
   }
   rv = dmdFile->OpenANSIFileDesc("wb", aOutFile);
   NS_WARN_IF(NS_FAILED(rv));
+
+  // Print the path, because on some platforms (e.g. Mac) it's not obvious.
+  nsCString path;
+  rv = dmdFile->GetNativePath(path);
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    return rv;
+  }
+  dmd::StatusMsg("opened %s for writing\n", path.get());
+
   return rv;
 }
 
@@ -729,21 +734,6 @@ nsMemoryInfoDumper::DumpDMDToFile(FILE* aFile)
   rv = dmdWriter->Finish();
   NS_WARN_IF(NS_FAILED(rv));
   return rv;
-}
-
-nsresult
-nsMemoryInfoDumper::DumpDMD(const nsAString& aIdentifier)
-{
-  nsresult rv;
-  FILE* dmdFile;
-  rv = OpenDMDFile(aIdentifier, getpid(), &dmdFile);
-  if (NS_WARN_IF(NS_FAILED(rv))) {
-    return rv;
-  }
-  if (!dmdFile) {
-    return NS_OK;
-  }
-  return DumpDMDToFile(dmdFile);
 }
 #endif  // MOZ_DMD
 
@@ -911,11 +901,11 @@ nsMemoryInfoDumper::DumpMemoryReportsToNamedFile(
   }
 
   // Process reports and finish up.
+  nsCOMPtr<nsIMemoryReporterManager> mgr =
+    do_GetService("@mozilla.org/memory-reporter-manager;1");
   nsRefPtr<DumpReportCallback> dumpReport = new DumpReportCallback(mrWriter);
   nsRefPtr<FinishReportingCallback> finishReporting =
     new FinishReportingCallback(aFinishDumping, aFinishDumpingData);
-  nsCOMPtr<nsIMemoryReporterManager> mgr =
-    do_GetService("@mozilla.org/memory-reporter-manager;1");
   return mgr->GetReports(dumpReport, nullptr, finishReporting, mrWriter,
                          aAnonymize);
 }

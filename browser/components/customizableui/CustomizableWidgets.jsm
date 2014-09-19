@@ -159,6 +159,7 @@ const CustomizableWidgets = [{
       // Populate our list of history
       const kMaxResults = 15;
       let doc = aEvent.detail.ownerDocument;
+      let win = doc.defaultView;
 
       let options = PlacesUtils.history.getNewQueryOptions();
       options.excludeQueries = true;
@@ -201,8 +202,10 @@ const CustomizableWidgets = [{
               item.addEventListener("click", function (aEvent) {
                 onHistoryVisit(uri, aEvent, item);
               });
-              if (icon)
-                item.setAttribute("image", "moz-anno:favicon:" + icon);
+              if (icon) {
+                let iconURL = PlacesUtils.getImageURLForResolution(win, "moz-anno:favicon:" + icon);
+                item.setAttribute("image", iconURL);
+              }
               fragment.appendChild(item);
             } catch (e) {
               ERROR("Error while showing history subview: " + e);
@@ -961,7 +964,7 @@ if (Services.prefs.getBoolPref("browser.tabs.remote")) {
     };
   }
 
-  let openRemote = !Services.prefs.getBoolPref("browser.tabs.remote.autostart");
+  let openRemote = !Services.appinfo.browserTabsRemoteAutostart;
   // Like the XUL menuitem counterparts, we hard-code these strings in because
   // this button should never roll into production.
   let buttonLabel = openRemote ? "New e10s Window"

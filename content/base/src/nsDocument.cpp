@@ -39,6 +39,7 @@
 #include "nsIDocShellTreeItem.h"
 #include "nsCOMArray.h"
 #include "nsDOMClassInfo.h"
+#include "mozilla/Services.h"
 
 #include "mozilla/AsyncEventDispatcher.h"
 #include "mozilla/BasicEvents.h"
@@ -149,6 +150,9 @@
 #include "nsHtml5TreeOpExecutor.h"
 #include "mozilla/dom/HTMLLinkElement.h"
 #include "mozilla/dom/HTMLMediaElement.h"
+#ifdef MOZ_MEDIA_NAVIGATOR
+#include "mozilla/MediaManager.h"
+#endif // MOZ_MEDIA_NAVIGATOR
 #ifdef MOZ_WEBRTC
 #include "IPeerConnection.h"
 #endif // MOZ_WEBRTC
@@ -197,6 +201,7 @@
 #include "mozilla/dom/HTMLInputElement.h"
 #include "mozilla/dom/NodeFilterBinding.h"
 #include "mozilla/dom/OwningNonNull.h"
+#include "mozilla/dom/TabChild.h"
 #include "mozilla/dom/UndoManager.h"
 #include "mozilla/dom/WebComponentsBinding.h"
 #include "nsFrame.h"
@@ -682,7 +687,7 @@ public:
 
 struct FindContentData
 {
-  FindContentData(nsIDocument *aSubDoc)
+  explicit FindContentData(nsIDocument* aSubDoc)
     : mSubDocument(aSubDoc), mResult(nullptr)
   {
   }
@@ -1396,7 +1401,7 @@ nsExternalResourceMap::ExternalResource::~ExternalResource()
 class nsDOMStyleSheetSetList MOZ_FINAL : public DOMStringList
 {
 public:
-  nsDOMStyleSheetSetList(nsIDocument* aDocument);
+  explicit nsDOMStyleSheetSetList(nsIDocument* aDocument);
 
   void Disconnect()
   {
@@ -1599,6 +1604,12 @@ nsDocument::~nsDocument()
 
   NS_ASSERTION(!mIsShowing, "Destroying a currently-showing document");
 
+  // Note: This assert is only non-fatal because mochitest-bc triggers
+  // it... as well as the preceding assert about !mIsShowing.
+  NS_ASSERTION(!mObservingAppThemeChanged,
+               "Document leaked to shutdown, then the observer service dropped "
+               "its ref to us so we were able to go away.");
+
   if (IsTopLevelContentDocument()) {
     //don't report for about: pages
     nsCOMPtr<nsIPrincipal> principal = GetPrincipal();
@@ -1735,7 +1746,7 @@ nsDocument::~nsDocument()
 }
 
 NS_INTERFACE_TABLE_HEAD(nsDocument)
-  NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
+  NS_WRAPPERCACHE_INTERFACE_TABLE_ENTRY
   NS_INTERFACE_TABLE_BEGIN
     NS_INTERFACE_TABLE_ENTRY_AMBIGUOUS(nsDocument, nsISupports, nsINode)
     NS_INTERFACE_TABLE_ENTRY(nsDocument, nsINode)
@@ -2142,7 +2153,7 @@ nsDocument::Init()
   // we use the default compartment for this document, instead of creating
   // wrapper in some random compartment when the document is exposed to js
   // via some events.
-  nsCOMPtr<nsIGlobalObject> global = xpc::GetJunkScopeGlobal();
+  nsCOMPtr<nsIGlobalObject> global = xpc::GetNativeForGlobal(xpc::PrivilegedJunkScope());
   NS_ENSURE_TRUE(global, NS_ERROR_FAILURE);
   mScopeObject = do_GetWeakReference(global);
   MOZ_ASSERT(mScopeObject);
@@ -2200,15 +2211,15 @@ nsDocument::Reset(nsIChannel* aChannel, nsILoadGroup* aLoadGroup)
   nsCOMPtr<nsIPrincipal> principal;
   if (aChannel) {
     // Note: this code is duplicated in XULDocument::StartDocumentLoad and
-    // nsScriptSecurityManager::GetChannelPrincipal.
+    // nsScriptSecurityManager::GetChannelResultPrincipal.
     // Note: this should match nsDocShell::OnLoadingSite
     NS_GetFinalChannelURI(aChannel, getter_AddRefs(uri));
 
     nsIScriptSecurityManager *securityManager =
       nsContentUtils::GetSecurityManager();
     if (securityManager) {
-      securityManager->GetChannelPrincipal(aChannel,
-                                           getter_AddRefs(principal));
+      securityManager->GetChannelResultPrincipal(aChannel,
+                                                 getter_AddRefs(principal));
     }
   }
 
@@ -2506,6 +2517,55 @@ nsDocument::FillStyleSet(nsStyleSet* aStyleSet)
                          nsStyleSet::eDocSheet);
 }
 
+static void
+WarnIfSandboxIneffective(nsIDocShell* aDocShell,
+                         uint32_t aSandboxFlags,
+                         nsIChannel* aChannel)
+{
+  // If the document is sandboxed (via the HTML5 iframe sandbox
+  // attribute) and both the allow-scripts and allow-same-origin
+  // keywords are supplied, the sandboxed document can call into its
+  // parent document and remove its sandboxing entirely - we print a
+  // warning to the web console in this case.
+  if (aSandboxFlags & SANDBOXED_NAVIGATION &&
+      !(aSandboxFlags & SANDBOXED_SCRIPTS) &&
+      !(aSandboxFlags & SANDBOXED_ORIGIN)) {
+    nsCOMPtr<nsIDocShellTreeItem> parentAsItem;
+    aDocShell->GetSameTypeParent(getter_AddRefs(parentAsItem));
+    nsCOMPtr<nsIDocShell> parentDocShell = do_QueryInterface(parentAsItem);
+    if (!parentDocShell) {
+      return;
+    }
+
+    // Don't warn if our parent is not the top-level document.
+    nsCOMPtr<nsIDocShellTreeItem> grandParentAsItem;
+    parentDocShell->GetSameTypeParent(getter_AddRefs(grandParentAsItem));
+    if (grandParentAsItem) {
+      return;
+    }
+
+    nsCOMPtr<nsIChannel> parentChannel;
+    parentDocShell->GetCurrentDocumentChannel(getter_AddRefs(parentChannel));
+    if (!parentChannel) {
+      return;
+    }
+    nsresult rv = nsContentUtils::CheckSameOrigin(aChannel, parentChannel);
+    if (NS_FAILED(rv)) {
+      return;
+    }
+
+    nsCOMPtr<nsIDocument> parentDocument = do_GetInterface(parentDocShell);
+    nsCOMPtr<nsIURI> iframeUri;
+    parentChannel->GetURI(getter_AddRefs(iframeUri));
+    nsContentUtils::ReportToConsole(nsIScriptError::warningFlag,
+                                    NS_LITERAL_CSTRING("Iframe Sandbox"),
+                                    parentDocument,
+                                    nsContentUtils::eSECURITY_PROPERTIES,
+                                    "BothAllowScriptsAndSameOriginPresent",
+                                    nullptr, 0, iframeUri);
+  }
+}
+
 nsresult
 nsDocument::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
                               nsILoadGroup* aLoadGroup,
@@ -2595,6 +2655,7 @@ nsDocument::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
   if (docShell) {
     nsresult rv = docShell->GetSandboxFlags(&mSandboxFlags);
     NS_ENSURE_SUCCESS(rv, rv);
+    WarnIfSandboxIneffective(docShell, mSandboxFlags, GetChannel());
   }
 
   // If this is not a data document, set CSP.
@@ -4494,7 +4555,7 @@ nsDocument::SetScriptGlobalObject(nsIScriptGlobalObject *aScriptGlobalObject)
       return;
     }
 
-    nsCOMPtr<nsIServiceWorkerManager> swm = do_GetService(SERVICEWORKERMANAGER_CONTRACTID);
+    nsCOMPtr<nsIServiceWorkerManager> swm = mozilla::services::GetServiceWorkerManager();
     if (swm) {
       swm->MaybeStartControlling(this);
       mMaybeServiceWorkerControlled = true;
@@ -5544,7 +5605,7 @@ class ProcessStackRunner MOZ_FINAL : public nsIRunnable
 {
   ~ProcessStackRunner() {}
 public:
-  ProcessStackRunner(bool aIsBaseQueue = false)
+  explicit ProcessStackRunner(bool aIsBaseQueue = false)
     : mIsBaseQueue(aIsBaseQueue)
   {
   }
@@ -7499,15 +7560,33 @@ nsIDocument::AdoptNode(nsINode& aAdoptedNode, ErrorResult& rv)
 nsViewportInfo
 nsDocument::GetViewportInfo(const ScreenIntSize& aDisplaySize)
 {
+  // Compute the CSS-to-LayoutDevice pixel scale as the product of the
+  // widget scale and the full zoom.
+  nsPresContext* context = mPresShell->GetPresContext();
+  float fullZoom = context ? context->GetFullZoom() : 1.0;
+  fullZoom = (fullZoom == 0.0) ? 1.0 : fullZoom;
+  nsIWidget *widget = nsContentUtils::WidgetForDocument(this);
+  float widgetScale = widget ? widget->GetDefaultScale().scale : 1.0f;
+  CSSToLayoutDeviceScale layoutDeviceScale(widgetScale * fullZoom);
+
+  CSSToScreenScale defaultScale = layoutDeviceScale
+                                * LayoutDeviceToScreenScale(1.0);
+
   // In cases where the width of the CSS viewport is less than or equal to the width
   // of the display (i.e. width <= device-width) then we disable double-tap-to-zoom
   // behaviour. See bug 941995 for details.
 
   switch (mViewportType) {
   case DisplayWidthHeight:
-    return nsViewportInfo(aDisplaySize);
+    return nsViewportInfo(aDisplaySize,
+                          defaultScale,
+                          /*allowZoom*/ true,
+                          /*allowDoubleTapZoom*/ true);
   case DisplayWidthHeightNoZoom:
-    return nsViewportInfo(aDisplaySize, /*allowZoom*/ false, /*allowDoubleTapZoom*/ false);
+    return nsViewportInfo(aDisplaySize,
+                          defaultScale,
+                          /*allowZoom*/ false,
+                          /*allowDoubleTapZoom*/ false);
   case Unknown:
   {
     nsAutoString viewport;
@@ -7527,7 +7606,10 @@ nsDocument::GetViewportInfo(const ScreenIntSize& aDisplaySize)
           {
             // We're making an assumption that the docType can't change here
             mViewportType = DisplayWidthHeight;
-            return nsViewportInfo(aDisplaySize, /*allowZoom*/true, /*allowDoubleTapZoom*/false);
+            return nsViewportInfo(aDisplaySize,
+                                  defaultScale,
+                                  /*allowZoom*/true,
+                                  /*allowDoubleTapZoom*/false);
           }
         }
       }
@@ -7536,7 +7618,10 @@ nsDocument::GetViewportInfo(const ScreenIntSize& aDisplaySize)
       GetHeaderData(nsGkAtoms::handheldFriendly, handheldFriendly);
       if (handheldFriendly.EqualsLiteral("true")) {
         mViewportType = DisplayWidthHeight;
-        return nsViewportInfo(aDisplaySize, /*allowZoom*/true, /*allowDoubleTapZoom*/false);
+        return nsViewportInfo(aDisplaySize,
+                              defaultScale,
+                              /*allowZoom*/true,
+                              /*allowDoubleTapZoom*/false);
       }
 
       // Bug 940036. This is bad. When FirefoxOS was built, apps installed
@@ -7559,7 +7644,10 @@ nsDocument::GetViewportInfo(const ScreenIntSize& aDisplaySize)
                                           "ImplicitMetaViewportTagFallback");
         }
         mViewportType = DisplayWidthHeightNoZoom;
-        return nsViewportInfo(aDisplaySize, /*allowZoom*/false, /*allowDoubleTapZoom*/false);
+        return nsViewportInfo(aDisplaySize,
+                              defaultScale,
+                              /*allowZoom*/false,
+                              /*allowDoubleTapZoom*/false);
       }
     }
 
@@ -7650,8 +7738,11 @@ nsDocument::GetViewportInfo(const ScreenIntSize& aDisplaySize)
       if (mValidHeight && !aDisplaySize.IsEmpty()) {
         size.width = size.height * aDisplaySize.width / aDisplaySize.height;
       } else {
+        // Stretch CSS pixel size of viewport to keep device pixel size
+        // unchanged after full zoom applied.
+        // See bug 974242.
         size.width = Preferences::GetInt("browser.viewport.desktopWidth",
-                                         kViewportDefaultScreenWidth);
+                                         kViewportDefaultScreenWidth) / fullZoom;
       }
     }
 
@@ -7662,17 +7753,14 @@ nsDocument::GetViewportInfo(const ScreenIntSize& aDisplaySize)
         size.height = size.width;
       }
     }
-    // Now convert the scale into device pixels per CSS pixel.
-    nsIWidget *widget = nsContentUtils::WidgetForDocument(this);
-    CSSToLayoutDeviceScale pixelRatio = widget ? widget->GetDefaultScale()
-                                               : CSSToLayoutDeviceScale(1.0f);
-    CSSToScreenScale scaleFloat = mScaleFloat * pixelRatio;
-    CSSToScreenScale scaleMinFloat = mScaleMinFloat * pixelRatio;
-    CSSToScreenScale scaleMaxFloat = mScaleMaxFloat * pixelRatio;
+
+    CSSToScreenScale scaleFloat = mScaleFloat * layoutDeviceScale;
+    CSSToScreenScale scaleMinFloat = mScaleMinFloat * layoutDeviceScale;
+    CSSToScreenScale scaleMaxFloat = mScaleMaxFloat * layoutDeviceScale;
 
     if (mAutoSize) {
       // aDisplaySize is in screen pixels; convert them to CSS pixels for the viewport size.
-      CSSToScreenScale defaultPixelScale = pixelRatio * LayoutDeviceToScreenScale(1.0f);
+      CSSToScreenScale defaultPixelScale = layoutDeviceScale * LayoutDeviceToScreenScale(1.0f);
       size = ScreenSize(aDisplaySize) / defaultPixelScale;
     }
 
@@ -8468,6 +8556,14 @@ nsDocument::CanSavePresentation(nsIRequest *aNewRequest)
    return false;
   }
 
+#ifdef MOZ_MEDIA_NAVIGATOR
+  // Check if we have active GetUserMedia use
+  if (MediaManager::Exists() && win &&
+      MediaManager::Get()->IsWindowStillActive(win->WindowID())) {
+    return false;
+  }
+#endif // MOZ_MEDIA_NAVIGATOR
+
 #ifdef MOZ_WEBRTC
   // Check if we have active PeerConnections
   nsCOMPtr<IPeerConnectionManager> pcManager =
@@ -8526,7 +8622,7 @@ nsDocument::Destroy()
 
   mRegistry = nullptr;
 
-  nsCOMPtr<nsIServiceWorkerManager> swm = do_GetService(SERVICEWORKERMANAGER_CONTRACTID);
+  nsCOMPtr<nsIServiceWorkerManager> swm = mozilla::services::GetServiceWorkerManager();
   if (swm) {
     swm->MaybeStopControlling(this);
   }
@@ -8686,7 +8782,7 @@ nsDocument::UnblockOnload(bool aFireSync)
 
 class nsUnblockOnloadEvent : public nsRunnable {
 public:
-  nsUnblockOnloadEvent(nsDocument *doc) : mDoc(doc) {}
+  explicit nsUnblockOnloadEvent(nsDocument* aDoc) : mDoc(aDoc) {}
   NS_IMETHOD Run() {
     mDoc->DoUnblockOnload();
     return NS_OK;
@@ -8844,7 +8940,10 @@ nsDocument::OnPageShow(bool aPersisted,
                         "chrome-page-shown" :
                         "content-page-shown",
                       nullptr);
-
+  if (!mObservingAppThemeChanged) {
+    os->AddObserver(this, "app-theme-changed", /* ownsWeak */ false);
+    mObservingAppThemeChanged = true;
+  }
 
   DispatchPageTransition(target, NS_LITERAL_STRING("pageshow"), aPersisted);
 }
@@ -8918,6 +9017,9 @@ nsDocument::OnPageHide(bool aPersisted,
                           "chrome-page-hidden" :
                           "content-page-hidden",
                         nullptr);
+
+    os->RemoveObserver(this, "app-theme-changed");
+    mObservingAppThemeChanged = false;
   }
 
   DispatchPageTransition(target, NS_LITERAL_STRING("pagehide"), aPersisted);
@@ -9393,7 +9495,7 @@ nsDocument::LoadChromeSheetSync(nsIURI* uri, bool isAgentSheet,
 class nsDelayedEventDispatcher : public nsRunnable
 {
 public:
-  nsDelayedEventDispatcher(nsTArray<nsCOMPtr<nsIDocument> >& aDocuments)
+  explicit nsDelayedEventDispatcher(nsTArray<nsCOMPtr<nsIDocument>>& aDocuments)
   {
     mDocuments.SwapElements(aDocuments);
   }
@@ -9413,7 +9515,7 @@ namespace {
 
 struct UnsuppressArgs
 {
-  UnsuppressArgs(nsIDocument::SuppressionType aWhat)
+  explicit UnsuppressArgs(nsIDocument::SuppressionType aWhat)
     : mWhat(aWhat)
   {
   }
@@ -10385,8 +10487,7 @@ FullscreenRoots::Add(nsIDocument* aRoot)
     if (!sInstance) {
       sInstance = new FullscreenRoots();
     }
-    nsWeakPtr weakRoot = do_GetWeakReference(aRoot);
-    sInstance->mRoots.AppendElement(weakRoot);
+    sInstance->mRoots.AppendElement(do_GetWeakReference(aRoot));
   }
 }
 
@@ -10516,7 +10617,7 @@ SetWindowFullScreen(nsIDocument* aDoc, bool aValue)
 
 class nsCallExitFullscreen : public nsRunnable {
 public:
-  nsCallExitFullscreen(nsIDocument* aDoc)
+  explicit nsCallExitFullscreen(nsIDocument* aDoc)
     : mDoc(aDoc) {}
   NS_IMETHOD Run()
   {
@@ -10542,8 +10643,9 @@ nsIDocument::ExitFullscreen(nsIDocument* aDoc, bool aRunAsync)
 }
 
 // Returns true if the document is a direct child of a cross process parent
-// mozbrowser iframe. This is the case when the document has a null parent,
-// and its DocShell reports that it is a browser frame.
+// mozbrowser iframe or TabParent. This is the case when the document has
+// a null parent and its DocShell reports that it is a browser frame, or
+// we can get a TabChild from it.
 static bool
 HasCrossProcessParent(nsIDocument* aDocument)
 {
@@ -10561,7 +10663,12 @@ HasCrossProcessParent(nsIDocument* aDocument)
   if (!docShell) {
     return false;
   }
-  return docShell->GetIsBrowserOrApp();
+  TabChild* tabChild(TabChild::GetFrom(docShell));
+  if (!tabChild) {
+    return false;
+  }
+
+  return true;
 }
 
 static bool
@@ -10824,7 +10931,7 @@ nsDocument::IsFullScreenDoc()
 class nsCallRequestFullScreen : public nsRunnable
 {
 public:
-  nsCallRequestFullScreen(Element* aElement)
+  explicit nsCallRequestFullScreen(Element* aElement)
     : mElement(aElement),
       mDoc(aElement->OwnerDoc()),
       mWasCallerChrome(nsContentUtils::IsCallerChrome()),
@@ -10953,8 +11060,7 @@ nsDocument::FullScreenStackPush(Element* aElement)
     EventStateManager::SetFullScreenState(top, false);
   }
   EventStateManager::SetFullScreenState(aElement, true);
-  nsWeakPtr weakElement = do_GetWeakReference(aElement);
-  mFullScreenStack.AppendElement(weakElement);
+  mFullScreenStack.AppendElement(do_GetWeakReference(aElement));
   NS_ASSERTION(GetFullScreenElement() == aElement, "Should match");
   return true;
 }
@@ -11621,8 +11727,55 @@ nsDocument::Observe(nsISupports *aSubject,
         NS_DispatchToMainThread(r);
       }
     }
+  } else if (strcmp("app-theme-changed", aTopic) == 0) {
+    if (!nsContentUtils::IsSystemPrincipal(NodePrincipal()) &&
+        !IsUnstyledDocument()) {
+      // We don't want to style the chrome window, only app ones.
+      OnAppThemeChanged();
+    }
   }
   return NS_OK;
+}
+
+void
+nsDocument::OnAppThemeChanged()
+{
+  // Bail out if there is no theme support set up properly.
+  auto themeOrigin = Preferences::GetString("b2g.theme.origin");
+  if (!themeOrigin || !Preferences::GetBool("dom.mozApps.themable")) {
+    return;
+  }
+
+  for (int32_t i = 0; i < GetNumberOfStyleSheets(); i++) {
+    nsRefPtr<CSSStyleSheet> sheet =  do_QueryObject(GetStyleSheetAt(i));
+    if (!sheet) {
+      continue;
+    }
+
+    nsINode* owningNode = sheet->GetOwnerNode();
+    if (!owningNode) {
+      continue;
+    }
+    // Get a DOM stylesheet link to check the href against the theme origin.
+    nsIURI* sheetURI = sheet->GetOriginalURI();
+    if (!sheetURI) {
+      continue;
+    }
+    nsAutoString sheetOrigin;
+    nsContentUtils::GetUTFOrigin(sheetURI, sheetOrigin);
+    if (!sheetOrigin.Equals(themeOrigin)) {
+      continue;
+    }
+
+    // Finally getting a Stylesheet link.
+    nsCOMPtr<nsIStyleSheetLinkingElement> link = do_QueryInterface(owningNode);
+    if (!link) {
+      continue;
+    }
+    bool willNotify;
+    bool isAlternate;
+    link->UpdateStyleSheet(nullptr, &willNotify, &isAlternate, true);
+  }
 }
 
 void
@@ -12162,54 +12315,6 @@ nsDocument::Evaluate(const nsAString& aExpression, nsIDOMNode* aContextNode,
 {
   return XPathEvaluator()->Evaluate(aExpression, aContextNode, aResolver, aType,
                                     aInResult, aResult);
-}
-
-// This is just a hack around the fact that window.document is not
-// [Unforgeable] yet.
-JSObject*
-nsIDocument::WrapObject(JSContext *aCx)
-{
-  MOZ_ASSERT(IsDOMBinding());
-
-  JS::Rooted<JSObject*> obj(aCx, nsINode::WrapObject(aCx));
-  if (!obj) {
-    return nullptr;
-  }
-
-  nsCOMPtr<nsPIDOMWindow> win = do_QueryInterface(GetInnerWindow());
-  if (!win ||
-      static_cast<nsGlobalWindow*>(win.get())->IsDOMBinding()) {
-    // No window or window on new DOM binding, nothing else to do here.
-    return obj;
-  }
-
-  if (this != win->GetExtantDoc()) {
-    // We're not the current document; we're also done here
-    return obj;
-  }
-
-  JSAutoCompartment ac(aCx, obj);
-
-  JS::Rooted<JS::Value> winVal(aCx);
-  nsresult rv = nsContentUtils::WrapNative(aCx, win, &NS_GET_IID(nsIDOMWindow),
-                                           &winVal,
-                                           false);
-  if (NS_FAILED(rv)) {
-    Throw(aCx, rv);
-    return nullptr;
-  }
-
-  NS_NAMED_LITERAL_STRING(doc_str, "document");
-
-  JS::Rooted<JSObject*> winObj(aCx, &winVal.toObject());
-  if (!JS_DefineUCProperty(aCx, winObj, doc_str.get(),
-                           doc_str.Length(), obj,
-                           JSPROP_READONLY | JSPROP_ENUMERATE,
-                           JS_PropertyStub, JS_StrictPropertyStub)) {
-    return nullptr;
-  }
-
-  return obj;
 }
 
 XPathEvaluator*

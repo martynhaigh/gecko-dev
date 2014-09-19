@@ -32,6 +32,7 @@
 #include "jsstr.h"
 #include "jstypes.h"
 #include "jsutil.h"
+#include "jswrapper.h"
 #include "prmjtime.h"
 
 #include "js/Date.h"
@@ -2555,7 +2556,7 @@ date_format(JSContext *cx, double date, formatspec format, MutableHandleValue rv
                 usetz = false;
             } else {
                 for (i = 0; i < tzlen; i++) {
-                    jschar c = tzbuf[i];
+                    char16_t c = tzbuf[i];
                     if (c > 127 ||
                         !(isalpha(c) || isdigit(c) ||
                           c == ' ' || c == '(' || c == ')')) {
@@ -3130,5 +3131,8 @@ js_DateGetSeconds(JSObject *obj)
 JS_FRIEND_API(double)
 js_DateGetMsecSinceEpoch(JSObject *obj)
 {
-    return obj->is<DateObject>() ? obj->as<DateObject>().UTCTime().toNumber() : 0;
+    obj = CheckedUnwrap(obj);
+    if (!obj || !obj->is<DateObject>())
+        return 0;
+    return obj->as<DateObject>().UTCTime().toNumber();
 }

@@ -154,6 +154,11 @@
 #include "mozilla/net/NeckoMessageUtils.h"
 #include "mozilla/RemoteSpellCheckEngineChild.h"
 
+#ifdef MOZ_B2G_RIL
+#include "mozilla/dom/mobileconnection/MobileConnectionChild.h"
+using namespace mozilla::dom::mobileconnection;
+#endif
+
 using namespace base;
 using namespace mozilla;
 using namespace mozilla::docshell;
@@ -361,7 +366,7 @@ private:
 class ConsoleListener MOZ_FINAL : public nsIConsoleListener
 {
 public:
-    ConsoleListener(ContentChild* aChild)
+    explicit ConsoleListener(ContentChild* aChild)
     : mChild(aChild) {}
 
     NS_DECL_ISUPPORTS
@@ -592,6 +597,7 @@ ContentChild::Init(MessageLoop* aIOLoop,
 void
 ContentChild::InitProcessAttributes()
 {
+#ifdef MOZ_WIDGET_GONK
 #ifdef MOZ_NUWA_PROCESS
     if (IsNuwaProcess()) {
         SetProcessName(NS_LITERAL_STRING("(Nuwa)"), false);
@@ -603,7 +609,9 @@ ContentChild::InitProcessAttributes()
     } else {
         SetProcessName(NS_LITERAL_STRING("Browser"), false);
     }
-
+#else
+    SetProcessName(NS_LITERAL_STRING("Web Content"), true);
+#endif
 }
 
 void
@@ -714,7 +722,7 @@ class MemoryReportsWrapper MOZ_FINAL : public nsISupports {
     ~MemoryReportsWrapper() {}
 public:
     NS_DECL_ISUPPORTS
-    MemoryReportsWrapper(InfallibleTArray<MemoryReport> *r) : mReports(r) { }
+    explicit MemoryReportsWrapper(InfallibleTArray<MemoryReport>* r) : mReports(r) { }
     InfallibleTArray<MemoryReport> *mReports;
 };
 NS_IMPL_ISUPPORTS0(MemoryReportsWrapper)
@@ -724,7 +732,7 @@ class MemoryReportCallback MOZ_FINAL : public nsIMemoryReporterCallback
 public:
     NS_DECL_ISUPPORTS
 
-    MemoryReportCallback(const nsACString &aProcess)
+    explicit MemoryReportCallback(const nsACString& aProcess)
     : mProcess(aProcess)
     {
     }
@@ -934,7 +942,12 @@ ContentChild::RecvSetProcessSandbox()
 #endif
     SetContentProcessSandbox();
 #elif defined(XP_WIN)
-    mozilla::SandboxTarget::Instance()->StartSandbox();
+    nsAdoptingString contentSandboxPref =
+        Preferences::GetString("browser.tabs.remote.sandbox");
+    if (contentSandboxPref.EqualsLiteral("on")
+        || contentSandboxPref.EqualsLiteral("warn")) {
+        mozilla::SandboxTarget::Instance()->StartSandbox();
+    }
 #endif
 #endif
     return true;
@@ -944,6 +957,7 @@ bool
 ContentChild::RecvSpeakerManagerNotify()
 {
 #ifdef MOZ_WIDGET_GONK
+    // Only notify the process which has the SpeakerManager instance.
     nsRefPtr<SpeakerManagerService> service =
         SpeakerManagerService::GetSpeakerManagerService();
     if (service) {
@@ -1216,6 +1230,43 @@ ContentChild::DeallocPFileSystemRequestChild(PFileSystemRequestChild* aFileSyste
     // FileSystemTaskBase.cpp. We should decrease it after IPC.
     NS_RELEASE(child);
     return true;
+}
+
+PMobileConnectionChild*
+ContentChild::SendPMobileConnectionConstructor(PMobileConnectionChild* aActor,
+                                               const uint32_t& aClientId)
+{
+#ifdef MOZ_B2G_RIL
+    // Add an extra ref for IPDL. Will be released in
+    // ContentChild::DeallocPMobileConnectionChild().
+    static_cast<MobileConnectionChild*>(aActor)->AddRef();
+    return PContentChild::SendPMobileConnectionConstructor(aActor, aClientId);
+#else
+    MOZ_CRASH("No support for mobileconnection on this platform!");;
+#endif
+}
+
+PMobileConnectionChild*
+ContentChild::AllocPMobileConnectionChild(const uint32_t& aClientId)
+{
+#ifdef MOZ_B2G_RIL
+    NS_NOTREACHED("No one should be allocating PMobileConnectionChild actors");
+    return nullptr;
+#else
+    MOZ_CRASH("No support for mobileconnection on this platform!");;
+#endif
+}
+
+bool
+ContentChild::DeallocPMobileConnectionChild(PMobileConnectionChild* aActor)
+{
+#ifdef MOZ_B2G_RIL
+    // MobileConnectionChild is refcounted, must not be freed manually.
+    static_cast<MobileConnectionChild*>(aActor)->Release();
+    return true;
+#else
+    MOZ_CRASH("No support for mobileconnection on this platform!");
+#endif
 }
 
 PNeckoChild*
@@ -2005,6 +2056,16 @@ ContentChild::RecvNuwaFork()
 #else
     return false; // Makes the underlying IPC channel abort.
 #endif
+}
+
+bool
+ContentChild::RecvOnAppThemeChanged()
+{
+    nsCOMPtr<nsIObserverService> os = services::GetObserverService();
+    if (os) {
+        os->NotifyObservers(nullptr, "app-theme-changed", nullptr);
+    }
+    return true;
 }
 
 } // namespace dom

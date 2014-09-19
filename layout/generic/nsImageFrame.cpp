@@ -85,6 +85,7 @@ using namespace mozilla;
 
 using namespace mozilla::layers;
 using namespace mozilla::dom;
+using namespace mozilla::gfx;
 
 // static icon information
 nsImageFrame::IconLoad* nsImageFrame::gIconLoad = nullptr;
@@ -759,10 +760,15 @@ nsImageFrame::EnsureIntrinsicSizeAndRatio(nsPresContext* aPresContext)
   }
 }
 
-/* virtual */ nsSize
+/* virtual */
+LogicalSize
 nsImageFrame::ComputeSize(nsRenderingContext *aRenderingContext,
-                          nsSize aCBSize, nscoord aAvailableWidth,
-                          nsSize aMargin, nsSize aBorder, nsSize aPadding,
+                          WritingMode aWM,
+                          const LogicalSize& aCBSize,
+                          nscoord aAvailableISize,
+                          const LogicalSize& aMargin,
+                          const LogicalSize& aBorder,
+                          const LogicalSize& aPadding,
                           uint32_t aFlags)
 {
   nsPresContext *presContext = PresContext();
@@ -797,10 +803,13 @@ nsImageFrame::ComputeSize(nsRenderingContext *aRenderingContext,
     }
   }
 
-  return nsLayoutUtils::ComputeSizeWithIntrinsicDimensions(
+  return nsLayoutUtils::ComputeSizeWithIntrinsicDimensions(aWM,
                             aRenderingContext, this,
-                            intrinsicSize, mIntrinsicRatio, aCBSize,
-                            aMargin, aBorder, aPadding);
+                            intrinsicSize, mIntrinsicRatio,
+                            aCBSize,
+                            aMargin,
+                            aBorder,
+                            aPadding);
 }
 
 nsRect 
@@ -1434,11 +1443,10 @@ nsDisplayImage::ConfigureLayer(ImageLayer *aLayer, const nsIntPoint& aOffset)
 
   const gfxRect destRect = GetDestRect();
 
-  gfx::Matrix transform;
   gfxPoint p = destRect.TopLeft() + aOffset;
-  transform.Translate(p.x, p.y);
-  transform.Scale(destRect.Width()/imageWidth,
-                  destRect.Height()/imageHeight);
+  Matrix transform = Matrix::Translation(p.x, p.y);
+  transform.PreScale(destRect.Width() / imageWidth,
+                     destRect.Height() / imageHeight);
   aLayer->SetBaseTransform(gfx::Matrix4x4::From2D(transform));
 }
 
@@ -1925,9 +1933,9 @@ void
 nsImageFrame::GetDocumentCharacterSet(nsACString& aCharset) const
 {
   if (mContent) {
-    NS_ASSERTION(mContent->GetDocument(),
+    NS_ASSERTION(mContent->GetComposedDoc(),
                  "Frame still alive after content removed from document!");
-    aCharset = mContent->GetDocument()->GetDocumentCharacterSet();
+    aCharset = mContent->GetComposedDoc()->GetDocumentCharacterSet();
   }
 }
 

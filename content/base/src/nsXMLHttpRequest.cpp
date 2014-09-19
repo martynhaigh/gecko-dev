@@ -149,7 +149,7 @@ NS_IMPL_ISUPPORTS(nsXHRParseEndListener, nsIDOMEventListener)
 class nsResumeTimeoutsEvent : public nsRunnable
 {
 public:
-  nsResumeTimeoutsEvent(nsPIDOMWindow* aWindow) : mWindow(aWindow) {}
+  explicit nsResumeTimeoutsEvent(nsPIDOMWindow* aWindow) : mWindow(aWindow) {}
 
   NS_IMETHOD Run()
   {
@@ -352,9 +352,7 @@ nsXMLHttpRequest::Init()
   // Instead of grabbing some random global from the context stack,
   // let's use the default one (junk scope) for now.
   // We should move away from this Init...
-  nsCOMPtr<nsIGlobalObject> global = xpc::GetJunkScopeGlobal();
-  NS_ENSURE_TRUE(global, NS_ERROR_FAILURE);
-  Construct(subjectPrincipal, global);
+  Construct(subjectPrincipal, xpc::GetNativeForGlobal(xpc::PrivilegedJunkScope()));
   return NS_OK;
 }
 
@@ -768,7 +766,7 @@ nsXMLHttpRequest::CreateResponseParsedJSON(JSContext* aCx)
   // The Unicode converter has already zapped the BOM if there was one
   JS::Rooted<JS::Value> value(aCx);
   if (!JS_ParseJSON(aCx,
-                    static_cast<const jschar*>(mResponseText.get()), mResponseText.Length(),
+                    static_cast<const char16_t*>(mResponseText.get()), mResponseText.Length(),
                     &value)) {
     return NS_ERROR_FAILURE;
   }
@@ -1113,8 +1111,7 @@ nsXMLHttpRequest::Status()
     return 0;
   }
 
-  uint16_t readyState;
-  GetReadyState(&readyState);
+  uint16_t readyState = ReadyState();
   if (readyState == UNSENT || readyState == OPENED) {
     return 0;
   }
@@ -1138,14 +1135,8 @@ nsXMLHttpRequest::Status()
 
   nsCOMPtr<nsIHttpChannel> httpChannel = GetCurrentHttpChannel();
   if (!httpChannel) {
-
-    // Let's simulate the http protocol for jar/app requests:
-    nsCOMPtr<nsIJARChannel> jarChannel = GetCurrentJARChannel();
-    if (jarChannel) {
-      return 200; // Ok
-    }
-
-    return 0;
+    // Pretend like we got a 200 response, since our load was successful
+    return 200;
   }
 
   uint32_t status;
@@ -1161,13 +1152,8 @@ IMPL_CSTRING_GETTER(GetStatusText)
 void
 nsXMLHttpRequest::GetStatusText(nsCString& aStatusText)
 {
-  nsCOMPtr<nsIHttpChannel> httpChannel = GetCurrentHttpChannel();
-
+  // Return an empty status text on all error loads.
   aStatusText.Truncate();
-
-  if (!httpChannel) {
-    return;
-  }
 
   // Make sure we don't leak status information from denied cross-site
   // requests.
@@ -1175,18 +1161,25 @@ nsXMLHttpRequest::GetStatusText(nsCString& aStatusText)
     return;
   }
 
-
   // Check the current XHR state to see if it is valid to obtain the statusText
   // value.  This check is to prevent the status text for redirects from being
   // available before all the redirects have been followed and HTTP headers have
   // been received.
-  uint16_t readyState;
-  GetReadyState(&readyState);
-  if (readyState != OPENED && readyState != UNSENT) {
-    httpChannel->GetResponseStatusText(aStatusText);
+  uint16_t readyState = ReadyState();
+  if (readyState == UNSENT || readyState == OPENED) {
+    return;
   }
 
+  if (mErrorLoad) {
+    return;
+  }
 
+  nsCOMPtr<nsIHttpChannel> httpChannel = GetCurrentHttpChannel();
+  if (httpChannel) {
+    httpChannel->GetResponseStatusText(aStatusText);
+  } else {
+    aStatusText.AssignLiteral("OK");
+  }
 }
 
 void
@@ -3417,7 +3410,7 @@ nsXMLHttpRequest::ChangeState(uint32_t aState, bool aBroadcast)
 class AsyncVerifyRedirectCallbackForwarder MOZ_FINAL : public nsIAsyncVerifyRedirectCallback
 {
 public:
-  AsyncVerifyRedirectCallbackForwarder(nsXMLHttpRequest *xhr)
+  explicit AsyncVerifyRedirectCallbackForwarder(nsXMLHttpRequest* xhr)
     : mXHR(xhr)
   {
   }
@@ -4081,8 +4074,8 @@ ArrayBufferBuilder::mapToFileInPackage(const nsCString& aFile,
     return rv;
   }
   nsZipItem* zipItem = zip->GetItem(aFile.get());
-  if (NS_FAILED(rv)) {
-    return rv;
+  if (!zipItem) {
+    return NS_ERROR_FILE_TARGET_DOES_NOT_EXIST;
   }
 
   // If file was added to the package as stored(uncompressed), map to the

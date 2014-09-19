@@ -191,7 +191,7 @@ public:
 class ClearException
 {
 public:
-  ClearException(JSContext* aCx)
+  explicit ClearException(JSContext* aCx)
     : mCx(aCx)
   {
   }
@@ -278,7 +278,7 @@ private:
 class ConsoleCallDataRunnable MOZ_FINAL : public ConsoleRunnable
 {
 public:
-  ConsoleCallDataRunnable(ConsoleCallData* aCallData)
+  explicit ConsoleCallDataRunnable(ConsoleCallData* aCallData)
     : mCallData(aCallData)
   {
   }
@@ -624,6 +624,7 @@ METHOD(Warn, "warn")
 METHOD(Error, "error")
 METHOD(Exception, "exception")
 METHOD(Debug, "debug")
+METHOD(Table, "table")
 
 void
 Console::Trace(JSContext* aCx)
@@ -808,7 +809,7 @@ Console::Method(JSContext* aCx, MethodName aMethodName,
   // goes wrong.
   class RAII {
   public:
-    RAII(LinkedList<ConsoleCallData>& aList)
+    explicit RAII(LinkedList<ConsoleCallData>& aList)
       : mList(aList)
       , mUnfinished(true)
     {
@@ -910,9 +911,8 @@ Console::Method(JSContext* aCx, MethodName aMethodName,
       nsGlobalWindow *win = static_cast<nsGlobalWindow*>(mWindow.get());
       MOZ_ASSERT(win);
 
-      ErrorResult rv;
-      nsRefPtr<nsPerformance> performance = win->GetPerformance(rv);
-      if (rv.Failed() || !performance) {
+      nsRefPtr<nsPerformance> performance = win->GetPerformance();
+      if (!performance) {
         return;
       }
 
@@ -1113,7 +1113,7 @@ Console::ProcessCallData(ConsoleCallData* aData)
   // mStorage, but that's a bit fragile.  Instead, we just use the junk scope,
   // with explicit permission from the XPConnect module owner.  If you're
   // tempted to do that anywhere else, talk to said module owner first.
-  JSAutoCompartment ac2(cx, xpc::GetJunkScope());
+  JSAutoCompartment ac2(cx, xpc::PrivilegedJunkScope());
 
   JS::Rooted<JS::Value> eventValue(cx);
   if (!ToJSValue(cx, event, &eventValue)) {
