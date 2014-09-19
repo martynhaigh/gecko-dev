@@ -27,6 +27,6 @@ public class NewTabletUI {
             sNewTabletUI = prefs.getBoolean(GeckoPreferences.PREFS_NEW_TABLET_UI, DEFAULT);
         }
 
-        return true;//sNewTabletUI;
+        return sNewTabletUI;
     }
 }
