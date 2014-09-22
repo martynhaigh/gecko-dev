@@ -28,7 +28,6 @@
 #include "nsCycleCollector.h"
 #include "nsIXPConnect.h"
 #include "nsJSUtils.h"
-#include "MainThreadUtils.h"
 #include "nsISupportsImpl.h"
 #include "qsObjectHelper.h"
 #include "xpcpublic.h"
@@ -843,6 +842,10 @@ MaybeWrapValue(JSContext* cx, JS::MutableHandle<JS::Value> rval)
 // GetWrapperPreserveColor() which can return its existing wrapper, if any, and
 // a WrapObject() which will try to create a wrapper. Typically, this is done by
 // having "value" inherit from nsWrapperCache.
+//
+// The value stored in rval will be ready to be exposed to whatever JS
+// is running on cx right now.  In particular, it will be in the
+// compartment of cx, and outerized as needed.
 template <class T>
 MOZ_ALWAYS_INLINE bool
 WrapNewBindingObject(JSContext* cx, T* value, JS::MutableHandle<JS::Value> rval)
@@ -1208,6 +1211,24 @@ ClearWrapper(T* p, void*)
   nsWrapperCache* cache;
   CallQueryInterface(p, &cache);
   ClearWrapper(p, cache);
+}
+
+template<class T>
+inline void
+UpdateWrapper(T* p, nsWrapperCache* cache, JSObject* obj, const JSObject* old)
+{
+  JS::AutoAssertGCCallback inCallback(obj);
+  cache->UpdateWrapper(obj, old);
+}
+
+template<class T>
+inline void
+UpdateWrapper(T* p, void*, JSObject* obj, const JSObject* old)
+{
+  JS::AutoAssertGCCallback inCallback(obj);
+  nsWrapperCache* cache;
+  CallQueryInterface(p, &cache);
+  UpdateWrapper(p, cache, obj, old);
 }
 
 // Attempt to preserve the wrapper, if any, for a Paris DOM bindings object.

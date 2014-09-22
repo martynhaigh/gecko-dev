@@ -88,11 +88,67 @@ var gMainPane = {
     setEventListener("chooseFolder", "command",
                      gMainPane.chooseFolder);
 
+#ifdef E10S_TESTING_ONLY
+    setEventListener("e10sAutoStart", "command",
+                     gMainPane.enableE10SChange);
+    let e10sCheckbox = document.getElementById("e10sAutoStart");
+    let e10sPref = document.getElementById("browser.tabs.remote.autostart");
+    let e10sTempPref = document.getElementById("e10sTempPref");
+    e10sCheckbox.checked = e10sPref.value || e10sTempPref.value;
+#endif
+
     // Notify observers that the UI is now ready
     Components.classes["@mozilla.org/observer-service;1"]
               .getService(Components.interfaces.nsIObserverService)
               .notifyObservers(window, "main-pane-loaded", null);
   },
+
+#ifdef E10S_TESTING_ONLY
+  enableE10SChange: function ()
+  {
+    let e10sCheckbox = document.getElementById("e10sAutoStart");
+    let e10sPref = document.getElementById("browser.tabs.remote.autostart");
+    let e10sTempPref = document.getElementById("e10sTempPref");
+
+    let prefsToChange;
+    if (e10sCheckbox.checked) {
+      // Enabling e10s autostart
+      prefsToChange = [e10sPref];
+    } else {
+      // Disabling e10s autostart
+      prefsToChange = [e10sPref];
+      if (e10sTempPref.value) {
+       prefsToChange.push(e10sTempPref);
+      }
+    }
+
+    const Cc = Components.classes, Ci = Components.interfaces;
+    let brandName = document.getElementById("bundleBrand").getString("brandShortName");
+    let bundle = document.getElementById("bundlePreferences");
+    let msg = bundle.getFormattedString(e10sCheckbox.checked ?
+                                        "featureEnableRequiresRestart" : "featureDisableRequiresRestart",
+                                        [brandName]);
+    let title = bundle.getFormattedString("shouldRestartTitle", [brandName]);
+    let shouldProceed = Services.prompt.confirm(window, title, msg)
+    if (shouldProceed) {
+      let cancelQuit = Cc["@mozilla.org/supports-PRBool;1"]
+                         .createInstance(Ci.nsISupportsPRBool);
+      Services.obs.notifyObservers(cancelQuit, "quit-application-requested",
+                                   "restart");
+      shouldProceed = !cancelQuit.data;
+
+      if (shouldProceed) {
+        for (let prefToChange of prefsToChange) {
+          prefToChange.value = e10sCheckbox.checked;
+        }
+        Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit |  Ci.nsIAppStartup.eRestart);
+      }
+    }
+
+    // Revert the checkbox in case we didn't quit
+    e10sCheckbox.checked = e10sPref.value || e10sTempPref.value;
+  },
+#endif
 
   // HOME PAGE
 

@@ -118,6 +118,11 @@ public:
     AllocPImageBridgeChild(mozilla::ipc::Transport* aTransport,
                            base::ProcessId aOtherProcess) MOZ_OVERRIDE;
 
+#if defined(XP_WIN) && defined(MOZ_CONTENT_SANDBOX)
+    // Cleans up any resources used by the process when sandboxed.
+    void CleanUpSandboxEnvironment();
+#endif
+
     virtual bool RecvSetProcessSandbox() MOZ_OVERRIDE;
 
     PBackgroundChild*
@@ -156,7 +161,7 @@ public:
     AllocPMemoryReportRequestChild(const uint32_t& aGeneration,
                                    const bool& aAnonymize,
                                    const bool& aMinimizeMemoryUsage,
-                                   const FileDescriptor& aDMDFile) MOZ_OVERRIDE;
+                                   const MaybeFileDesc& aDMDFile) MOZ_OVERRIDE;
     virtual bool
     DeallocPMemoryReportRequestChild(PMemoryReportRequestChild* actor) MOZ_OVERRIDE;
 
@@ -165,7 +170,7 @@ public:
                                         const uint32_t& aGeneration,
                                         const bool& aAnonymize,
                                         const bool &aMinimizeMemoryUsage,
-                                        const FileDescriptor &aDMDFile) MOZ_OVERRIDE;
+                                        const MaybeFileDesc &aDMDFile) MOZ_OVERRIDE;
 
     virtual PCycleCollectWithLogsChild*
     AllocPCycleCollectWithLogsChild(const bool& aDumpAllTraces,

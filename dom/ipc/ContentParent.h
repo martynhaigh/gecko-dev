@@ -451,7 +451,7 @@ private:
     AllocPMemoryReportRequestParent(const uint32_t& aGeneration,
                                     const bool &aAnonymize,
                                     const bool &aMinimizeMemoryUsage,
-                                    const FileDescriptor &aDMDFile) MOZ_OVERRIDE;
+                                    const MaybeFileDesc &aDMDFile) MOZ_OVERRIDE;
     virtual bool DeallocPMemoryReportRequestParent(PMemoryReportRequestParent* actor) MOZ_OVERRIDE;
 
     virtual PCycleCollectWithLogsParent*
@@ -601,7 +601,7 @@ private:
     virtual bool RecvAudioChannelChangeDefVolChannel(const int32_t& aChannel,
                                                      const bool& aHidden) MOZ_OVERRIDE;
     virtual bool RecvGetSystemMemory(const uint64_t& getterId) MOZ_OVERRIDE;
-    virtual bool RecvBroadcastVolume(const nsString& aVolumeName) MOZ_OVERRIDE;
+    virtual bool RecvGetVolumes(InfallibleTArray<VolumeInfo>* aResult) MOZ_OVERRIDE;
 
     virtual bool RecvDataStoreGetStores(
                        const nsString& aName,
@@ -713,8 +713,6 @@ private:
 
 #ifdef MOZ_NUWA_PROCESS
     static bool sNuwaReady;
-    struct NuwaReinitializeData;
-    nsAutoPtr<NuwaReinitializeData> mReinitializeData;
 #endif
 };
 

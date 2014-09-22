@@ -292,7 +292,7 @@ pref("browser.slowStartup.maxSamples", 5);
 // This url, if changed, MUST continue to point to an https url. Pulling arbitrary content to inject into
 // this page over http opens us up to a man-in-the-middle attack that we'd rather not face. If you are a downstream
 // repackager of this code using an alternate snippet url, please keep your users safe
-pref("browser.aboutHomeSnippets.updateUrl", "https://snippets.mozilla.com/%STARTPAGE_VERSION%/%NAME%/%VERSION%/%APPBUILDID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/");
+pref("browser.aboutHomeSnippets.updateUrl", "https://snippets.cdn.mozilla.net/%STARTPAGE_VERSION%/%NAME%/%VERSION%/%APPBUILDID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/");
 
 pref("browser.enable_automatic_image_resizing", true);
 pref("browser.chrome.site_icons", true);
@@ -664,8 +664,6 @@ pref("plugins.update.notifyUser", false);
 
 pref("plugins.click_to_play", true);
 
-pref("plugins.hideMissingPluginsNotification", false);
-
 pref("plugin.default.state", 1);
 
 // Plugins bundled in XPIs are enabled by default.
@@ -699,12 +697,15 @@ pref("plugin.state.ciscowebcommunicator", 2);
 pref("plugin.state.npmcafeemss", 2);
 #endif
 
-// Cisco VGConnect for directv.com, bug 981403
+// Cisco VGConnect for directv.com, bug 981403 & bug 1051772
 #ifdef XP_WIN
 pref("plugin.state.npplayerplugin", 2);
 #endif
 #ifdef XP_MACOSX
 pref("plugin.state.playerplugin", 2);
+pref("plugin.state.playerplugin.dtv", 2);
+pref("plugin.state.playerplugin.ciscodrm", 2);
+pref("plugin.state.playerplugin.charter", 2);
 #endif
 
 // Cisco Jabber Client, bug 981905
@@ -845,8 +846,14 @@ pref("plugin.state.personalplugin", 2);
 pref("plugin.state.libplugins", 2);
 #endif
 
-// display door hanger if flash not installed
-pref("plugins.notifyMissingFlash", true);
+// Novell iPrint Client, bug 1036693
+#ifdef XP_WIN
+pref("plugin.state.npnipp", 2);
+pref("plugin.state.npnisp", 2);
+#endif
+#ifdef XP_MACOSX
+pref("plugin.state.iprint", 2);
+#endif
 
 #ifdef XP_MACOSX
 pref("browser.preferences.animateFadeIn", true);
@@ -1004,6 +1011,9 @@ pref("urlclassifier.alternate_error_page", "blocked");
 
 // The number of random entries to send with a gethash request.
 pref("urlclassifier.gethashnoise", 4);
+
+// Gethash timeout for Safebrowsing.
+pref("urlclassifier.gethash.timeout_ms", 5000);
 
 // If an urlclassifier table has not been updated in this number of seconds,
 // a gethash request will be forced to check that the result is still in
@@ -1404,7 +1414,6 @@ pref("devtools.tilt.outro_transition", true);
 // - enableAutocompletion: Whether to enable JavaScript autocompletion.
 pref("devtools.scratchpad.recentFilesMax", 10);
 pref("devtools.scratchpad.showTrailingSpace", false);
-pref("devtools.scratchpad.enableCodeFolding", true);
 pref("devtools.scratchpad.enableAutocompletion", true);
 
 // Enable the Storage Inspector
@@ -1479,10 +1488,6 @@ pref("devtools.browserconsole.filter.secwarn", true);
 // Text size in the Web Console. Use 0 for the system default size.
 pref("devtools.webconsole.fontSize", 0);
 
-// Number of usages of the web console or scratchpad.
-// If this is less than 5, then pasting code into the web console or scratchpad is disabled
-pref("devtools.selfxss.count", 0);
-
 // Persistent logging: |true| if you want the Web Console to keep all of the
 // logged messages after reloading the page, |false| if you want the output to
 // be cleared each time page navigation happens.
@@ -1514,6 +1519,7 @@ pref("devtools.editor.expandtab", true);
 pref("devtools.editor.keymap", "default");
 pref("devtools.editor.autoclosebrackets", true);
 pref("devtools.editor.detectindentation", true);
+pref("devtools.editor.enableCodeFolding", true);
 pref("devtools.editor.autocomplete", true);
 
 // Enable the Font Inspector
@@ -1599,7 +1605,7 @@ pref("loop.throttled", false);
 pref("loop.enabled", true);
 pref("loop.throttled", true);
 pref("loop.soft_start_ticket_number", -1);
-pref("loop.soft_start_hostname", "soft-start.loop-dev.stage.mozaws.net");
+pref("loop.soft_start_hostname", "soft-start.loop.services.mozilla.com");
 #endif
 
 pref("loop.server", "https://loop.services.mozilla.com");
@@ -1613,6 +1619,7 @@ pref("loop.retry_delay.limit", 300000);
 pref("loop.feedback.baseUrl", "https://input.mozilla.org/api/v1/feedback");
 pref("loop.feedback.product", "Loop");
 pref("loop.debug.websocket", false);
+pref("loop.debug.sdk", false);
 
 // serverURL to be assigned by services team
 pref("services.push.serverURL", "wss://push.services.mozilla.com/");
@@ -1636,11 +1643,6 @@ pref("dom.debug.propagate_gesture_events_through_content", false);
 
 // The request URL of the GeoLocation backend.
 pref("geo.wifi.uri", "https://www.googleapis.com/geolocation/v1/geolocate?key=%GOOGLE_API_KEY%");
-#ifdef RELEASE_BUILD
-pref("geo.wifi.logging.enabled", false);
-#else
-pref("geo.wifi.logging.enabled", true);
-#endif
 
 // Necko IPC security checks only needed for app isolation for cookies/cache/etc:
 // currently irrelevant for desktop e10s
