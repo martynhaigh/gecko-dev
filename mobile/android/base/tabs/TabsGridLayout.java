@@ -63,8 +63,8 @@ class TabsGridLayout extends GridView
 
     private class TabsGridLayoutAdapter extends TabsLayoutAdapter {
 
-        private Button.OnClickListener mCloseClickListener;
-        private View.OnClickListener mSelectClickListener;
+        final private Button.OnClickListener mCloseClickListener;
+        final private View.OnClickListener mSelectClickListener;
 
         public TabsGridLayoutAdapter (Context context) {
             super(context);
@@ -213,7 +213,7 @@ class TabsGridLayout extends GridView
         updateSelectedPosition();
     }
 
-    public void resetTransforms(View view) {
+    private void resetTransforms(View view) {
         ViewHelper.setAlpha(view, 1);
         ViewHelper.setTranslationX(view, 0);
     }
