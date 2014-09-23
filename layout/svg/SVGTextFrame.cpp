@@ -2888,10 +2888,10 @@ SVGTextDrawPathCallbacks::SetupContext()
   // or make SetAntialiasMode set cairo text antialiasing too.
   switch (mFrame->StyleSVG()->mTextRendering) {
   case NS_STYLE_TEXT_RENDERING_OPTIMIZESPEED:
-    gfx->SetAntialiasMode(gfxContext::MODE_ALIASED);
+    gfx->SetAntialiasMode(AntialiasMode::NONE);
     break;
   default:
-    gfx->SetAntialiasMode(gfxContext::MODE_COVERAGE);
+    gfx->SetAntialiasMode(AntialiasMode::SUBPIXEL);
     break;
   }
 }
@@ -3147,9 +3147,9 @@ nsDisplaySVGText::Paint(nsDisplayListBuilder* aBuilder,
   gfxMatrix tm = nsSVGIntegrationUtils::GetCSSPxToDevPxMatrix(mFrame) *
                    gfxMatrix::Translation(devPixelOffset);
 
-  aCtx->PushState();
+  aCtx->ThebesContext()->Save();
   static_cast<SVGTextFrame*>(mFrame)->PaintSVG(aCtx, tm);
-  aCtx->PopState();
+  aCtx->ThebesContext()->Restore();
 }
 
 // ---------------------------------------------------------------------

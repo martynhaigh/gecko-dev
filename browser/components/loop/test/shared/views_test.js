@@ -27,22 +27,6 @@ describe("loop.shared.views", function() {
     sandbox.restore();
   });
 
-  describe("L10nView", function() {
-    beforeEach(function() {
-      sandbox.stub(l10n, "translate");
-    });
-
-    it("should translate generated contents on render()", function() {
-      var TestView = loop.shared.views.L10nView.extend();
-
-      var view = new TestView();
-      view.render();
-
-      sinon.assert.calledOnce(l10n.translate);
-      sinon.assert.calledWithExactly(l10n.translate, view.el);
-    });
-  });
-
   describe("MediaControlButton", function() {
     it("should render an enabled local audio button", function() {
       var comp = TestUtils.renderIntoDocument(sharedViews.MediaControlButton({
@@ -203,13 +187,12 @@ describe("loop.shared.views", function() {
         initSession: sandbox.stub().returns(fakeSession)
       };
       model = new sharedModels.ConversationModel(fakeSessionData, {
-        sdk: fakeSDK,
-        pendingCallTimeout: 1000
+        sdk: fakeSDK
       });
     });
 
     describe("#componentDidMount", function() {
-      it("should start a session", function() {
+      it("should start a session by default", function() {
         sandbox.stub(model, "startSession");
 
         mountTestComponent({
@@ -219,6 +202,19 @@ describe("loop.shared.views", function() {
         });
 
         sinon.assert.calledOnce(model.startSession);
+      });
+
+      it("shouldn't start a session if initiate is false", function() {
+        sandbox.stub(model, "startSession");
+
+        mountTestComponent({
+          initiate: false,
+          sdk: fakeSDK,
+          model: model,
+          video: {enabled: true}
+        });
+
+        sinon.assert.notCalled(model.startSession);
       });
 
       it("should set the correct stream publish options", function() {

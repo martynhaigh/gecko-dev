@@ -307,7 +307,7 @@ DefinePropertyIfFound(XPCCallContext& ccx,
             if (!funobj)
                 return false;
 
-            propFlags |= JSPROP_GETTER;
+            propFlags |= JSPROP_GETTER | JSPROP_SHARED;
             propFlags &= ~JSPROP_ENUMERATE;
 
             AutoResolveName arn(ccx, id);
@@ -391,15 +391,15 @@ DefinePropertyIfFound(XPCCallContext& ccx,
     MOZ_ASSERT(member->IsAttribute(), "way broken!");
 
     propFlags |= JSPROP_GETTER | JSPROP_SHARED;
+    propFlags &= ~JSPROP_READONLY;
     JSObject* funobj = funval.toObjectOrNull();
     JSPropertyOp getter = JS_DATA_TO_FUNC_PTR(JSPropertyOp, funobj);
     JSStrictPropertyOp setter;
     if (member->IsWritableAttribute()) {
         propFlags |= JSPROP_SETTER;
-        propFlags &= ~JSPROP_READONLY;
         setter = JS_DATA_TO_FUNC_PTR(JSStrictPropertyOp, funobj);
     } else {
-        setter = js_GetterOnlyPropertyStub;
+        setter = nullptr;
     }
 
     AutoResolveName arn(ccx, id);
@@ -573,6 +573,17 @@ WrappedNativeFinalize(js::FreeOp *fop, JSObject *obj, WNHelperType helperType)
 }
 
 static void
+WrappedNativeObjectMoved(JSObject *obj, const JSObject *old)
+{
+    nsISupports* p = static_cast<nsISupports*>(xpc_GetJSPrivate(obj));
+    if (!p)
+        return;
+
+    XPCWrappedNative* wrapper = static_cast<XPCWrappedNative*>(p);
+    wrapper->FlatJSObjectMoved(obj, old);
+}
+
+static void
 XPC_WN_NoHelper_Finalize(js::FreeOp *fop, JSObject *obj)
 {
     WrappedNativeFinalize(fop, obj, WN_NOHELPER);
@@ -658,7 +669,9 @@ const XPCWrappedNativeJSClass XPC_WN_NoHelper_JSClass = {
         nullptr, // outerObject
         nullptr, // innerObject
         nullptr, // iteratorObject
-        true,   // isWrappedNative
+        true,    // isWrappedNative
+        nullptr, // weakmapKeyDelegateOp
+        WrappedNativeObjectMoved
     },
 
     // ObjectOps
@@ -1165,6 +1178,7 @@ XPCNativeScriptableShared::PopulateJSClass()
         mJSClass.base.trace = XPCWrappedNative::Trace;
 
     mJSClass.base.ext.isWrappedNative = true;
+    mJSClass.base.ext.objectMovedOp = WrappedNativeObjectMoved;
 }
 
 /***************************************************************************/

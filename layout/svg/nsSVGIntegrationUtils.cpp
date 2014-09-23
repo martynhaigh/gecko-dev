@@ -26,6 +26,7 @@
 
 using namespace mozilla;
 using namespace mozilla::layers;
+using namespace mozilla::gfx;
 
 // ----------------------------------------------------------------------
 
@@ -386,7 +387,16 @@ public:
   {
     BasicLayerManager* basic = static_cast<BasicLayerManager*>(mLayerManager);
     basic->SetTarget(aContext->ThebesContext());
-    nsRenderingContext::AutoPushTranslation push(aContext, -mOffset);
+
+    gfxContext* ctx = aContext->ThebesContext();
+
+    gfxPoint devPixelOffset =
+      nsLayoutUtils::PointToGfxPoint(-mOffset,
+                                     aTarget->PresContext()->AppUnitsPerDevPixel());
+
+    gfxContextMatrixAutoSaveRestore autoSR(ctx);
+    ctx->SetMatrix(ctx->CurrentMatrix().Translate(devPixelOffset));
+
     mLayerManager->EndTransaction(FrameLayerBuilder::DrawThebesLayer, mBuilder);
   }
 
@@ -494,7 +504,10 @@ nsSVGIntegrationUtils::PaintFramesWithEffects(nsRenderingContext* aCtx,
   NS_ASSERTION(hasSVGLayout || offsetToBoundingBox == offsetToUserSpace,
                "For non-SVG frames there shouldn't be any additional offset");
 
-  aCtx->Translate(offsetToUserSpace);
+  gfxPoint devPixelOffsetToUserSpace =
+    nsLayoutUtils::PointToGfxPoint(offsetToUserSpace,
+                                   aFrame->PresContext()->AppUnitsPerDevPixel());
+  gfx->SetMatrix(gfx->CurrentMatrix().Translate(devPixelOffsetToUserSpace));
 
   gfxMatrix cssPxToDevPxMatrix = GetCSSPxToDevPxMatrix(aFrame);
 
@@ -529,7 +542,7 @@ nsSVGIntegrationUtils::PaintFramesWithEffects(nsRenderingContext* aCtx,
   } else {
     gfx->SetMatrix(matrixAutoSaveRestore.Matrix());
     aLayerManager->EndTransaction(FrameLayerBuilder::DrawThebesLayer, aBuilder);
-    aCtx->Translate(offsetToUserSpace);
+    gfx->SetMatrix(gfx->CurrentMatrix().Translate(devPixelOffsetToUserSpace));
   }
 
   if (clipPathFrame && isTrivialClip) {
@@ -543,33 +556,34 @@ nsSVGIntegrationUtils::PaintFramesWithEffects(nsRenderingContext* aCtx,
 
   gfx->PopGroupToSource();
 
-  nsRefPtr<gfxPattern> maskSurface =
+  Matrix maskTransform;
+  RefPtr<SourceSurface> maskSurface =
     maskFrame ? maskFrame->GetMaskForMaskedFrame(aCtx->ThebesContext(),
                                                  aFrame, cssPxToDevPxMatrix,
-                                                 opacity)
+                                                 opacity, &maskTransform)
               : nullptr;
 
-  nsRefPtr<gfxPattern> clipMaskSurface;
   if (clipPathFrame && !isTrivialClip) {
     gfx->PushGroup(gfxContentType::COLOR_ALPHA);
 
     nsresult rv = clipPathFrame->ApplyClipOrPaintClipMask(aCtx, aFrame, cssPxToDevPxMatrix);
-    clipMaskSurface = gfx->PopGroup();
+    Matrix clippedMaskTransform;
+    RefPtr<SourceSurface> clipMaskSurface = gfx->PopGroupToSurface(&clippedMaskTransform);
 
     if (NS_SUCCEEDED(rv) && clipMaskSurface) {
       // Still more set after clipping, so clip to another surface
       if (maskSurface || opacity != 1.0f) {
         gfx->PushGroup(gfxContentType::COLOR_ALPHA);
-        gfx->Mask(clipMaskSurface);
+        gfx->Mask(clipMaskSurface, clippedMaskTransform);
         gfx->PopGroupToSource();
       } else {
-        gfx->Mask(clipMaskSurface);
+        gfx->Mask(clipMaskSurface, clippedMaskTransform);
       }
     }
   }
 
   if (maskSurface) {
-    gfx->Mask(maskSurface);
+    gfx->Mask(maskSurface, maskTransform);
   } else if (opacity != 1.0f) {
     gfx->Paint(opacity);
   }

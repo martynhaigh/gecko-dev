@@ -414,7 +414,7 @@ class BytecodeParser
 uint32_t
 BytecodeParser::simulateOp(JSOp op, uint32_t offset, uint32_t *offsetStack, uint32_t stackDepth)
 {
-    uint32_t nuses = GetWarmUpCounter(script_, offset);
+    uint32_t nuses = GetUseCount(script_, offset);
     uint32_t ndefs = GetDefCount(script_, offset);
 
     JS_ASSERT(stackDepth >= nuses);
@@ -1635,7 +1635,7 @@ JSAtom *
 ExpressionDecompiler::getLocal(uint32_t local, jsbytecode *pc)
 {
     JS_ASSERT(local < script->nfixed());
-    if (local < script->nfixedvars()) {
+    if (local < script->nbodyfixed()) {
         JS_ASSERT(fun);
         uint32_t slot = local + fun->nargs();
         JS_ASSERT(slot < script->bindings.count());

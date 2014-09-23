@@ -18,9 +18,9 @@ loop.shared.models = (function(l10n) {
       ongoing:      false,         // Ongoing call flag
       callerId:     undefined,     // Loop caller id
       loopToken:    undefined,     // Loop conversation token
-      loopCallId:   undefined,     // LoopService id for incoming session
       sessionId:    undefined,     // OT session id
       sessionToken: undefined,     // OT session token
+      sessionType:  undefined,     // Hawk session type
       apiKey:       undefined,     // OT api key
       callId:       undefined,     // The callId on the server
       progressURL:  undefined,     // The websocket url to use for progress
@@ -52,28 +52,12 @@ loop.shared.models = (function(l10n) {
     session: undefined,
 
     /**
-     * Pending call timeout value.
-     * @type {Number}
-     */
-    pendingCallTimeout: undefined,
-
-    /**
-     * Pending call timer.
-     * @type {Number}
-     */
-    _pendingCallTimer: undefined,
-
-    /**
      * Constructor.
      *
      * Options:
      *
      * Required:
      * - {OT} sdk: OT SDK object.
-     *
-     * Optional:
-     * - {Number} pendingCallTimeout: Pending call timeout in milliseconds
-     *                                (default: 20000).
      *
      * @param  {Object} attributes Attributes object.
      * @param  {Object} options    Options object.
@@ -84,10 +68,12 @@ loop.shared.models = (function(l10n) {
         throw new Error("missing required sdk");
       }
       this.sdk = options.sdk;
-      this.pendingCallTimeout = options.pendingCallTimeout || 20000;
 
-      // Ensure that any pending call timer is cleared on disconnect/error
-      this.on("session:ended session:error", this._clearPendingCallTimer, this);
+      // Set loop.debug.sdk to true in the browser, or standalone:
+      // localStorage.setItem("debug.sdk", true);
+      if (loop.shared.utils.getBoolPreference("debug.sdk")) {
+        this.sdk.setLogLevel(this.sdk.DEBUG);
+      }
     },
 
     /**
@@ -112,20 +98,6 @@ loop.shared.models = (function(l10n) {
      *                             server for the outgoing call.
      */
     outgoing: function(sessionData) {
-      this._clearPendingCallTimer();
-
-      // Outgoing call has never reached destination, closing - see bug 1020448
-      function handleOutgoingCallTimeout() {
-        /*jshint validthis:true */
-        if (!this.get("ongoing")) {
-          this.trigger("timeout").endSession();
-        }
-      }
-
-      // Setup pending call timeout.
-      this._pendingCallTimer = setTimeout(
-        handleOutgoingCallTimeout.bind(this), this.pendingCallTimeout);
-
       this.setOutgoingSessionData(sessionData);
       this.trigger("call:outgoing");
     },
@@ -167,6 +139,7 @@ loop.shared.models = (function(l10n) {
       this.set({
         sessionId:      sessionData.sessionId,
         sessionToken:   sessionData.sessionToken,
+        sessionType:    sessionData.sessionType,
         apiKey:         sessionData.apiKey,
         callId:         sessionData.callId,
         progressURL:    sessionData.progressURL,
@@ -275,15 +248,6 @@ loop.shared.models = (function(l10n) {
         default:
           this.trigger("session:error", err);
           break;
-      }
-    },
-
-    /**
-     * Clears current pending call timer, if any.
-     */
-    _clearPendingCallTimer: function() {
-      if (this._pendingCallTimer) {
-        clearTimeout(this._pendingCallTimer);
       }
     },
 

@@ -59,6 +59,7 @@ JSCompartment::JSCompartment(Zone *zone, const JS::CompartmentOptions &options =
     selfHostingScriptSource(nullptr),
     gcIncomingGrayPointers(nullptr),
     gcWeakMapList(nullptr),
+    gcPreserveJitCode(options.preserveJitCode()),
     debugModeBits(0),
     rngState(0),
     watchpointMap(nullptr),
@@ -435,8 +436,8 @@ JSCompartment::wrap(JSContext *cx, MutableHandleObject obj, HandleObject existin
     if (existing) {
         // Is it possible to reuse |existing|?
         if (!existing->getTaggedProto().isLazy() ||
-            // Note: don't use is<ObjectProxyObject>() here -- it also matches subclasses!
-            existing->getClass() != &ProxyObject::uncallableClass_ ||
+            // Note: Class asserted above, so all that's left to check is callability
+            existing->isCallable() ||
             existing->getParent() != global ||
             obj->isCallable())
         {
@@ -575,6 +576,12 @@ JSCompartment::sweep(FreeOp *fop, bool releaseTypes)
 {
     JS_ASSERT(!activeAnalysis);
     JSRuntime *rt = runtimeFromMainThread();
+
+    {
+        gcstats::MaybeAutoPhase ap(rt->gc.stats, !rt->isHeapCompacting(),
+                                   gcstats::PHASE_SWEEP_TABLES_INNER_VIEWS);
+        innerViews.sweep(rt);
+    }
 
     {
         gcstats::MaybeAutoPhase ap(rt->gc.stats, !rt->isHeapCompacting(),
@@ -912,6 +919,7 @@ JSCompartment::addSizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf,
                                       size_t *tiObjectTypeTables,
                                       size_t *compartmentObject,
                                       size_t *compartmentTables,
+                                      size_t *innerViewsArg,
                                       size_t *crossCompartmentWrappersArg,
                                       size_t *regexpCompartment,
                                       size_t *savedStacksSet)
@@ -923,6 +931,7 @@ JSCompartment::addSizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf,
                         + initialShapes.sizeOfExcludingThis(mallocSizeOf)
                         + newTypeObjects.sizeOfExcludingThis(mallocSizeOf)
                         + lazyTypeObjects.sizeOfExcludingThis(mallocSizeOf);
+    *innerViewsArg += innerViews.sizeOfExcludingThis(mallocSizeOf);
     *crossCompartmentWrappersArg += crossCompartmentWrappers.sizeOfExcludingThis(mallocSizeOf);
     *regexpCompartment += regExps.sizeOfExcludingThis(mallocSizeOf);
     *savedStacksSet += savedStacks_.sizeOfExcludingThis(mallocSizeOf);

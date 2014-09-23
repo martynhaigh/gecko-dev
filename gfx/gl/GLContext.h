@@ -80,6 +80,8 @@ namespace gl {
 MOZ_BEGIN_ENUM_CLASS(GLFeature)
     bind_buffer_offset,
     blend_minmax,
+    clear_buffers,
+    copy_buffer,
     depth_texture,
     draw_buffers,
     draw_instanced,
@@ -346,6 +348,7 @@ public:
         ARB_ES2_compatibility,
         ARB_ES3_compatibility,
         ARB_color_buffer_float,
+        ARB_copy_buffer,
         ARB_depth_texture,
         ARB_draw_buffers,
         ARB_draw_instanced,
@@ -944,6 +947,30 @@ public:
         BeforeGLDrawCall();
         raw_fClear(mask);
         AfterGLDrawCall();
+    }
+
+    void fClearBufferfi(GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil) {
+        BEFORE_GL_CALL;
+        mSymbols.fClearBufferfi(buffer, drawbuffer, depth, stencil);
+        AFTER_GL_CALL;
+    }
+
+    void fClearBufferfv(GLenum buffer, GLint drawbuffer, const GLfloat* value) {
+        BEFORE_GL_CALL;
+        mSymbols.fClearBufferfv(buffer, drawbuffer, value);
+        AFTER_GL_CALL;
+    }
+
+    void fClearBufferiv(GLenum buffer, GLint drawbuffer, const GLint* value) {
+        BEFORE_GL_CALL;
+        mSymbols.fClearBufferiv(buffer, drawbuffer, value);
+        AFTER_GL_CALL;
+    }
+
+    void fClearBufferuiv(GLenum buffer, GLint drawbuffer, const GLuint* value) {
+        BEFORE_GL_CALL;
+        mSymbols.fClearBufferuiv(buffer, drawbuffer, value);
+        AFTER_GL_CALL;
     }
 
     void fClearColor(GLclampf r, GLclampf g, GLclampf b, GLclampf a) {
@@ -2636,6 +2663,18 @@ public:
         ASSERT_SYMBOL_PRESENT(fGetFenceiv);
         BEFORE_GL_CALL;
         mSymbols.fGetFenceiv(fence, pname, params);
+        AFTER_GL_CALL;
+    }
+
+// Core GL & Extension ARB_copy_buffer
+public:
+    void fCopyBufferSubData(GLenum readtarget, GLenum writetarget,
+                            GLintptr readoffset, GLintptr writeoffset,
+                            GLsizeiptr size)
+    {
+        BEFORE_GL_CALL;
+        ASSERT_SYMBOL_PRESENT(fCopyBufferSubData);
+        mSymbols.fCopyBufferSubData(readtarget, writetarget, readoffset, writeoffset, size);
         AFTER_GL_CALL;
     }
 
