@@ -5,4 +5,5 @@
 
 <resources>
     <item type="layout" name="tabs_layout_item_view">@layout/tabs_item_row</item>
+    <item type="layout" name="tabs_panel">@layout/tabs_panel_default</item>
 </resources>
