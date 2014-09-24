@@ -5,6 +5,7 @@
 
 package org.mozilla.gecko.tabs;
 
+import android.view.ViewStub;
 import org.mozilla.gecko.AppConstants.Versions;
 import org.mozilla.gecko.GeckoApp;
 import org.mozilla.gecko.GeckoAppShell;
@@ -143,8 +144,14 @@ public class TabsPanel extends LinearLayout
     private void inflateLayout(Context context) {
         if(NewTabletUI.isEnabled(context)) {
             LayoutInflater.from(context).inflate(R.layout.tabs_panel_default, this);
+            ViewStub header = (ViewStub)findViewById(R.id.tabs_panel_header_stub);
+            header.setLayoutResource(R.layout.tabs_panel_header_default);
+            header.inflate();
         } else {
             LayoutInflater.from(context).inflate(R.layout.tabs_panel, this);
+            ViewStub header = (ViewStub)findViewById(R.id.tabs_panel_header_stub);
+            header.setLayoutResource(R.layout.tabs_panel_header);
+            header.inflate();
         }
     }
 

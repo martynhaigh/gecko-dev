@@ -5,4 +5,6 @@
 
 <resources>
     <item type="layout" name="tabs_panel">@layout/tabs_panel_sidebar</item>
+    <item type="layout" name="tabs_panel_header">@layout/tabs_panel_header_sidebar</item>
+
 </resources>
