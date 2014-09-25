@@ -5,11 +5,8 @@
 
 package org.mozilla.gecko.tabs;
 
-import java.util.ArrayList;
-
-import android.util.Log;
-import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.R;
+import org.mozilla.gecko.Tab;
 
 import android.content.Context;
 import android.view.LayoutInflater;
@@ -17,9 +14,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 
+import java.util.ArrayList;
+
 // Adapter to bind tabs into a list
 public class TabsLayoutAdapter extends BaseAdapter {
-    public static final String LOGTAG = "Geckor" + TabsLayoutAdapter.class.getSimpleName();;
+    public static final String LOGTAG = "Gecko" + TabsLayoutAdapter.class.getSimpleName();;
     private Context mContext;
     private ArrayList<Tab> mTabs;
     private LayoutInflater mInflater;
@@ -83,7 +82,9 @@ public class TabsLayoutAdapter extends BaseAdapter {
     }
 
     View newView(int position, ViewGroup parent) {
-        return mInflater.inflate(R.layout.tabs_layout_item_view, parent, false);
+        final TabsLayoutItemView view = (TabsLayoutItemView) mInflater.inflate(R.layout.tabs_layout_item_view, parent, false);
+        view.populateChildReferences();
+        return view;
     }
 
     void bindView(View view, Tab tab) {

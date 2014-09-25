@@ -107,7 +107,6 @@ class TabsListLayout extends TwoWayView
         public View newView(int position, ViewGroup parent) {
             TabsLayoutItemView item = (TabsLayoutItemView) super.newView(position, parent);
 
-            // this is a big nasty, but we'll get rid of it in bug 1058574
             item.populateChildReferences();
             item.setCloseOnClickListener(mOnClickListener);
 

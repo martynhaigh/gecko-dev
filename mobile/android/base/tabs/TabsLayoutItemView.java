@@ -24,8 +24,8 @@ public class TabsLayoutItemView extends LinearLayout
     private static final int[] STATE_CHECKED = { android.R.attr.state_checked };
     private boolean mChecked;
 
-    // yeah, it's a bit nasty having two different styles for the class members, but this'll be fixed once bug 1058574
-    // is addressed
+    // yeah, it's a bit nasty having two different styles for the class members,
+    // this'll be fixed once bug 1058574 is addressed
     int id;
     TextView title;
     ImageView thumbnail;
@@ -40,8 +40,9 @@ public class TabsLayoutItemView extends LinearLayout
     public int[] onCreateDrawableState(int extraSpace) {
         final int[] drawableState = super.onCreateDrawableState(extraSpace + 1);
 
-        if (mChecked)
+        if (mChecked) {
             mergeDrawableStates(drawableState, STATE_CHECKED);
+        }
 
         return drawableState;
     }
@@ -60,8 +61,9 @@ public class TabsLayoutItemView extends LinearLayout
             int count = getChildCount();
             for (int i=0; i < count; i++) {
                 final View child = getChildAt(i);
-                if (child instanceof Checkable)
+                if (child instanceof Checkable) {
                     ((Checkable) child).setChecked(checked);
+                } 
             }
         }
     }
@@ -71,6 +73,7 @@ public class TabsLayoutItemView extends LinearLayout
         mChecked = !mChecked;
     }
 
+    // this is a big nasty, but we'll get rid of it in bug 1058574
     public void populateChildReferences() {
         title = (TextView) findViewById(R.id.title);
         thumbnail = (ImageView) findViewById(R.id.thumbnail);
