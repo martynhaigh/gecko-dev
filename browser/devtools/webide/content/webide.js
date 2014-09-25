@@ -7,7 +7,6 @@ const Cu = Components.utils;
 const Ci = Components.interfaces;
 
 Cu.import("resource:///modules/devtools/gDevTools.jsm");
-Cu.import("resource://gre/modules/FileUtils.jsm");
 Cu.import("resource://gre/modules/Task.jsm");
 
 const {devtools} = Cu.import("resource://gre/modules/devtools/Loader.jsm", {});
@@ -21,6 +20,7 @@ const ProjectEditor = require("projecteditor/projecteditor");
 const {Devices} = Cu.import("resource://gre/modules/devtools/Devices.jsm");
 const {GetAvailableAddons} = require("devtools/webide/addons");
 const {GetTemplatesJSON, GetAddonsJSON} = require("devtools/webide/remote-resources");
+const utils = require("devtools/webide/utils");
 
 const Strings = Services.strings.createBundle("chrome://browser/locale/devtools/webide.properties");
 
@@ -75,6 +75,8 @@ let UI = {
     }
     Services.prefs.setBoolPref("devtools.webide.autoinstallADBHelper", false);
 
+    this.lastConnectedRuntime = Services.prefs.getCharPref("devtools.webide.lastConnectedRuntime");
+
     this.setupDeck();
   },
 
@@ -125,18 +127,22 @@ let UI = {
     switch (what) {
       case "runtimelist":
         this.updateRuntimeList();
+        this.autoConnectRuntime();
         break;
       case "connection":
         this.updateRuntimeButton();
         this.updateCommands();
         break;
       case "project":
-        this.updateTitle();
-        this.closeToolbox();
-        this.updateCommands();
-        this.updateProjectButton();
-        this.openProject();
-        break;
+        this._updatePromise = Task.spawn(function() {
+          UI.updateTitle();
+          yield UI.destroyToolbox();
+          UI.updateCommands();
+          UI.updateProjectButton();
+          UI.openProject();
+          UI.autoStartProject();
+        });
+        return;
       case "project-is-not-running":
       case "project-is-running":
       case "list-tabs-response":
@@ -144,6 +150,7 @@ let UI = {
         break;
       case "runtime":
         this.updateRuntimeButton();
+        this.saveLastConnectedRuntime();
         break;
       case "project-validated":
         this.updateTitle();
@@ -154,6 +161,7 @@ let UI = {
       case "install-progress":
         this.updateProgress(Math.round(100 * details.bytesSent / details.totalBytes));
     };
+    this._updatePromise = promise.resolve();
   },
 
   openInBrowser: function(url) {
@@ -219,7 +227,7 @@ let UI = {
     this._busyTimeout = setTimeout(() => {
       this.unbusy();
       UI.reportError("error_operationTimeout", this._busyOperationDescription);
-    }, 30000);
+    }, 6000);
   },
 
   cancelBusyTimeout: function() {
@@ -247,10 +255,11 @@ let UI = {
       this.cancelBusyTimeout();
       this.unbusy();
     }, (e) => {
+      let message = operationDescription + (e ? (": " + e) : "");
       this.cancelBusyTimeout();
       let operationCanceled = e && e.canceled;
       if (!operationCanceled) {
-        UI.reportError("error_operationFail", operationDescription);
+        UI.reportError("error_operationFail", message);
         console.error(e);
       }
       this.unbusy();
@@ -342,6 +351,34 @@ let UI = {
     }
   },
 
+  autoConnectRuntime: function () {
+    // Automatically reconnect to the previously selected runtime,
+    // if available and has an ID
+    if (AppManager.selectedRuntime || !this.lastConnectedRuntime) {
+      return;
+    }
+    let [_, type, id] = this.lastConnectedRuntime.match(/^(\w+):(.+)$/);
+
+    type = type.toLowerCase();
+
+    // Local connection is mapped to AppManager.runtimeList.custom array
+    if (type == "local") {
+      type = "custom";
+    }
+
+    // We support most runtimes except simulator, that needs to be manually
+    // launched
+    if (type == "usb" || type == "wifi" || type == "custom") {
+      for (let runtime of AppManager.runtimeList[type]) {
+        // Some runtimes do not expose getID function and don't support
+        // autoconnect (like remote connection)
+        if (typeof(runtime.getID) == "function" && runtime.getID() == id) {
+          this.connectToRuntime(runtime);
+        }
+      }
+    }
+  },
+
   connectToRuntime: function(runtime) {
     let name = runtime.getName();
     let promise = AppManager.connectToRuntime(runtime);
@@ -356,6 +393,17 @@ let UI = {
       let name = AppManager.selectedRuntime.getName();
       labelNode.setAttribute("value", name);
     }
+  },
+
+  saveLastConnectedRuntime: function () {
+    if (AppManager.selectedRuntime &&
+        typeof(AppManager.selectedRuntime.getID) === "function") {
+      this.lastConnectedRuntime = AppManager.selectedRuntime.type + ":" + AppManager.selectedRuntime.getID();
+    } else {
+      this.lastConnectedRuntime = "";
+    }
+    Services.prefs.setCharPref("devtools.webide.lastConnectedRuntime",
+                               this.lastConnectedRuntime);
   },
 
   /********** PROJECTS **********/
@@ -459,8 +507,7 @@ let UI = {
 
     let forceDetailsOnly = false;
     if (project.type == "packaged") {
-      let directory = new FileUtils.File(project.location);
-      forceDetailsOnly = !directory.exists();
+      forceDetailsOnly = !utils.doesFileExist(project.location);
     }
 
     // Show only the details screen
@@ -480,6 +527,48 @@ let UI = {
       this.updateProjectEditorHeader();
     }, console.error);
   },
+
+  autoStartProject: function() {
+    let project = AppManager.selectedProject;
+
+    if (!project) {
+      return;
+    }
+    if (!(project.type == "runtimeApp" ||
+          project.type == "mainProcess" ||
+          project.type == "tab")) {
+      return; // For something that is not an editable app, we're done.
+    }
+
+    Task.spawn(function() {
+      if (project.type == "runtimeApp") {
+        yield UI.busyUntil(AppManager.launchRuntimeApp(), "running app");
+      }
+      yield UI.createToolbox();
+    });
+  },
+
+  importAndSelectApp: Task.async(function* (source) {
+    let isPackaged = !!source.path;
+    let project;
+    try {
+      project = yield AppProjects[isPackaged ? "addPackaged" : "addHosted"](source);
+    } catch (e) {
+      if (e === "Already added") {
+        // Select project that's already been added,
+        // and allow it to be revalidated and selected
+        project = AppProjects.get(isPackaged ? source.path : source);
+      } else {
+        throw e;
+      }
+    }
+
+    // Validate project
+    yield AppManager.validateProject(project);
+
+    // Select project
+    AppManager.selectedProject = project;
+  }),
 
   /********** DECK **********/
 
@@ -629,13 +718,21 @@ let UI = {
     } catch(e) { console.error(e); }
   },
 
-  closeToolbox: function() {
+  destroyToolbox: function() {
     if (this.toolboxPromise) {
-      this.toolboxPromise.then(toolbox => {
+      return this.toolboxPromise.then(toolbox => {
         toolbox.destroy();
         this.toolboxPromise = null;
       }, console.error);
     }
+    return promise.resolve();
+  },
+
+  createToolbox: function() {
+    this.toolboxPromise = AppManager.getTarget().then((target) => {
+      return this.showToolbox(target);
+    }, console.error);
+    return this.busyUntil(this.toolboxPromise, "opening toolbox");
   },
 
   showToolbox: function(target) {
@@ -714,68 +811,29 @@ let Cmds = {
   importPackagedApp: function(location) {
     return UI.busyUntil(Task.spawn(function* () {
 
-      let directory;
+      let directory = utils.getPackagedDirectory(window, location);
 
-      if (!location) {
-        let fp = Cc["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
-        fp.init(window, Strings.GetStringFromName("importPackagedApp_title"), Ci.nsIFilePicker.modeGetFolder);
-        let res = fp.show();
-        if (res == Ci.nsIFilePicker.returnCancel) {
-          return promise.resolve();
-        }
-        directory = fp.file;
-      } else {
-        directory = new FileUtils.File(location);
-      }
-
-      // Add project
-      let project = yield AppProjects.addPackaged(directory);
-
-      // Validate project
-      yield AppManager.validateProject(project);
-
-      // Select project
-      AppManager.selectedProject = project;
-    }), "importing packaged app");
-  },
-
-
-  importHostedApp: function(location) {
-    return UI.busyUntil(Task.spawn(function* () {
-      let ret = {value: null};
-
-      let url;
-      if (!location) {
-        Services.prompt.prompt(window,
-                               Strings.GetStringFromName("importHostedApp_title"),
-                               Strings.GetStringFromName("importHostedApp_header"),
-                               ret, null, {});
-        location = ret.value;
-      }
-
-      if (!location) {
+      if (!directory) {
+        // User cancelled directory selection
         return;
       }
 
-      // Clean location string and add "http://" if missing
-      location = location.trim();
-      try { // Will fail if no scheme
-        Services.io.extractScheme(location);
-      } catch(e) {
-        location = "http://" + location;
-      }
-
-      // Add project
-      let project = yield AppProjects.addHosted(location)
-
-      // Validate project
-      yield AppManager.validateProject(project);
-
-      // Select project
-      AppManager.selectedProject = project;
-    }), "importing hosted app");
+      yield UI.importAndSelectApp(directory);
+    }), "importing packaged app");
   },
 
+  importHostedApp: function(location) {
+    return UI.busyUntil(Task.spawn(function* () {
+
+      let url = utils.getHostedURL(window, location);
+
+      if (!url) {
+        return;
+      }
+
+      yield UI.importAndSelectApp(url);
+    }), "importing hosted app");
+  },
 
   showProjectPanel: function() {
     let deferred = promise.defer();
@@ -986,7 +1044,7 @@ let Cmds = {
       case "hosted":
         return UI.busyUntil(AppManager.installAndRunProject(), "installing and running app");
       case "runtimeApp":
-        return UI.busyUntil(AppManager.runRuntimeApp(), "running app");
+        return UI.busyUntil(AppManager.launchOrReloadRuntimeApp(), "launching / reloading app");
       case "tab":
         return UI.busyUntil(AppManager.reloadTab(), "reloading tab");
     }
@@ -999,14 +1057,10 @@ let Cmds = {
 
   toggleToolbox: function() {
     if (UI.toolboxIframe) {
-      UI.closeToolbox();
+      UI.destroyToolbox();
       return promise.resolve();
     } else {
-      UI.toolboxPromise = AppManager.getTarget().then((target) => {
-        return UI.showToolbox(target);
-      }, console.error);
-      UI.busyUntil(UI.toolboxPromise, "opening toolbox");
-      return UI.toolboxPromise;
+      return UI.createToolbox();
     }
   },
 
@@ -1034,4 +1088,4 @@ let Cmds = {
   showPrefs: function() {
     UI.selectDeckPanel("prefs");
   },
-}
+};

@@ -130,7 +130,7 @@ public:
   typedef mozilla::CSSPoint CSSPoint;
   typedef mozilla::CSSSize CSSSize;
   typedef mozilla::LayerMargin LayerMargin;
-  typedef mozilla::LayoutDeviceIntRect LayoutDeviceIntRect;
+  typedef mozilla::LayoutDeviceIntSize LayoutDeviceIntSize;
 
   /**
    * Finds previously assigned ViewID for the given content element, if any.
@@ -753,6 +753,20 @@ public:
    */
   static TransformResult TransformRect(nsIFrame* aFromFrame, nsIFrame* aToFrame,
                                        nsRect& aRect);
+
+  /**
+   * Get the border-box of aElement's primary frame, transformed it to be
+   * relative to aFrame.
+   */
+  static nsRect GetRectRelativeToFrame(mozilla::dom::Element* aElement,
+                                       nsIFrame* aFrame);
+
+  /**
+   * Returns true if aRect with border inflation of size aInflateSize contains
+   * aPoint.
+   */
+  static bool ContainsPoint(const nsRect& aRect, const nsPoint& aPoint,
+                            nscoord aInflateSize);
 
   /**
    * Return true if a "layer transform" could be computed for aFrame,
@@ -2161,13 +2175,13 @@ public:
   UpdateImageVisibilityForFrame(nsIFrame* aImageFrame);
 
   /**
-   * Populate aOutRect with the bounds of the content viewer corresponding
-   * to the given prescontext. Return true if the bounds were set, false
+   * Populate aOutSize with the size of the content viewer corresponding
+   * to the given prescontext. Return true if the size was set, false
    * otherwise.
    */
   static bool
-  GetContentViewerBounds(nsPresContext* aPresContext,
-                         LayoutDeviceIntRect& aOutRect);
+  GetContentViewerSize(nsPresContext* aPresContext,
+                       LayoutDeviceIntSize& aOutSize);
 
  /**
   * Calculate the compostion size for a frame. See FrameMetrics.h for

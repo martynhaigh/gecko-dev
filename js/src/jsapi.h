@@ -1814,6 +1814,17 @@ CurrentGlobalOrNull(JSContext *cx);
 extern JS_PUBLIC_API(JSObject *)
 JS_InitReflect(JSContext *cx, JS::HandleObject global);
 
+/*
+ * Add various profiling-related functions as properties of the given object.
+ * Defined in builtin/Profilers.cpp.
+ */
+extern JS_PUBLIC_API(bool)
+JS_DefineProfilingFunctions(JSContext *cx, JS::HandleObject obj);
+
+/* Defined in vm/Debugger.cpp. */
+extern JS_PUBLIC_API(bool)
+JS_DefineDebuggerObject(JSContext *cx, JS::HandleObject obj);
+
 #ifdef JS_HAS_CTYPES
 /*
  * Initialize the 'ctypes' object on a global variable 'obj'. The 'ctypes'
@@ -2074,7 +2085,7 @@ typedef enum JSGCParamKey {
     /* Amount of bytes allocated by the GC. */
     JSGC_BYTES = 3,
 
-    /* Number of times when GC was invoked. */
+    /* Number of times GC has been invoked. Includes both major and minor GC. */
     JSGC_NUMBER = 4,
 
     /* Max size of the code cache in bytes. */
@@ -2303,12 +2314,14 @@ extern JS_PUBLIC_API(bool)
 JS_ConvertStub(JSContext *cx, JS::HandleObject obj, JSType type,
                JS::MutableHandleValue vp);
 
-struct JSConstDoubleSpec {
-    double          dval;
-    const char      *name;
-    uint8_t         flags;
-    uint8_t         spare[3];
+template<typename T>
+struct JSConstScalarSpec {
+    const char *name;
+    T val;
 };
+
+typedef JSConstScalarSpec<double> JSConstDoubleSpec;
+typedef JSConstScalarSpec<int32_t> JSConstIntegerSpec;
 
 struct JSJitInfo;
 
@@ -2560,6 +2573,7 @@ class JS_PUBLIC_API(CompartmentOptions)
       , traceGlobal_(nullptr)
       , singletonsAsTemplates_(true)
       , addonId_(nullptr)
+      , preserveJitCode_(false)
     {
         zone_.spec = JS::FreshZone;
     }
@@ -2640,6 +2654,12 @@ class JS_PUBLIC_API(CompartmentOptions)
         return traceGlobal_;
     }
 
+    bool preserveJitCode() const { return preserveJitCode_; }
+    CompartmentOptions &setPreserveJitCode(bool flag) {
+        preserveJitCode_ = flag;
+        return *this;
+    }
+
   private:
     JSVersion version_;
     bool invisibleToDebugger_;
@@ -2659,6 +2679,7 @@ class JS_PUBLIC_API(CompartmentOptions)
     bool singletonsAsTemplates_;
 
     JSAddonId *addonId_;
+    bool preserveJitCode_;
 };
 
 JS_PUBLIC_API(CompartmentOptions &)
@@ -2765,6 +2786,9 @@ JS_DefineObject(JSContext *cx, JS::HandleObject obj, const char *name,
 
 extern JS_PUBLIC_API(bool)
 JS_DefineConstDoubles(JSContext *cx, JS::HandleObject obj, const JSConstDoubleSpec *cds);
+
+extern JS_PUBLIC_API(bool)
+JS_DefineConstIntegers(JSContext *cx, JS::HandleObject obj, const JSConstIntegerSpec *cis);
 
 extern JS_PUBLIC_API(bool)
 JS_DefineProperties(JSContext *cx, JS::HandleObject obj, const JSPropertySpec *ps);
@@ -3286,7 +3310,7 @@ JS_NewPropertyIterator(JSContext *cx, JS::Handle<JSObject*> obj);
  * left to visit.  Return false on error.
  */
 extern JS_PUBLIC_API(bool)
-JS_NextProperty(JSContext *cx, JS::Handle<JSObject*> iterobj, jsid *idp);
+JS_NextProperty(JSContext *cx, JS::HandleObject iterobj, JS::MutableHandleId idp);
 
 extern JS_PUBLIC_API(jsval)
 JS_GetReservedSlot(JSObject *obj, uint32_t index);

@@ -83,14 +83,11 @@ public class TabsLayoutAdapter extends BaseAdapter {
     }
 
     View newView(int position, ViewGroup parent) {
-        return mInflater.inflate(R.layout.tabs_row, parent, false);
+        return mInflater.inflate(R.layout.tabs_layout_item_view, parent, false);
     }
 
     void bindView(View view, Tab tab) {
-        if (view instanceof TabsLayoutItemView) {
-            ((TabsLayoutItemView) view).assignValues(tab);
-        } else {
-            throw new ClassCastException("Bound view must be a type of TabsLayoutItemView.");
-        }
+        TabsLayoutItemView item = (TabsLayoutItemView) view;
+        item.assignValues(tab);
     }
 }

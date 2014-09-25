@@ -107,6 +107,9 @@ pref("offline-apps.quota.warn",        51200);
 // cache compression turned off for now - see bug #715198
 pref("browser.cache.compression_level", 0);
 
+// Whether or not MozAbortablePromise is enabled.
+pref("dom.abortablepromise.enabled", false);
+
 // Whether or not testing features are enabled.
 pref("dom.quotaManager.testing", false);
 
@@ -380,10 +383,10 @@ pref("media.getusermedia.screensharing.enabled", true);
 #endif
 
 #ifdef RELEASE_BUILD
-pref("media.getusermedia.screensharing.allowed_domains", "");
+pref("media.getusermedia.screensharing.allowed_domains", "webex.com,*.webex.com,collaborate.com,*.collaborate.com");
 #else
  // temporary value, not intended for release - bug 1049087
-pref("media.getusermedia.screensharing.allowed_domains", "mozilla.github.io");
+pref("media.getusermedia.screensharing.allowed_domains", "mozilla.github.io,webex.com,*.webex.com,collaborate.com,*.collaborate.com");
 #endif
 // OS/X 10.6 and XP have screen/window sharing off by default due to various issues - Caveat emptor
 pref("media.getusermedia.screensharing.allow_on_old_platforms", false);
@@ -1209,6 +1212,7 @@ pref("network.http.spdy.enabled", true);
 pref("network.http.spdy.enabled.v3", true);
 pref("network.http.spdy.enabled.v3-1", true);
 pref("network.http.spdy.enabled.http2draft", true);
+pref("network.http.spdy.enabled.http2", false);
 pref("network.http.spdy.enforce-tls-profile", true);
 pref("network.http.spdy.chunk-size", 16000);
 pref("network.http.spdy.timeout", 180);
@@ -1718,6 +1722,9 @@ pref("security.csp.enable", true);
 pref("security.csp.debug", false);
 pref("security.csp.experimentalEnabled", false);
 
+// Default Content Security Policy to apply to privileged apps.
+pref("security.apps.privileged.CSP.default", "default-src *; script-src 'self'; object-src 'none'; style-src 'self' 'unsafe-inline'");
+
 // Mixed content blocking
 pref("security.mixed_content.block_active_content", false);
 pref("security.mixed_content.block_display_content", false);
@@ -1918,7 +1925,7 @@ pref("bidi.support", 1);
 // Whether delete and backspace should immediately delete characters not
 // visually adjacent to the caret, or adjust the visual position of the caret
 // on the first keypress and delete the character on a second keypress
-pref("bidi.edit.delete_immediately", false);
+pref("bidi.edit.delete_immediately", true);
 
 // Bidi caret movement style:
 // 0 = logical
@@ -4242,10 +4249,9 @@ pref("snav.enabled", false);
 // Turn off touch caret by default.
 pref("touchcaret.enabled", false);
 
-// Maximum distance to the center of touch caret (in app unit square) which
-// will be accepted to drag touch caret (0 means only in the bounding box of touch
-// caret is accepted)
-pref("touchcaret.distance.threshold", 1500);
+// This will inflate the size of the touch caret frame when checking if user
+// clicks on the caret or not. In app units.
+pref("touchcaret.inflatesize.threshold", 40);
 
 // We'll start to increment time when user release the control of touch caret.
 // When time exceed this expiration time, we'll hide touch caret.
@@ -4291,3 +4297,10 @@ pref("camera.control.low_memory_thresholdMB", 404);
 
 // UDPSocket API
 pref("dom.udpsocket.enabled", false);
+
+// Experiment: Get TTL from DNS records.
+//     Unset initially (0); Randomly chosen on first run; will remain unchanged
+//     unless adjusted by the user or experiment ends. Variants defined in
+//     nsHostResolver.cpp.
+pref("dns.ttl-experiment.variant", 0);
+pref("dns.ttl-experiment.enabled", true);
