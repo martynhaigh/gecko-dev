@@ -56,7 +56,6 @@ class TabsGridLayout extends GridView
             public void onMovedToScrapHeap(View view) {
                 TabsLayoutItemView item = (TabsLayoutItemView) view;
                 item.thumbnail.setImageDrawable(null);
-                item.close.setVisibility(View.VISIBLE);
             }
         });
     }
@@ -99,6 +98,7 @@ class TabsGridLayout extends GridView
         @Override
         public void bindView(View view, Tab tab) {
             super.bindView(view, tab);
+            ((TabsLayoutItemView) view).close.setVisibility(View.VISIBLE);
 
             // If we're recycling this view, there's a chance it was transformed during
             // the close animation. Remove any of those properties.
@@ -165,8 +165,7 @@ class TabsGridLayout extends GridView
                 if (view == null)
                     return;
 
-                TabsLayoutItemView item = (TabsLayoutItemView) view;
-                item.assignValues(tab);
+                ((TabsLayoutItemView) view).assignValues(tab);
                 break;
         }
     }

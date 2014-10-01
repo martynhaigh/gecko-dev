@@ -54,16 +54,18 @@ public class TabsLayoutItemView extends LinearLayout
 
     @Override
     public void setChecked(boolean checked) {
-        if (mChecked != checked) {
-            mChecked = checked;
-            refreshDrawableState();
+        if (mChecked == checked) {
+            return;
+        }
 
-            int count = getChildCount();
-            for (int i=0; i < count; i++) {
-                final View child = getChildAt(i);
-                if (child instanceof Checkable) {
-                    ((Checkable) child).setChecked(checked);
-                } 
+        mChecked = checked;
+        refreshDrawableState();
+
+        int count = getChildCount();
+        for (int i = 0; i < count; i++) {
+            final View child = getChildAt(i);
+            if (child instanceof Checkable) {
+                ((Checkable) child).setChecked(checked);
             }
         }
     }
@@ -73,16 +75,17 @@ public class TabsLayoutItemView extends LinearLayout
         mChecked = !mChecked;
     }
 
-    // this is a big nasty, but we'll get rid of it in bug 1058574
-    public void populateChildReferences() {
+    public void setCloseOnClickListener(OnClickListener mOnClickListener) {
+        close.setOnClickListener(mOnClickListener);
+    }
+
+    @Override
+    protected void onFinishInflate() {
+        super.onFinishInflate();
         title = (TextView) findViewById(R.id.title);
         thumbnail = (ImageView) findViewById(R.id.thumbnail);
         close = (ImageButton) findViewById(R.id.close);
         thumbnailWrapper = (TabThumbnailWrapper) findViewById(R.id.wrapper);
-    }
-
-    public void setCloseOnClickListener(OnClickListener mOnClickListener) {
-        close.setOnClickListener(mOnClickListener);
     }
 
     protected void assignValues(Tab tab)  {

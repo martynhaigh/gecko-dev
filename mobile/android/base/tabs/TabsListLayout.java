@@ -8,7 +8,6 @@ package org.mozilla.gecko.tabs;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.mozilla.gecko.AboutPages;
 import org.mozilla.gecko.animation.PropertyAnimator.Property;
 import org.mozilla.gecko.animation.PropertyAnimator;
 import org.mozilla.gecko.animation.ViewHelper;
@@ -16,7 +15,6 @@ import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
-import org.mozilla.gecko.tabs.TabsLayoutAdapter;
 import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
 import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.util.ThreadUtils;
@@ -89,13 +87,15 @@ class TabsListLayout extends TwoWayView
     }
 
     private class TabsListLayoutAdapter extends TabsLayoutAdapter {
-        private Button.OnClickListener mOnClickListener;
+        private Button.OnClickListener mCloseOnClickListener;
         public TabsListLayoutAdapter (Context context) {
             super(context);
 
-            mOnClickListener = new Button.OnClickListener() {
+            mCloseOnClickListener = new Button.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    // The view here is the close button, which has a reference
+                    // to the parent TabsLayoutItemView in it's tag, hence the getTag() call
                     TabsLayoutItemView item = (TabsLayoutItemView) v.getTag();
                     final int pos = (isVertical() ? item.getWidth() : 0 - item.getHeight());
                     animateClose(item, pos);
@@ -107,8 +107,7 @@ class TabsListLayout extends TwoWayView
         public View newView(int position, ViewGroup parent) {
             TabsLayoutItemView item = (TabsLayoutItemView) super.newView(position, parent);
 
-            item.populateChildReferences();
-            item.setCloseOnClickListener(mOnClickListener);
+            item.setCloseOnClickListener(mCloseOnClickListener);
 
             return item;
         }
@@ -361,8 +360,7 @@ class TabsListLayout extends TwoWayView
         else
             animator.attach(view, Property.WIDTH, 1);
 
-        TabsLayoutItemView tab = (TabsLayoutItemView)view;
-        final int tabId = tab.id;
+        final int tabId = ((TabsLayoutItemView) view).id;
 
         // Caching this assumes that all rows are the same height
         if (mOriginalSize == 0) {
@@ -496,8 +494,8 @@ class TabsListLayout extends TwoWayView
                     mSwipeView.setPressed(false);
 
                     if (!mSwiping) {
-                        TabsLayoutItemView tab = (TabsLayoutItemView) mSwipeView;
-                        Tabs.getInstance().selectTab(tab.id);
+                        TabsLayoutItemView item = (TabsLayoutItemView) mSwipeView;
+                        Tabs.getInstance().selectTab(item.id);
                         autoHidePanel();
 
                         mVelocityTracker.recycle();
@@ -584,8 +582,7 @@ class TabsListLayout extends TwoWayView
                         mSwiping = true;
                         TabsListLayout.this.requestDisallowInterceptTouchEvent(true);
 
-                        TabsLayoutItemView tab = (TabsLayoutItemView) mSwipeView;
-                        tab.close.setVisibility(View.INVISIBLE);
+                        ((TabsLayoutItemView) mSwipeView).close.setVisibility(View.INVISIBLE);
 
                         // Stops listview from highlighting the touched item
                         // in the list when swiping.
