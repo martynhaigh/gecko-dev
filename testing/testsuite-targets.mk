@@ -206,10 +206,10 @@ RUN_REFTEST_B2G = rm -f ./$@.log && $(PYTHON) _tests/reftest/runreftestb2g.py \
 
 ifeq ($(OS_ARCH),WINNT) #{
 # GPU-rendered shadow layers are unsupported here
-OOP_CONTENT = --setpref=layers.async-pan-zoom.enabled=true --setpref=browser.tabs.remote=true --setpref=browser.tabs.remote.autostart=true --setpref=layers.acceleration.disabled=true
+OOP_CONTENT = --setpref=layers.async-pan-zoom.enabled=true --setpref=browser.tabs.remote.autostart=true --setpref=layers.acceleration.disabled=true
 GPU_RENDERING =
 else
-OOP_CONTENT = --setpref=layers.async-pan-zoom.enabled=true --setpref=browser.tabs.remote=true --setpref=browser.tabs.remote.autostart=true
+OOP_CONTENT = --setpref=layers.async-pan-zoom.enabled=true --setpref=browser.tabs.remote.autostart=true
 GPU_RENDERING = --setpref=layers.acceleration.force-enabled=true
 endif #}
 
@@ -289,6 +289,12 @@ jstestbrowser:
 
 GARBAGE += $(addsuffix .log,$(MOCHITESTS) reftest crashtest jstestbrowser)
 
+ifeq ($(OS_ARCH),Darwin)
+xpcshell_path = $(TARGET_DIST)/$(MOZ_MACBUNDLE_NAME)/Contents/MacOS/xpcshell
+else
+xpcshell_path = $(LIBXUL_DIST)/bin/xpcshell
+endif
+
 # Execute all xpcshell tests in the directories listed in the manifest.
 # See also config/rules.mk 'xpcshell-tests' target for local execution.
 # Usage: |make [TEST_PATH=...] [EXTRA_TEST_ARGS=...] xpcshell-tests|.
@@ -309,7 +315,7 @@ xpcshell-tests:
 	  --xunit-suite-name=xpcshell \
           $(SYMBOLS_PATH) \
 	  $(TEST_PATH_ARG) $(EXTRA_TEST_ARGS) \
-	  $(LIBXUL_DIST)/bin/xpcshell
+	  $(xpcshell_path)
 
 B2G_XPCSHELL = \
 	rm -f ./@.log && \
@@ -423,6 +429,7 @@ endif
 
 ifeq ($(MOZ_WIDGET_TOOLKIT),android)
 package-tests: stage-android
+package-tests: stage-instrumentation-tests
 endif
 
 ifeq ($(MOZ_WIDGET_TOOLKIT),gonk)
@@ -518,8 +525,6 @@ else
 	cp -RL $(DIST)/bin/jsapi-tests$(BIN_SUFFIX) $(PKG_STAGE)/cppunittests
 endif
 
-
-
 stage-jittest: make-stage-dir
 	$(NSINSTALL) -D $(PKG_STAGE)/jit-test/tests
 	cp -RL $(topsrcdir)/js/src/jsapi.h $(PKG_STAGE)/jit-test
@@ -552,6 +557,9 @@ stage-mozbase: make-stage-dir
 stage-web-platform-tests: make-stage-dir
 	$(MAKE) -C $(DEPTH)/testing/web-platform stage-package
 
+stage-instrumentation-tests: make-stage-dir
+	$(MAKE) -C $(DEPTH)/testing/instrumentation stage-package
+
 .PHONY: \
   mochitest \
   mochitest-plain \
@@ -579,5 +587,6 @@ stage-web-platform-tests: make-stage-dir
   stage-marionette \
   stage-steeplechase \
   stage-web-platform-tests \
+  stage-instrumentation-tests \
   $(NULL)
 

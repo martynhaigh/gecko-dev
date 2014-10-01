@@ -965,6 +965,10 @@ public abstract class GeckoApp
             }
             if (image != null) {
                 String path = Media.insertImage(getContentResolver(),image, null, null);
+                if (path == null) {
+                    Toast.makeText((Context) this, R.string.set_image_path_fail, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 final Intent intent = new Intent(Intent.ACTION_ATTACH_DATA);
                 intent.addCategory(Intent.CATEGORY_DEFAULT);
                 intent.setData(Uri.parse(path));
@@ -1120,6 +1124,7 @@ public abstract class GeckoApp
         mGeckoReadyStartupTimer = new Telemetry.UptimeTimer("FENNEC_STARTUP_TIME_GECKOREADY");
 
         final Intent intent = getIntent();
+        final String action = intent.getAction();
         final String args = intent.getStringExtra("args");
 
         earlyStartJavaSampler(intent);
@@ -1148,17 +1153,7 @@ public abstract class GeckoApp
                         profilePath =  m.group(1);
                     }
                     if (profileName == null) {
-                        try {
-                            profileName = getDefaultProfileName();
-                        } catch (NoMozillaDirectoryException e) {
-                            Log.wtf(LOGTAG, "Unable to fetch default profile name!", e);
-                            // There's nothing at all we can do now. If the Mozilla directory
-                            // didn't exist, then we're screwed.
-                            // Crash here so we can fix the bug.
-                            throw new RuntimeException(e);
-                        }
-                        if (profileName == null)
-                            profileName = GeckoProfile.DEFAULT_PROFILE;
+                        profileName = GeckoProfile.DEFAULT_PROFILE;
                     }
                     GeckoProfile.sIsUsingCustomProfile = true;
                 }
@@ -1169,7 +1164,13 @@ public abstract class GeckoApp
             }
         }
 
-        BrowserDB.initialize(getProfile().getName());
+        // Speculatively pre-fetch the profile in the background.
+        ThreadUtils.postToBackgroundThread(new Runnable() {
+            @Override
+            public void run() {
+                getProfile();
+            }
+        });
 
         // Workaround for <http://code.google.com/p/android/issues/detail?id=20915>.
         try {
@@ -1186,8 +1187,6 @@ public abstract class GeckoApp
         // `(GeckoApplication) getApplication()` here.
         GeckoAppShell.setContextGetter(this);
         GeckoAppShell.setGeckoInterface(this);
-
-        ThreadUtils.setUiThread(Thread.currentThread(), new Handler());
 
         Tabs.getInstance().attachToContext(this);
         try {
@@ -1213,6 +1212,30 @@ public abstract class GeckoApp
             // without killing the entire application (see Bug 769269).
             mIsRestoringActivity = true;
             Telemetry.HistogramAdd("FENNEC_RESTORING_ACTIVITY", 1);
+
+        } else {
+            final String uri = getURIFromIntent(intent);
+
+            GeckoThread.setArgs(args);
+            GeckoThread.setAction(action);
+            GeckoThread.setUri(TextUtils.isEmpty(uri) ? null : uri);
+        }
+
+        if (!ACTION_DEBUG.equals(action) &&
+                GeckoThread.checkAndSetLaunchState(GeckoThread.LaunchState.Launching,
+                                                   GeckoThread.LaunchState.Launched)) {
+            GeckoThread.createAndStart();
+
+        } else if (ACTION_DEBUG.equals(action) &&
+                GeckoThread.checkAndSetLaunchState(GeckoThread.LaunchState.Launching,
+                                                   GeckoThread.LaunchState.WaitForDebugger)) {
+            ThreadUtils.getUiHandler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    GeckoThread.setLaunchState(GeckoThread.LaunchState.Launched);
+                    GeckoThread.createAndStart();
+                }
+            }, 1000 * 5 /* 5 seconds */);
         }
 
         Bundle stateBundle = getIntent().getBundleExtra(EXTRA_STATE_BUNDLE);
@@ -1376,6 +1399,9 @@ public abstract class GeckoApp
             layerView.initializeView(EventDispatcher.getInstance());
             mLayerView = layerView;
             GeckoAppShell.setLayerView(layerView);
+            GeckoAppShell.sendEventToGecko(GeckoEvent.createObjectEvent(
+                GeckoEvent.ACTION_OBJECT_LAYER_CLIENT, layerView.getLayerClientObject()));
+
             // bind the GeckoEditable instance to the new LayerView
             GeckoAppShell.notifyIMEContext(GeckoEditableListener.IME_STATE_DISABLED, "", "", "");
         }
@@ -1429,15 +1455,11 @@ public abstract class GeckoApp
         // parallel with Gecko load.
         checkMigrateProfile();
 
-        Uri data = intent.getData();
-        if (data != null && "http".equals(data.getScheme())) {
-            startupAction = StartupAction.PREFETCH;
-            ThreadUtils.postToBackgroundThread(new PrefetchRunnable(data.toString()));
-        }
-
         Tabs.registerOnTabsChangedListener(this);
 
         initializeChrome();
+
+        BrowserDB.initialize(getProfile().getName());
 
         // If we are doing a restore, read the session data and send it to Gecko
         if (!mIsRestoringActivity) {
@@ -1480,25 +1502,6 @@ public abstract class GeckoApp
         }
 
         Telemetry.HistogramAdd("FENNEC_STARTUP_GECKOAPP_ACTION", startupAction.ordinal());
-
-        if (!mIsRestoringActivity) {
-            GeckoThread.setArgs(intent.getStringExtra("args"));
-            GeckoThread.setAction(intent.getAction());
-            GeckoThread.setUri(passedUri);
-        }
-        if (!ACTION_DEBUG.equals(action) &&
-            GeckoThread.checkAndSetLaunchState(GeckoThread.LaunchState.Launching, GeckoThread.LaunchState.Launched)) {
-            GeckoThread.createAndStart();
-        } else if (ACTION_DEBUG.equals(action) &&
-            GeckoThread.checkAndSetLaunchState(GeckoThread.LaunchState.Launching, GeckoThread.LaunchState.WaitForDebugger)) {
-            ThreadUtils.getUiHandler().postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    GeckoThread.setLaunchState(GeckoThread.LaunchState.Launching);
-                    GeckoThread.createAndStart();
-                }
-            }, 1000 * 5 /* 5 seconds */);
-        }
 
         // Check if launched from data reporting notification.
         if (ACTION_LAUNCH_SETTINGS.equals(action)) {
@@ -1565,12 +1568,6 @@ public abstract class GeckoApp
             }
         });
 
-        PrefsHelper.getPref("app.geo.reportdata", new PrefsHelper.PrefHandlerBase() {
-            @Override public void prefValue(String pref, int value) {
-                // Acting on this pref is Bug 1036508; for now, do nothing.
-            }
-        });
-
         // Trigger the completion of the telemetry timer that wraps activity startup,
         // then grab the duration to give to FHR.
         mJavaUiStartupTimer.stop();
@@ -1600,7 +1597,6 @@ public abstract class GeckoApp
             if (selectedTab != null)
                 Tabs.getInstance().notifyListeners(selectedTab, Tabs.TabEvents.SELECTED);
             geckoConnected();
-            GeckoAppShell.setLayerClient(mLayerView.getLayerClientObject());
             GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Viewport:Flush", null));
         }
 
@@ -1667,7 +1663,7 @@ public abstract class GeckoApp
         }
     }
 
-    public GeckoProfile getProfile() {
+    public synchronized GeckoProfile getProfile() {
         // fall back to default profile if we didn't load a specific one
         if (mProfile == null) {
             mProfile = GeckoProfile.get(this);
@@ -1771,43 +1767,6 @@ public abstract class GeckoApp
     public String getDefaultUAString() {
         return HardwareUtils.isTablet() ? AppConstants.USER_AGENT_FENNEC_TABLET :
                                           AppConstants.USER_AGENT_FENNEC_MOBILE;
-    }
-
-    public String getUAStringForHost(String host) {
-        // With our standard UA String, we get a 200 response code and
-        // client-side redirect from t.co. This bot-like UA gives us a
-        // 301 response code
-        if ("t.co".equals(host)) {
-            return AppConstants.USER_AGENT_BOT_LIKE;
-        }
-        return getDefaultUAString();
-    }
-
-    class PrefetchRunnable implements Runnable {
-        private String mPrefetchUrl;
-
-        PrefetchRunnable(String prefetchUrl) {
-            mPrefetchUrl = prefetchUrl;
-        }
-
-        @Override
-        public void run() {
-            HttpURLConnection connection = null;
-            try {
-                URL url = new URL(mPrefetchUrl);
-                // data url should have an http scheme
-                connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestProperty("User-Agent", getUAStringForHost(url.getHost()));
-                connection.setInstanceFollowRedirects(false);
-                connection.setRequestMethod("GET");
-                connection.connect();
-            } catch (Exception e) {
-                Log.e(LOGTAG, "Exception prefetching URL", e);
-            } finally {
-                if (connection != null)
-                    connection.disconnect();
-            }
-        }
     }
 
     private void processAlertCallback(Intent intent) {
@@ -2163,21 +2122,32 @@ public abstract class GeckoApp
     }
 
     public void doRestart() {
-        doRestart(RESTARTER_ACTION, null);
+        doRestart(RESTARTER_ACTION, null, null);
     }
 
     public void doRestart(String args) {
-        doRestart(RESTARTER_ACTION, args);
+        doRestart(RESTARTER_ACTION, args, null);
     }
 
-    public void doRestart(String action, String args) {
+    public void doRestart(Intent intent) {
+        doRestart(RESTARTER_ACTION, null, intent);
+    }
+
+    public void doRestart(String action, String args, Intent restartIntent) {
         Log.d(LOGTAG, "doRestart(\"" + action + "\")");
         try {
             Intent intent = new Intent(action);
             intent.setClassName(AppConstants.ANDROID_PACKAGE_NAME, RESTARTER_CLASS);
+
             /* TODO: addEnvToIntent(intent); */
-            if (args != null)
+            if (args != null) {
                 intent.putExtra("args", args);
+            }
+
+            if (restartIntent != null) {
+                intent.putExtra(Intent.EXTRA_INTENT, restartIntent);
+            }
+
             intent.putExtra("didRestart", true);
             Log.d(LOGTAG, "Restart intent: " + intent.toString());
             GeckoAppShell.killAnyZombies();

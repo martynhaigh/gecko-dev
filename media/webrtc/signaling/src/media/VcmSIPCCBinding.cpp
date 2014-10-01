@@ -2079,6 +2079,7 @@ int vcmTxStartICE(cc_mcapid_t mcap_id,
     err = vcmTxCreateVideoConduit(level, payload, pc, attrs, conduit);
     is_video = true;
   } else {
+    mediaType = "unrecognized";
     CSFLogError(logTag, "%s: mcap_id unrecognized", __FUNCTION__);
   }
   if (err) {
@@ -2548,12 +2549,12 @@ cc_boolean vcmCheckAttribs(cc_uint32_t media_type, void *sdp_p, int level,
             rcap->max_cpb = t_uint;
         }
 
-        if ( ccsdpAttrGetFmtpMaxCpb(sdp_p, level, 0, fmtp_inst, &t_uint) == SDP_SUCCESS )
+        if ( ccsdpAttrGetFmtpMaxDpb(sdp_p, level, 0, fmtp_inst, &t_uint) == SDP_SUCCESS )
         {
             rcap->max_dpb = t_uint;
         }
 
-        if ( ccsdpAttrGetFmtpMaxCpb(sdp_p, level, 0, fmtp_inst, &t_uint) == SDP_SUCCESS )
+        if ( ccsdpAttrGetFmtpMaxBr(sdp_p, level, 0, fmtp_inst, &t_uint) == SDP_SUCCESS )
         {
             rcap->max_br = t_uint;
         }
@@ -2852,4 +2853,3 @@ short vcmGetVideoPreferredCodec(int32_t *preferred_codec) {
                          "media.navigator.video.preferred_codec",
                          preferred_codec);
 }
-

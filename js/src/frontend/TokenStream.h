@@ -270,7 +270,7 @@ class MOZ_STACK_CLASS TokenStream
     const char *getFilename() const { return filename; }
     unsigned getLineno() const { return lineno; }
     unsigned getColumn() const { return userbuf.addressOfNextRawChar() - linebase - 1; }
-    JSPrincipals *getOriginPrincipals() const { return originPrincipals; }
+    bool getMutedErrors() const { return mutedErrors; }
     JSVersion versionNumber() const { return VersionNumber(options().version); }
     JSVersion versionWithFlags() const { return options().version; }
 
@@ -492,10 +492,6 @@ class MOZ_STACK_CLASS TokenStream
     void tell(Position *);
     void seek(const Position &pos);
     bool seek(const Position &pos, const TokenStream &other);
-
-    size_t positionToOffset(const Position &pos) const {
-        return pos.buf - userbuf.base();
-    }
 
     const char16_t *rawBase() const {
         return userbuf.base();
@@ -774,13 +770,16 @@ class MOZ_STACK_CLASS TokenStream
     bool                maybeStrSpecial[256];   // speeds up string scanning
     uint8_t             isExprEnding[TOK_LIMIT];// which tokens definitely terminate exprs?
     ExclusiveContext    *const cx;
-    JSPrincipals        *const originPrincipals;
+    bool                mutedErrors;
     StrictModeGetter    *strictModeGetter;  // used to test for strict mode
 };
 
 // Steal one JSREPORT_* bit (see jsapi.h) to tell that arguments to the error
 // message have const char16_t* type, not const char*.
 #define JSREPORT_UC 0x100
+
+extern const char *
+TokenKindToDesc(TokenKind tt);
 
 } // namespace frontend
 } // namespace js

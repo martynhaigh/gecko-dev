@@ -44,12 +44,13 @@
   <color name="text_color_tertiary">#9198A1</color>
 
   <!-- Default inverse colors -->
-  <color name="text_color_primary_inverse">#FFFFFF</color>
+  <color name="text_color_primary_inverse">#F5F5F5</color>
   <color name="text_color_secondary_inverse">#DDDDDD</color>
   <color name="text_color_tertiary_inverse">#A4A7A9</color>
 
   <!-- Colour used for share overlay button labels -->
   <color name="text_color_overlaybtn">#666666</color>
+  <color name="text_color_overlaybtn_disabled">#AFB1B3</color>
 
   <color name="overlay_share_header_background">#FFFFFFFF</color>
 

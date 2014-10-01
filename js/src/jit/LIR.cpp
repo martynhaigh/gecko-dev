@@ -201,7 +201,7 @@ LRecoverInfo::New(MIRGenerator *gen, MResumePoint *mir)
     if (!recoverInfo || !recoverInfo->init(mir))
         return nullptr;
 
-    JitSpew(JitSpew_Snapshots, "Generating LIR recover info %p from MIR (%p)",
+    JitSpew(JitSpew_IonSnapshots, "Generating LIR recover info %p from MIR (%p)",
             (void *)recoverInfo, (void *)mir);
 
     return recoverInfo;
@@ -293,7 +293,7 @@ LSnapshot::New(MIRGenerator *gen, LRecoverInfo *recover, BailoutKind kind)
     if (!snapshot || !snapshot->init(gen))
         return nullptr;
 
-    JitSpew(JitSpew_Snapshots, "Generating LIR snapshot %p from recover (%p)",
+    JitSpew(JitSpew_IonSnapshots, "Generating LIR snapshot %p from recover (%p)",
             (void *)snapshot, (void *)recover);
 
     return snapshot;
@@ -348,6 +348,8 @@ static const char * const TypeChars[] =
     "s",            // SLOTS
     "f",            // FLOAT32
     "d",            // DOUBLE
+    "i32x4",        // INT32X4
+    "f32x4",        // FLOAT32X4
 #ifdef JS_NUNBOX32
     "t",            // TYPE
     "p"             // PAYLOAD
@@ -475,8 +477,8 @@ LInstruction::assignSnapshot(LSnapshot *snapshot)
     snapshot_ = snapshot;
 
 #ifdef DEBUG
-    if (JitSpewEnabled(JitSpew_Snapshots)) {
-        JitSpewHeader(JitSpew_Snapshots);
+    if (JitSpewEnabled(JitSpew_IonSnapshots)) {
+        JitSpewHeader(JitSpew_IonSnapshots);
         fprintf(JitSpewFile, "Assigning snapshot %p to instruction %p (",
                 (void *)snapshot, (void *)this);
         printName(JitSpewFile);
@@ -541,9 +543,25 @@ bool
 LMoveGroup::add(LAllocation *from, LAllocation *to, LDefinition::Type type)
 {
 #ifdef DEBUG
-    JS_ASSERT(*from != *to);
+    MOZ_ASSERT(*from != *to);
     for (size_t i = 0; i < moves_.length(); i++)
-        JS_ASSERT(*to != *moves_[i].to());
+        MOZ_ASSERT(*to != *moves_[i].to());
+
+    // Check that SIMD moves are aligned according to ABI requirements.
+    if (LDefinition(type).isSimdType()) {
+        if (from->isMemory()) {
+            if (from->isArgument())
+                MOZ_ASSERT(from->toArgument()->index() % SimdStackAlignment == 0);
+            else
+                MOZ_ASSERT(from->toStackSlot()->slot() % SimdStackAlignment == 0);
+        }
+        if (to->isMemory()) {
+            if (to->isArgument())
+                MOZ_ASSERT(to->toArgument()->index() % SimdStackAlignment == 0);
+            else
+                MOZ_ASSERT(to->toStackSlot()->slot() % SimdStackAlignment == 0);
+        }
+    }
 #endif
     return moves_.append(LMove(from, to, type));
 }
@@ -582,7 +600,11 @@ LMoveGroup::printOperands(FILE *fp)
         const LMove &move = getMove(i);
         // Use two printfs, as LAllocation::toString is not reentrant.
         fprintf(fp, " [%s", move.from()->toString());
-        fprintf(fp, " -> %s]", move.to()->toString());
+        fprintf(fp, " -> %s", move.to()->toString());
+#ifdef DEBUG
+        fprintf(fp, ", %s", TypeChars[move.type()]);
+#endif
+        fprintf(fp, "]");
         if (i != numMoves() - 1)
             fprintf(fp, ",");
     }

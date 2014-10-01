@@ -21,6 +21,7 @@
 #include "gc/Barrier.h"
 #include "gc/Marking.h"
 #include "jit/IonTypes.h"
+#include "js/UbiNode.h"
 #include "js/Utility.h"
 #include "js/Vector.h"
 
@@ -318,11 +319,11 @@ class Type
 inline Type GetValueType(const Value &val);
 
 /*
- * Get the type of a possibly optimized out value. This generally only
- * happens on unconditional type monitors on bailing out of Ion, such as
- * for argument and local types.
+ * Get the type of a possibly optimized out or uninitialized let value. This
+ * generally only happens on unconditional type monitors on bailing out of
+ * Ion, such as for argument and local types.
  */
-inline Type GetMaybeOptimizedOutValueType(const Value &val);
+inline Type GetMaybeUntrackedValueType(const Value &val);
 
 /*
  * Type inference memory management overview.
@@ -759,8 +760,11 @@ class TemporaryTypeSet : public TypeSet
     /* Get the prototype shared by all objects in this set, or nullptr. */
     JSObject *getCommonPrototype();
 
-    /* Get the typed array type of all objects in this set, or TypedArrayObject::TYPE_MAX. */
+    /* Get the typed array type of all objects in this set, or Scalar::TypeMax. */
     Scalar::Type getTypedArrayType();
+
+    /* Get the shared typed array type of all objects in this set, or Scalar::TypeMax. */
+    Scalar::Type getSharedTypedArrayType();
 
     /* Whether all objects have JSCLASS_IS_DOMJSCLASS set. */
     bool isDOMClass();
@@ -966,6 +970,10 @@ class TypeNewScript
     void trace(JSTracer *trc);
     void sweep(FreeOp *fop);
 
+#ifdef JSGC_COMPACTING
+    void fixupAfterMovingGC();
+#endif
+
     void registerNewObject(JSObject *res);
     void unregisterNewObject(JSObject *res);
     bool maybeAnalyze(JSContext *cx, TypeObject *type, bool *regenerate, bool force = false);
@@ -996,7 +1004,7 @@ class TypeNewScript
  */
 
 /* Type information about an object accessed by a script. */
-struct TypeObject : gc::BarrieredCell<TypeObject>
+struct TypeObject : public gc::TenuredCell
 {
   private:
     /* Class shared by object using this type. */
@@ -1190,8 +1198,6 @@ struct TypeObject : gc::BarrieredCell<TypeObject>
     bool addDefiniteProperties(ExclusiveContext *cx, Shape *shape);
     bool matchDefiniteProperties(HandleObject obj);
     void addPrototype(JSContext *cx, TypeObject *proto);
-    void addPropertyType(ExclusiveContext *cx, jsid id, Type type);
-    void addPropertyType(ExclusiveContext *cx, jsid id, const Value &value);
     void markPropertyNonData(ExclusiveContext *cx, jsid id);
     void markPropertyNonWritable(ExclusiveContext *cx, jsid id);
     void markStateChange(ExclusiveContext *cx);
@@ -1206,6 +1212,10 @@ struct TypeObject : gc::BarrieredCell<TypeObject>
 
     inline void clearProperties();
     inline void sweep(FreeOp *fop, bool *oom);
+
+#ifdef JSGC_COMPACTING
+    void fixupAfterMovingGC();
+#endif
 
     size_t sizeOfExcludingThis(mozilla::MallocSizeOf mallocSizeOf) const;
 
@@ -1224,6 +1234,10 @@ struct TypeObject : gc::BarrieredCell<TypeObject>
 
     static inline uint32_t offsetOfProto() {
         return offsetof(TypeObject, proto_);
+    }
+
+    static inline uint32_t offsetOfNewScript() {
+        return offsetof(TypeObject, newScript_);
     }
 
   private:
@@ -1724,5 +1738,13 @@ MOZ_NORETURN void TypeFailure(JSContext *cx, const char *fmt, ...);
 
 } /* namespace types */
 } /* namespace js */
+
+// JS::ubi::Nodes can point to js::LazyScripts; they're js::gc::Cell instances
+// with no associated compartment.
+namespace JS {
+namespace ubi {
+template<> struct Concrete<js::types::TypeObject> : TracerConcrete<js::types::TypeObject> { };
+}
+}
 
 #endif /* jsinfer_h */

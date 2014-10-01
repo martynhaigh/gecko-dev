@@ -14,6 +14,7 @@
 #include "mozilla/Preferences.h"
 #include "nsUnicodeProperties.h"
 #include "gfxFontConstants.h"
+#include "gfxTextRun.h"
 
 #include "cairo-win32.h"
 
@@ -105,7 +106,7 @@ gfxGDIFont::ShapeText(gfxContext     *aContext,
 }
 
 const gfxFont::Metrics&
-gfxGDIFont::GetMetrics()
+gfxGDIFont::GetHorizontalMetrics()
 {
     if (!mMetrics) {
         Initialize();

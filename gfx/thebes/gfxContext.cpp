@@ -39,11 +39,11 @@ UserDataKey gfxContext::sDontUseAsSourceKey;
 /* This class lives on the stack and allows gfxContext users to easily, and
  * performantly get a gfx::Pattern to use for drawing in their current context.
  */
-class GeneralPattern
+class PatternFromState
 {
 public:    
-  explicit GeneralPattern(gfxContext *aContext) : mContext(aContext), mPattern(nullptr) {}
-  ~GeneralPattern() { if (mPattern) { mPattern->~Pattern(); } }
+  explicit PatternFromState(gfxContext *aContext) : mContext(aContext), mPattern(nullptr) {}
+  ~PatternFromState() { if (mPattern) { mPattern->~Pattern(); } }
 
   operator mozilla::gfx::Pattern&()
   {
@@ -244,7 +244,8 @@ TemporaryRef<Path> gfxContext::GetPath()
 
 void gfxContext::SetPath(Path* path)
 {
-  MOZ_ASSERT(path->GetBackendType() == mDT->GetBackendType());
+  MOZ_ASSERT(path->GetBackendType() == mDT->GetBackendType() ||
+             (mDT->GetBackendType() == BackendType::DIRECT2D1_1 && path->GetBackendType() == BackendType::DIRECT2D));
   mPath = path;
   mPathBuilder = nullptr;
   mPathIsRect = false;
@@ -261,17 +262,23 @@ gfxContext::CurrentPoint()
 void
 gfxContext::Stroke()
 {
+  Stroke(PatternFromState(this));
+}
+
+void
+gfxContext::Stroke(const Pattern& aPattern)
+{
   AzureState &state = CurrentState();
   if (mPathIsRect) {
     MOZ_ASSERT(!mTransformChanged);
 
-    mDT->StrokeRect(mRect, GeneralPattern(this),
+    mDT->StrokeRect(mRect, aPattern,
                     state.strokeOptions,
                     DrawOptions(1.0f, GetOp(), state.aaMode));
   } else {
     EnsurePath();
 
-    mDT->Stroke(mPath, GeneralPattern(this), state.strokeOptions,
+    mDT->Stroke(mPath, aPattern, state.strokeOptions,
                 DrawOptions(1.0f, GetOp(), state.aaMode));
   }
 }
@@ -279,15 +286,27 @@ gfxContext::Stroke()
 void
 gfxContext::Fill()
 {
+  Fill(PatternFromState(this));
+}
+
+void
+gfxContext::Fill(const Pattern& aPattern)
+{
   PROFILER_LABEL("gfxContext", "Fill",
     js::ProfileEntry::Category::GRAPHICS);
-  FillAzure(1.0f);
+  FillAzure(aPattern, 1.0f);
 }
 
 void
 gfxContext::FillWithOpacity(gfxFloat aOpacity)
 {
-  FillAzure(Float(aOpacity));
+  FillWithOpacity(PatternFromState(this), aOpacity);
+}
+
+void
+gfxContext::FillWithOpacity(const Pattern& aPattern, gfxFloat aOpacity)
+{
+  FillAzure(aPattern, Float(aOpacity));
 }
 
 void
@@ -431,38 +450,9 @@ gfxContext::DrawSurface(gfxASurface *surface, const gfxSize& size)
 
 // transform stuff
 void
-gfxContext::Translate(const gfxPoint& pt)
-{
-  Matrix newMatrix = mTransform;
-  ChangeTransform(newMatrix.PreTranslate(Float(pt.x), Float(pt.y)));
-}
-
-void
-gfxContext::Scale(gfxFloat x, gfxFloat y)
-{
-  Matrix newMatrix = mTransform;
-  ChangeTransform(newMatrix.PreScale(Float(x), Float(y)));
-}
-
-void
-gfxContext::Rotate(gfxFloat angle)
-{
-  Matrix rotation = Matrix::Rotation(Float(angle));
-  ChangeTransform(rotation * mTransform);
-}
-
-void
 gfxContext::Multiply(const gfxMatrix& matrix)
 {
   ChangeTransform(ToMatrix(matrix) * mTransform);
-}
-
-void
-gfxContext::MultiplyAndNudgeToIntegers(const gfxMatrix& matrix)
-{
-  Matrix transform = ToMatrix(matrix) * mTransform;
-  transform.NudgeToIntegers();
-  ChangeTransform(transform);
 }
 
 void
@@ -471,24 +461,10 @@ gfxContext::SetMatrix(const gfxMatrix& matrix)
   ChangeTransform(ToMatrix(matrix));
 }
 
-void
-gfxContext::IdentityMatrix()
-{
-  ChangeTransform(Matrix());
-}
-
 gfxMatrix
 gfxContext::CurrentMatrix() const
 {
   return ThebesMatrix(mTransform);
-}
-
-void
-gfxContext::NudgeCurrentMatrixToIntegers()
-{
-  gfxMatrix matrix = ThebesMatrix(mTransform);
-  matrix.NudgeToIntegers();
-  ChangeTransform(ToMatrix(matrix));
 }
 
 gfxPoint
@@ -628,20 +604,13 @@ gfxContext::PixelSnappedRectangleAndSetPattern(const gfxRect& rect,
 void
 gfxContext::SetAntialiasMode(AntialiasMode mode)
 {
-  if (mode == MODE_ALIASED) {
-    CurrentState().aaMode = gfx::AntialiasMode::NONE;
-  } else if (mode == MODE_COVERAGE) {
-    CurrentState().aaMode = gfx::AntialiasMode::SUBPIXEL;
-  }
+  CurrentState().aaMode = mode;
 }
 
-gfxContext::AntialiasMode
+AntialiasMode
 gfxContext::CurrentAntialiasMode() const
 {
-  if (CurrentState().aaMode == gfx::AntialiasMode::NONE) {
-    return MODE_ALIASED;
-  }
-  return MODE_COVERAGE;
+  return CurrentState().aaMode;
 }
 
 void
@@ -772,13 +741,13 @@ gfxContext::CurrentMiterLimit() const
 void
 gfxContext::SetFillRule(FillRule rule)
 {
-  CurrentState().fillRule = rule == FILL_RULE_WINDING ? gfx::FillRule::FILL_WINDING : gfx::FillRule::FILL_EVEN_ODD;
+  CurrentState().fillRule = rule;
 }
 
-gfxContext::FillRule
+FillRule
 gfxContext::CurrentFillRule() const
 {
-  return FILL_RULE_WINDING;
+  return CurrentState().fillRule;
 }
 
 // clipping
@@ -969,44 +938,15 @@ gfxContext::GetPattern()
 
 // masking
 void
-gfxContext::Mask(gfxPattern *pattern)
+gfxContext::Mask(SourceSurface* aSurface, const Matrix& aTransform)
 {
-  if (pattern->Extend() == gfxPattern::EXTEND_NONE) {
-    // In this situation the mask will be fully transparent (i.e. nothing
-    // will be drawn) outside of the bounds of the surface. We can support
-    // that by clipping out drawing to that area.
-    Point offset;
-    if (pattern->IsAzure()) {
-      // This is an Azure pattern. i.e. this was the result of a PopGroup and
-      // then the extend mode was changed to EXTEND_NONE.
-      // XXX - We may need some additional magic here in theory to support
-      // device offsets in these patterns, but no problems have been observed
-      // yet because of this. And it would complicate things a little further.
-      offset = Point(0.f, 0.f);
-    } else if (pattern->GetType() == gfxPattern::PATTERN_SURFACE) {
-      nsRefPtr<gfxASurface> asurf = pattern->GetSurface();
-      gfxPoint deviceOffset = asurf->GetDeviceOffset();
-      offset = Point(-deviceOffset.x, -deviceOffset.y);
+  Matrix old = mTransform;
+  Matrix mat = aTransform * mTransform;
 
-      // this lets GetAzureSurface work
-      pattern->GetPattern(mDT);
-    }
-
-    if (pattern->IsAzure() || pattern->GetType() == gfxPattern::PATTERN_SURFACE) {
-      RefPtr<SourceSurface> mask = pattern->GetAzureSurface();
-      Matrix mat = ToMatrix(pattern->GetInverseMatrix());
-      Matrix old = mTransform;
-      // add in the inverse of the pattern transform so that when we
-      // MaskSurface we are transformed to the place matching the pattern transform
-      mat = mat * mTransform;
-
-      ChangeTransform(mat);
-      mDT->MaskSurface(GeneralPattern(this), mask, offset, DrawOptions(1.0f, CurrentState().op, CurrentState().aaMode));
-      ChangeTransform(old);
-      return;
-    }
-  }
-  mDT->Mask(GeneralPattern(this), *pattern->GetPattern(mDT), DrawOptions(1.0f, CurrentState().op, CurrentState().aaMode));
+  ChangeTransform(mat);
+  mDT->MaskSurface(PatternFromState(this), aSurface, Point(),
+                   DrawOptions(1.0f, CurrentState().op, CurrentState().aaMode));
+  ChangeTransform(old);
 }
 
 void
@@ -1032,7 +972,7 @@ void
 gfxContext::Mask(SourceSurface *surface, const Point& offset)
 {
   // We clip here to bind to the mask surface bounds, see above.
-  mDT->MaskSurface(GeneralPattern(this),
+  mDT->MaskSurface(PatternFromState(this),
             surface,
             offset,
             DrawOptions(1.0f, CurrentState().op, CurrentState().aaMode));
@@ -1073,7 +1013,7 @@ gfxContext::Paint(gfxFloat alpha)
   if (state.opIsClear) {
     mDT->ClearRect(paintRect);
   } else {
-    mDT->FillRect(paintRect, GeneralPattern(this),
+    mDT->FillRect(paintRect, PatternFromState(this),
                   DrawOptions(Float(alpha), GetOp()));
   }
 }
@@ -1083,9 +1023,13 @@ gfxContext::Paint(gfxFloat alpha)
 void
 gfxContext::PushGroup(gfxContentType content)
 {
+  DrawTarget* oldDT = mDT;
+
   PushNewDT(content);
 
-  PushClipsToDT(mDT);
+  if (oldDT != mDT) {
+    PushClipsToDT(mDT);
+  }
   mDT->SetTransform(GetDTTransform());
 }
 
@@ -1093,7 +1037,7 @@ static gfxRect
 GetRoundOutDeviceClipExtents(gfxContext* aCtx)
 {
   gfxContextMatrixAutoSaveRestore save(aCtx);
-  aCtx->IdentityMatrix();
+  aCtx->SetMatrix(gfxMatrix());
   gfxRect r = aCtx->GetClipExtents();
   r.RoundOut();
   return r;
@@ -1115,6 +1059,11 @@ gfxContext::PushGroupAndCopyBackground(gfxContentType content)
     Point oldDeviceOffset = CurrentState().deviceOffset;
 
     PushNewDT(gfxContentType::COLOR);
+
+    if (oldDT == mDT) {
+      // Creating new DT failed.
+      return;
+    }
 
     Point offset = CurrentState().deviceOffset - oldDeviceOffset;
     Rect surfRect(0, 0, Float(mDT->GetSize().width), Float(mDT->GetSize().height));
@@ -1168,6 +1117,24 @@ gfxContext::PopGroup()
   nsRefPtr<gfxPattern> pat = new gfxPattern(src, mat);
 
   return pat.forget();
+}
+
+TemporaryRef<SourceSurface>
+gfxContext::PopGroupToSurface(Matrix* aTransform)
+{
+  RefPtr<SourceSurface> src = mDT->Snapshot();
+  Point deviceOffset = CurrentState().deviceOffset;
+
+  Restore();
+
+  Matrix mat = mTransform;
+  mat.Invert();
+
+  Matrix deviceOffsetTranslation;
+  deviceOffsetTranslation.PreTranslate(deviceOffset.x, deviceOffset.y);
+
+  *aTransform = deviceOffsetTranslation * mat;
+  return src;
 }
 
 void
@@ -1436,7 +1403,7 @@ gfxContext::EnsurePathBuilder()
 }
 
 void
-gfxContext::FillAzure(Float aOpacity)
+gfxContext::FillAzure(const Pattern& aPattern, Float aOpacity)
 {
   AzureState &state = CurrentState();
 
@@ -1450,16 +1417,16 @@ gfxContext::FillAzure(Float aOpacity)
     } else if (op == CompositionOp::OP_SOURCE) {
       // Emulate cairo operator source which is bound by mask!
       mDT->ClearRect(mRect);
-      mDT->FillRect(mRect, GeneralPattern(this), DrawOptions(aOpacity));
+      mDT->FillRect(mRect, aPattern, DrawOptions(aOpacity));
     } else {
-      mDT->FillRect(mRect, GeneralPattern(this), DrawOptions(aOpacity, op, state.aaMode));
+      mDT->FillRect(mRect, aPattern, DrawOptions(aOpacity, op, state.aaMode));
     }
   } else {
     EnsurePath();
 
     NS_ASSERTION(!state.opIsClear, "We shouldn't be clearing complex paths!");
 
-    mDT->Fill(mPath, GeneralPattern(this), DrawOptions(aOpacity, op, state.aaMode));
+    mDT->Fill(mPath, aPattern, DrawOptions(aOpacity, op, state.aaMode));
   }
 }
 
@@ -1648,8 +1615,11 @@ gfxContext::PushNewDT(gfxContentType content)
     newDT = mDT->CreateSimilarDrawTarget(IntSize(64, 64), format);
 
     if (!newDT) {
-      // If even this fails.. we're most likely just out of memory!
-      NS_ABORT_OOM(BytesPerPixel(format) * 64 * 64);
+      if (!gfxPlatform::GetPlatform()->DidRenderingDeviceReset()) {
+        // If even this fails.. we're most likely just out of memory!
+        NS_ABORT_OOM(BytesPerPixel(format) * 64 * 64);
+      }
+      newDT = CurrentState().drawTarget;
     }
   }
 

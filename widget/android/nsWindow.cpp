@@ -809,8 +809,8 @@ nsWindow::OnGlobalAndroidEvent(AndroidGeckoEvent *ae)
             gAndroidScreenBounds.width = newScreenWidth;
             gAndroidScreenBounds.height = newScreenHeight;
 
-            if (XRE_GetProcessType() != GeckoProcessType_Default ||
-                !BrowserTabsRemote()) {
+            if (XRE_GetProcessType() != GeckoProcessType_Default &&
+                !Preferences::GetBool("browser.tabs.remote.desktopbehavior", false)) {
                 break;
             }
 
@@ -1171,22 +1171,6 @@ nsWindow::DispatchGestureEvent(uint32_t msg, uint32_t direction, double delta,
     DispatchEvent(&event);
 }
 
-
-void
-nsWindow::DispatchMotionEvent(WidgetInputEvent &event, AndroidGeckoEvent *ae,
-                              const nsIntPoint &refPoint)
-{
-    nsIntPoint offset = WidgetToScreenOffset();
-
-    event.modifiers = ae->DOMModifiers();
-    event.time = ae->Time();
-
-    // XXX possibly bound the range of event.refPoint here.
-    //     some code may get confused.
-    event.refPoint = LayoutDeviceIntPoint::FromUntyped(refPoint - offset);
-
-    DispatchEvent(&event);
-}
 
 static unsigned int ConvertAndroidKeyCodeToDOMKeyCode(int androidKeyCode)
 {

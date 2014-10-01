@@ -631,6 +631,10 @@ void
 CairoTextureClientD3D9::Unlock()
 {
   MOZ_ASSERT(mIsLocked, "Unlocked called while the texture is not locked!");
+  if (!mIsLocked) {
+    return;
+  }
+
   if (mDrawTarget) {
     mDrawTarget->Flush();
     mDrawTarget = nullptr;
@@ -664,6 +668,11 @@ gfx::DrawTarget*
 CairoTextureClientD3D9::BorrowDrawTarget()
 {
   MOZ_ASSERT(mIsLocked && mD3D9Surface);
+  if (!mIsLocked || !mD3D9Surface) {
+    NS_WARNING("Calling BorrowDrawTarget on an Unlocked TextureClient");
+    return nullptr;
+  }
+
   if (mDrawTarget) {
     return mDrawTarget;
   }

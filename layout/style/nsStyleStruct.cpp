@@ -704,9 +704,12 @@ nsChangeHint nsStyleList::CalcDifference(const nsStyleList& aOther) const
   if (mListStylePosition != aOther.mListStylePosition)
     return NS_STYLE_HINT_FRAMECHANGE;
   if (EqualImages(mListStyleImage, aOther.mListStyleImage) &&
-      mListStyleType == aOther.mListStyleType) {
-    if (mImageRegion.IsEqualInterior(aOther.mImageRegion))
+      mCounterStyle == aOther.mCounterStyle) {
+    if (mImageRegion.IsEqualInterior(aOther.mImageRegion)) {
+      if (mListStyleType != aOther.mListStyleType)
+        return nsChangeHint_NeutralChange;
       return NS_STYLE_HINT_NONE;
+    }
     if (mImageRegion.width == aOther.mImageRegion.width &&
         mImageRegion.height == aOther.mImageRegion.height)
       return NS_STYLE_HINT_VISUAL;
@@ -1028,6 +1031,119 @@ nsChangeHint nsStyleSVG::CalcDifference(const nsStyleSVG& aOther) const
 }
 
 // --------------------
+// nsStyleClipPath
+//
+nsStyleClipPath::nsStyleClipPath()
+  : mType(NS_STYLE_CLIP_PATH_NONE)
+  , mURL(nullptr)
+  , mSizingBox(NS_STYLE_CLIP_SHAPE_SIZING_NOBOX)
+{
+}
+
+nsStyleClipPath::nsStyleClipPath(const nsStyleClipPath& aSource)
+  : mType(NS_STYLE_CLIP_PATH_NONE)
+  , mURL(nullptr)
+  , mSizingBox(NS_STYLE_CLIP_SHAPE_SIZING_NOBOX)
+{
+  if (aSource.mType == NS_STYLE_CLIP_PATH_URL) {
+    SetURL(aSource.mURL);
+  } else if (aSource.mType == NS_STYLE_CLIP_PATH_SHAPE) {
+    SetBasicShape(aSource.mBasicShape, aSource.mSizingBox);
+  } else if (aSource.mType == NS_STYLE_CLIP_PATH_SHAPE) {
+    SetSizingBox(aSource.mSizingBox);
+  }
+}
+
+nsStyleClipPath::~nsStyleClipPath()
+{
+  ReleaseRef();
+}
+
+nsStyleClipPath&
+nsStyleClipPath::operator=(const nsStyleClipPath& aOther)
+{
+  if (this == &aOther) {
+    return *this;
+  }
+
+  ReleaseRef();
+
+  if (aOther.mType == NS_STYLE_CLIP_PATH_URL) {
+    SetURL(aOther.mURL);
+  } else if (aOther.mType == NS_STYLE_CLIP_PATH_SHAPE) {
+    SetBasicShape(aOther.mBasicShape, aOther.mSizingBox);
+  } else if (aOther.mType == NS_STYLE_CLIP_PATH_BOX) {
+    SetSizingBox(aOther.mSizingBox);
+  } else {
+    mSizingBox = NS_STYLE_CLIP_SHAPE_SIZING_NOBOX;
+    mType = NS_STYLE_CLIP_PATH_NONE;
+  }
+  return *this;
+}
+
+
+bool
+nsStyleClipPath::operator==(const nsStyleClipPath& aOther) const
+{
+  if (mType != aOther.mType) {
+    return false;
+  }
+
+  if (mType == NS_STYLE_CLIP_PATH_URL) {
+    return EqualURIs(mURL, aOther.mURL);
+  } else if (mType == NS_STYLE_CLIP_PATH_SHAPE) {
+    return *mBasicShape == *aOther.mBasicShape &&
+           mSizingBox == aOther.mSizingBox;
+  } else if (mType == NS_STYLE_CLIP_PATH_BOX) {
+    return mSizingBox == aOther.mSizingBox;
+  }
+
+  return true;
+}
+
+void
+nsStyleClipPath::ReleaseRef()
+{
+  if (mType == NS_STYLE_CLIP_PATH_SHAPE) {
+    NS_ASSERTION(mBasicShape, "expected pointer");
+    mBasicShape->Release();
+  } else if (mType == NS_STYLE_CLIP_PATH_URL) {
+    NS_ASSERTION(mURL, "expected pointer");
+    mURL->Release();
+  }
+  mURL = nullptr;
+}
+
+void
+nsStyleClipPath::SetURL(nsIURI* aURL)
+{
+  NS_ASSERTION(aURL, "expected pointer");
+  ReleaseRef();
+  mURL = aURL;
+  mURL->AddRef();
+  mType = NS_STYLE_CLIP_PATH_URL;
+}
+
+void
+nsStyleClipPath::SetBasicShape(nsStyleBasicShape* aBasicShape, uint8_t aSizingBox)
+{
+  NS_ASSERTION(aBasicShape, "expected pointer");
+  ReleaseRef();
+  mBasicShape = aBasicShape;
+  mBasicShape->AddRef();
+  mSizingBox = aSizingBox;
+  mType = NS_STYLE_CLIP_PATH_SHAPE;
+}
+
+void
+nsStyleClipPath::SetSizingBox(uint8_t aSizingBox)
+{
+  ReleaseRef();
+  mSizingBox = aSizingBox;
+  mType = NS_STYLE_CLIP_PATH_BOX;
+}
+
+// --------------------
 // nsStyleFilter
 //
 nsStyleFilter::nsStyleFilter()
@@ -1142,7 +1258,6 @@ nsStyleSVGReset::nsStyleSVGReset()
     mStopColor               = NS_RGB(0,0,0);
     mFloodColor              = NS_RGB(0,0,0);
     mLightingColor           = NS_RGB(255,255,255);
-    mClipPath                = nullptr;
     mMask                    = nullptr;
     mStopOpacity             = 1.0f;
     mFloodOpacity            = 1.0f;
@@ -1176,7 +1291,7 @@ nsChangeHint nsStyleSVGReset::CalcDifference(const nsStyleSVGReset& aOther) cons
 {
   nsChangeHint hint = nsChangeHint(0);
 
-  if (!EqualURIs(mClipPath, aOther.mClipPath) ||
+  if (mClipPath != aOther.mClipPath ||
       !EqualURIs(mMask, aOther.mMask) ||
       mFilters != aOther.mFilters) {
     NS_UpdateHint(hint, nsChangeHint_UpdateEffects);
@@ -2611,6 +2726,10 @@ nsChangeHint nsStyleDisplay::CalcDifference(const nsStyleDisplay& aOther) const
     }
   }
 
+  if (mMixBlendMode != aOther.mMixBlendMode) {
+    NS_UpdateHint(hint, nsChangeHint_RepaintFrame);
+  }
+
   /* If we've added or removed the transform property, we need to reconstruct the frame to add
    * or remove the view object, and also to handle abs-pos and fixed-pos containers.
    */
@@ -2708,7 +2827,6 @@ nsChangeHint nsStyleDisplay::CalcDifference(const nsStyleDisplay& aOther) const
       (!mClip.IsEqualEdges(aOther.mClip) ||
        mOriginalDisplay != aOther.mOriginalDisplay ||
        mOriginalFloats != aOther.mOriginalFloats ||
-       mMixBlendMode != aOther.mMixBlendMode ||
        mTransitions != aOther.mTransitions ||
        mTransitionTimingFunctionCount !=
          aOther.mTransitionTimingFunctionCount ||
@@ -3206,7 +3324,7 @@ nsStyleText::nsStyleText(void)
   mWordWrap = NS_STYLE_WORDWRAP_NORMAL;
   mHyphens = NS_STYLE_HYPHENS_MANUAL;
   mTextSizeAdjust = NS_STYLE_TEXT_SIZE_ADJUST_AUTO;
-  mTextOrientation = NS_STYLE_TEXT_ORIENTATION_AUTO;
+  mTextOrientation = NS_STYLE_TEXT_ORIENTATION_MIXED;
   mTextCombineUpright = NS_STYLE_TEXT_COMBINE_UPRIGHT_NONE;
   mControlCharacterVisibility = NS_STYLE_CONTROL_CHARACTER_VISIBILITY_HIDDEN;
 
@@ -3325,6 +3443,7 @@ nsStyleUserInterface::nsStyleUserInterface(void)
   mUserInput = NS_STYLE_USER_INPUT_AUTO;
   mUserModify = NS_STYLE_USER_MODIFY_READ_ONLY;
   mUserFocus = NS_STYLE_USER_FOCUS_NONE;
+  mWindowDragging = NS_STYLE_WINDOW_DRAGGING_NO_DRAG;
 
   mCursor = NS_STYLE_CURSOR_AUTO; // fix for bugzilla bug 51113
 
@@ -3336,6 +3455,7 @@ nsStyleUserInterface::nsStyleUserInterface(const nsStyleUserInterface& aSource) 
   mUserInput(aSource.mUserInput),
   mUserModify(aSource.mUserModify),
   mUserFocus(aSource.mUserFocus),
+  mWindowDragging(aSource.mWindowDragging),
   mCursor(aSource.mCursor)
 { 
   MOZ_COUNT_CTOR(nsStyleUserInterface);
@@ -3373,6 +3493,10 @@ nsChangeHint nsStyleUserInterface::CalcDifference(const nsStyleUserInterface& aO
 
   if (mUserFocus != aOther.mUserFocus) {
     NS_UpdateHint(hint, nsChangeHint_NeutralChange);
+  }
+
+  if (mWindowDragging != aOther.mWindowDragging) {
+    NS_UpdateHint(hint, nsChangeHint_SchedulePaint);
   }
 
   return hint;

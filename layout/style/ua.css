@@ -99,6 +99,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* SVG documents don't always load this file but they do have links.
+ * If you change the link rules, consider carefully whether to make
+ * the same changes to svg.css.
+ */
+
 /* Links */
 
 *|*:-moz-any-link {
@@ -363,7 +368,7 @@ div[\_moz_anonclass="mozTouchCaret"].moz-selectioncaret-right.tilt {
 
 @media (min-resolution: 2.25dppx) {
   div[\_moz_anonclass="mozTouchCaret"].moz-touchcaret,
-  div[\_moz_anonclass="mozTouchCaret"].moz-selectioncaret-left
+  div[\_moz_anonclass="mozTouchCaret"].moz-selectioncaret-left,
   div[\_moz_anonclass="mozTouchCaret"].moz-selectioncaret-right {
     background-image: url("resource://gre/res/text_caret@2.25x.png");
   }

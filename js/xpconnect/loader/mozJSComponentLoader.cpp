@@ -389,7 +389,8 @@ mozJSComponentLoader::ReallyInit()
     // XXXkhuey B2G child processes have some sort of preferences race that
     // results in getting the wrong value.
     // But we don't want that on Firefox Mulet as it break most Firefox JSMs...
-#if defined(MOZ_B2G) && !defined(MOZ_MULET)
+    // Also disable on debug builds to break js components that rely on this.
+#if defined(MOZ_B2G) && !defined(MOZ_MULET) && !defined(DEBUG)
     mReuseLoaderGlobal = true;
 #endif
 
@@ -728,7 +729,7 @@ mozJSComponentLoader::PrepareObjectForLocation(JSContext* aCx,
     if (createdNewGlobal) {
         // AutoEntryScript required to invoke debugger hook, which is a
         // Gecko-specific concept at present.
-        dom::AutoEntryScript aes(GetNativeForGlobal(holder->GetJSObject()));
+        dom::AutoEntryScript aes(NativeGlobal(holder->GetJSObject()));
         RootedObject global(aes.cx(), holder->GetJSObject());
         JS_FireOnNewGlobalObject(aes.cx(), global);
     }
@@ -1006,7 +1007,7 @@ mozJSComponentLoader::ObjectForLocation(ComponentLoaderInfo &aInfo,
         // We're going to run script via JS_ExecuteScriptVersion or
         // JS_CallFunction, so we need an AutoEntryScript.
         // This is Gecko-specific and not in any spec.
-        dom::AutoEntryScript aes(GetNativeForGlobal(CurrentGlobalOrNull(cx)));
+        dom::AutoEntryScript aes(NativeGlobal(CurrentGlobalOrNull(cx)));
         AutoSaveContextOptions asco(cx);
         if (aPropagateExceptions)
             ContextOptionsRef(cx).setDontReportUncaught(true);

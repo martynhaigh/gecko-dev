@@ -76,9 +76,6 @@ js::ErrorObject::init(JSContext *cx, Handle<ErrorObject*> obj, JSExnType type,
     if (message)
         obj->nativeSetSlotWithType(cx, messageShape, StringValue(message));
 
-    if (report && report->originPrincipals)
-        JS_HoldPrincipals(report->originPrincipals);
-
     return true;
 }
 
@@ -93,7 +90,8 @@ js::ErrorObject::create(JSContext *cx, JSExnType errorType, HandleString stack,
 
     Rooted<ErrorObject*> errObject(cx);
     {
-        JSObject* obj = NewObjectWithGivenProto(cx, &ErrorObject::class_, proto, nullptr);
+        const Class *clasp = ErrorObject::classForType(errorType);
+        JSObject* obj = NewObjectWithGivenProto(cx, clasp, proto, nullptr);
         if (!obj)
             return nullptr;
         errObject = &obj->as<ErrorObject>();

@@ -15,10 +15,17 @@
   var PanelView = loop.panel.PanelView;
   // 1.2. Conversation Window
   var IncomingCallView = loop.conversation.IncomingCallView;
+  var DesktopPendingConversationView = loop.conversationViews.PendingConversationView;
 
   // 2. Standalone webapp
-  var CallUrlExpiredView    = loop.webapp.CallUrlExpiredView;
-  var StartConversationView = loop.webapp.StartConversationView;
+  var HomeView = loop.webapp.HomeView;
+  var UnsupportedBrowserView  = loop.webapp.UnsupportedBrowserView;
+  var UnsupportedDeviceView   = loop.webapp.UnsupportedDeviceView;
+  var CallUrlExpiredView      = loop.webapp.CallUrlExpiredView;
+  var PendingConversationView = loop.webapp.PendingConversationView;
+  var StartConversationView   = loop.webapp.StartConversationView;
+  var FailedConversationView  = loop.webapp.FailedConversationView;
+  var EndedConversationView   = loop.webapp.EndedConversationView;
 
   // 3. Shared components
   var ConversationToolbar = loop.shared.views.ConversationToolbar;
@@ -57,6 +64,12 @@
     sdk: mockSDK
   });
   mockConversationModel.startSession = noop;
+
+  var mockWebSocket = new loop.CallConnectionWebSocket({
+    url: "fake",
+    callId: "fakeId",
+    websocketToken: "fakeToken"
+  });
 
   var notifications = new loop.shared.models.NotificationCollection();
   var errNotifications = new loop.shared.models.NotificationCollection();
@@ -122,26 +135,48 @@
               PanelView({client: mockClient, notifications: notifications, 
                          callUrl: "http://invalid.example.url/"})
             ), 
+            Example({summary: "Call URL retrieved - authenticated", dashed: "true", style: {width: "332px"}}, 
+              PanelView({client: mockClient, notifications: notifications, 
+                         callUrl: "http://invalid.example.url/", 
+                         userProfile: {email: "test@example.com"}})
+            ), 
             Example({summary: "Pending call url retrieval", dashed: "true", style: {width: "332px"}}, 
               PanelView({client: mockClient, notifications: notifications})
             ), 
+            Example({summary: "Pending call url retrieval - authenticated", dashed: "true", style: {width: "332px"}}, 
+              PanelView({client: mockClient, notifications: notifications, 
+                         userProfile: {email: "test@example.com"}})
+            ), 
             Example({summary: "Error Notification", dashed: "true", style: {width: "332px"}}, 
               PanelView({client: mockClient, notifications: errNotifications})
+            ), 
+            Example({summary: "Error Notification - authenticated", dashed: "true", style: {width: "332px"}}, 
+              PanelView({client: mockClient, notifications: errNotifications, 
+                         userProfile: {email: "test@example.com"}})
             )
           ), 
 
           Section({name: "IncomingCallView"}, 
-            Example({summary: "Default", dashed: "true", style: {width: "280px"}}, 
+            Example({summary: "Default / incoming video call", dashed: "true", style: {width: "260px", height: "254px"}}, 
               React.DOM.div({className: "fx-embedded"}, 
-                IncomingCallView({model: mockConversationModel})
+                IncomingCallView({model: mockConversationModel, 
+                                  video: true})
+              )
+            ), 
+
+            Example({summary: "Default / incoming audio only call", dashed: "true", style: {width: "260px", height: "254px"}}, 
+              React.DOM.div({className: "fx-embedded"}, 
+                IncomingCallView({model: mockConversationModel, 
+                                  video: false})
               )
             )
           ), 
 
           Section({name: "IncomingCallView-ActiveState"}, 
-            Example({summary: "Default", dashed: "true", style: {width: "280px"}}, 
+            Example({summary: "Default", dashed: "true", style: {width: "260px", height: "254px"}}, 
               React.DOM.div({className: "fx-embedded"}, 
-                IncomingCallView({model: mockConversationModel, showDeclineMenu: true})
+                IncomingCallView({model: mockConversationModel, 
+                                   showMenu: true})
               )
             )
           ), 
@@ -192,13 +227,44 @@
             )
           ), 
 
+          Section({name: "PendingConversationView"}, 
+            Example({summary: "Pending conversation view (connecting)", dashed: "true"}, 
+              React.DOM.div({className: "standalone"}, 
+                PendingConversationView({websocket: mockWebSocket})
+              )
+            ), 
+            Example({summary: "Pending conversation view (ringing)", dashed: "true"}, 
+              React.DOM.div({className: "standalone"}, 
+                PendingConversationView({websocket: mockWebSocket, callState: "ringing"})
+              )
+            )
+          ), 
+
+          Section({name: "PendingConversationView (Desktop)"}, 
+            Example({summary: "Connecting", dashed: "true", 
+                     style: {width: "260px", height: "265px"}}, 
+              React.DOM.div({className: "fx-embedded"}, 
+                DesktopPendingConversationView({callState: "gather", calleeId: "Mr Smith"})
+              )
+            )
+          ), 
+
           Section({name: "StartConversationView"}, 
             Example({summary: "Start conversation view", dashed: "true"}, 
               React.DOM.div({className: "standalone"}, 
-                StartConversationView({model: mockConversationModel, 
+                StartConversationView({conversation: mockConversationModel, 
                                        client: mockClient, 
-                                       notifications: notifications, 
-                                       showCallOptionsMenu: true})
+                                       notifications: notifications})
+              )
+            )
+          ), 
+
+          Section({name: "FailedConversationView"}, 
+            Example({summary: "Failed conversation view", dashed: "true"}, 
+              React.DOM.div({className: "standalone"}, 
+                FailedConversationView({conversation: mockConversationModel, 
+                                        client: mockClient, 
+                                        notifications: notifications})
               )
             )
           ), 
@@ -278,13 +344,13 @@
               React.DOM.strong(null, "Note:"), " For the useable demo, you can access submitted data at ", 
               React.DOM.a({href: "https://input.allizom.org/"}, "input.allizom.org"), "."
             ), 
-            Example({summary: "Default (useable demo)", dashed: "true", style: {width: "280px"}}, 
+            Example({summary: "Default (useable demo)", dashed: "true", style: {width: "260px"}}, 
               FeedbackView({feedbackApiClient: stageFeedbackApiClient})
             ), 
-            Example({summary: "Detailed form", dashed: "true", style: {width: "280px"}}, 
+            Example({summary: "Detailed form", dashed: "true", style: {width: "260px"}}, 
               FeedbackView({feedbackApiClient: stageFeedbackApiClient, step: "form"})
             ), 
-            Example({summary: "Thank you!", dashed: "true", style: {width: "280px"}}, 
+            Example({summary: "Thank you!", dashed: "true", style: {width: "260px"}}, 
               FeedbackView({feedbackApiClient: stageFeedbackApiClient, step: "finished"})
             )
           ), 
@@ -295,6 +361,19 @@
             ), 
             Example({summary: "Non-Firefox User"}, 
               CallUrlExpiredView({helper: {isFirefox: returnFalse}})
+            )
+          ), 
+
+          Section({name: "EndedConversationView"}, 
+            Example({summary: "Displays the feedback form"}, 
+              React.DOM.div({className: "standalone"}, 
+                EndedConversationView({sdk: mockSDK, 
+                                       video: {enabled: true}, 
+                                       audio: {enabled: true}, 
+                                       conversation: mockConversationModel, 
+                                       feedbackApiClient: stageFeedbackApiClient, 
+                                       onAfterFeedbackReceived: noop})
+              )
             )
           ), 
 
@@ -312,6 +391,31 @@
                 React.DOM.p({className: "message"}, 
                   "The person you were calling has ended the conversation."
                 )
+              )
+            )
+          ), 
+
+          Section({name: "HomeView"}, 
+            Example({summary: "Standalone Home View"}, 
+              React.DOM.div({className: "standalone"}, 
+                HomeView(null)
+              )
+            )
+          ), 
+
+
+          Section({name: "UnsupportedBrowserView"}, 
+            Example({summary: "Standalone Unsupported Browser"}, 
+              React.DOM.div({className: "standalone"}, 
+                UnsupportedBrowserView(null)
+              )
+            )
+          ), 
+
+          Section({name: "UnsupportedDeviceView"}, 
+            Example({summary: "Standalone Unsupported Device"}, 
+              React.DOM.div({className: "standalone"}, 
+                UnsupportedDeviceView(null)
               )
             )
           )
@@ -367,6 +471,9 @@
     React.renderComponent(App(null), body);
 
     _renderComponentsInIframes();
+
+    // Put the title back, in case views changed it.
+    document.title = "Loop UI Components Showcase";
   });
 
 })();

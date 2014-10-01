@@ -6,11 +6,17 @@
 
 EXPORTS += [
     'CryptoTask.h',
+    'nsClientAuthRemember.h',
     'nsCrypto.h',
+    'nsNSSCallbacks.h',
+    'nsNSSCertificate.h',
+    'nsNSSComponent.h',
+    'nsNSSHelper.h',
     'nsNSSShutDown.h',
     'nsRandomGenerator.h',
     'NSSErrorsService.h',
     'ScopedNSSTypes.h',
+    'SharedCertVerifier.h',
 ]
 
 EXPORTS.mozilla += [
@@ -19,7 +25,6 @@ EXPORTS.mozilla += [
 
 UNIFIED_SOURCES += [
     'CryptoTask.cpp',
-    'nsCertificatePrincipal.cpp',
     'nsCertOverrideService.cpp',
     'nsCertPicker.cpp',
     'nsCertVerificationThread.cpp',
@@ -37,7 +42,6 @@ UNIFIED_SOURCES += [
     'nsNSSCertificateFakeTransport.cpp',
     'nsNSSCertTrust.cpp',
     'nsNSSCertValidity.cpp',
-    'nsNSSCleaner.cpp',
     'nsNSSErrors.cpp',
     'nsNSSIOLayer.cpp',
     'nsNSSModule.cpp',

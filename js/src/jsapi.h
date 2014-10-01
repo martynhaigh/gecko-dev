@@ -690,7 +690,7 @@ typedef void
 (* JSFinalizeCallback)(JSFreeOp *fop, JSFinalizeStatus status, bool isCompartment, void *data);
 
 typedef void
-(* JSMovingGCCallback)(JSRuntime *rt, void *data);
+(* JSWeakPointerCallback)(JSRuntime *rt, void *data);
 
 typedef bool
 (* JSInterruptCallback)(JSContext *cx);
@@ -1814,6 +1814,17 @@ CurrentGlobalOrNull(JSContext *cx);
 extern JS_PUBLIC_API(JSObject *)
 JS_InitReflect(JSContext *cx, JS::HandleObject global);
 
+/*
+ * Add various profiling-related functions as properties of the given object.
+ * Defined in builtin/Profilers.cpp.
+ */
+extern JS_PUBLIC_API(bool)
+JS_DefineProfilingFunctions(JSContext *cx, JS::HandleObject obj);
+
+/* Defined in vm/Debugger.cpp. */
+extern JS_PUBLIC_API(bool)
+JS_DefineDebuggerObject(JSContext *cx, JS::HandleObject obj);
+
 #ifdef JS_HAS_CTYPES
 /*
  * Initialize the 'ctypes' object on a global variable 'obj'. The 'ctypes'
@@ -2028,12 +2039,6 @@ extern JS_PUBLIC_API(void)
 JS_RemoveFinalizeCallback(JSRuntime *rt, JSFinalizeCallback cb);
 
 extern JS_PUBLIC_API(bool)
-JS_AddMovingGCCallback(JSRuntime *rt, JSMovingGCCallback cb, void *data);
-
-extern JS_PUBLIC_API(void)
-JS_RemoveMovingGCCallback(JSRuntime *rt, JSMovingGCCallback cb);
-
-extern JS_PUBLIC_API(bool)
 JS_IsGCMarkingTracer(JSTracer *trc);
 
 /* For assertions only. */
@@ -2043,26 +2048,41 @@ JS_IsMarkingGray(JSTracer *trc);
 #endif
 
 /*
- * JS_IsAboutToBeFinalized checks if the given object is going to be finalized
- * at the end of the current GC. When called outside of the context of a GC,
- * this function will return false. Typically this function is used on weak
- * references, where the reference should be nulled out or destroyed if the
- * given object is about to be finalized.
+ * Weak pointers and garbage collection
  *
- * The argument to JS_IsAboutToBeFinalized is an in-out param: when the
- * function returns false, the object being referenced is still alive, but the
- * garbage collector might have moved it. In this case, the reference passed
- * to JS_IsAboutToBeFinalized will be updated to the object's new location.
+ * Weak pointers are by their nature not marked as part of garbage collection,
+ * but they may need to be updated in two cases after a GC:
+ *
+ *  1) Their referent was found not to be live and is about to be finalized
+ *  2) Their referent has been moved by a compacting GC
+ *
+ * To handle this, any part of the system that maintain weak pointers to
+ * JavaScript GC things must register a callback with
+ * JS_(Add,Remove)WeakPointerCallback().  This callback must then call
+ * JS_UpdateWeakPointerAfterGC() on all weak pointers it knows about.
+ *
+ * The argument to JS_UpdateWeakPointerAfterGC() is an in-out param.  If the
+ * referent is about to be finalized the pointer will be set to null.  If the
+ * referent has been moved then the pointer will be updated to point to the new
+ * location.
+ *
  * Callers of this method are responsible for updating any state that is
  * dependent on the object's address. For example, if the object's address is
  * used as a key in a hashtable, then the object must be removed and
  * re-inserted with the correct hash.
  */
-extern JS_PUBLIC_API(bool)
-JS_IsAboutToBeFinalized(JS::Heap<JSObject *> *objp);
 
 extern JS_PUBLIC_API(bool)
-JS_IsAboutToBeFinalizedUnbarriered(JSObject **objp);
+JS_AddWeakPointerCallback(JSRuntime *rt, JSWeakPointerCallback cb, void *data);
+
+extern JS_PUBLIC_API(void)
+JS_RemoveWeakPointerCallback(JSRuntime *rt, JSWeakPointerCallback cb);
+
+extern JS_PUBLIC_API(void)
+JS_UpdateWeakPointerAfterGC(JS::Heap<JSObject *> *objp);
+
+extern JS_PUBLIC_API(void)
+JS_UpdateWeakPointerAfterGCUnbarriered(JSObject **objp);
 
 typedef enum JSGCParamKey {
     /* Maximum nominal heap before last ditch GC. */
@@ -2074,7 +2094,7 @@ typedef enum JSGCParamKey {
     /* Amount of bytes allocated by the GC. */
     JSGC_BYTES = 3,
 
-    /* Number of times when GC was invoked. */
+    /* Number of times GC has been invoked. Includes both major and minor GC. */
     JSGC_NUMBER = 4,
 
     /* Max size of the code cache in bytes. */
@@ -2303,12 +2323,14 @@ extern JS_PUBLIC_API(bool)
 JS_ConvertStub(JSContext *cx, JS::HandleObject obj, JSType type,
                JS::MutableHandleValue vp);
 
-struct JSConstDoubleSpec {
-    double          dval;
-    const char      *name;
-    uint8_t         flags;
-    uint8_t         spare[3];
+template<typename T>
+struct JSConstScalarSpec {
+    const char *name;
+    T val;
 };
+
+typedef JSConstScalarSpec<double> JSConstDoubleSpec;
+typedef JSConstScalarSpec<int32_t> JSConstIntegerSpec;
 
 struct JSJitInfo;
 
@@ -2560,6 +2582,7 @@ class JS_PUBLIC_API(CompartmentOptions)
       , traceGlobal_(nullptr)
       , singletonsAsTemplates_(true)
       , addonId_(nullptr)
+      , preserveJitCode_(false)
     {
         zone_.spec = JS::FreshZone;
     }
@@ -2640,6 +2663,12 @@ class JS_PUBLIC_API(CompartmentOptions)
         return traceGlobal_;
     }
 
+    bool preserveJitCode() const { return preserveJitCode_; }
+    CompartmentOptions &setPreserveJitCode(bool flag) {
+        preserveJitCode_ = flag;
+        return *this;
+    }
+
   private:
     JSVersion version_;
     bool invisibleToDebugger_;
@@ -2659,6 +2688,7 @@ class JS_PUBLIC_API(CompartmentOptions)
     bool singletonsAsTemplates_;
 
     JSAddonId *addonId_;
+    bool preserveJitCode_;
 };
 
 JS_PUBLIC_API(CompartmentOptions &)
@@ -2765,6 +2795,9 @@ JS_DefineObject(JSContext *cx, JS::HandleObject obj, const char *name,
 
 extern JS_PUBLIC_API(bool)
 JS_DefineConstDoubles(JSContext *cx, JS::HandleObject obj, const JSConstDoubleSpec *cds);
+
+extern JS_PUBLIC_API(bool)
+JS_DefineConstIntegers(JSContext *cx, JS::HandleObject obj, const JSConstIntegerSpec *cis);
 
 extern JS_PUBLIC_API(bool)
 JS_DefineProperties(JSContext *cx, JS::HandleObject obj, const JSPropertySpec *ps);
@@ -3286,7 +3319,7 @@ JS_NewPropertyIterator(JSContext *cx, JS::Handle<JSObject*> obj);
  * left to visit.  Return false on error.
  */
 extern JS_PUBLIC_API(bool)
-JS_NextProperty(JSContext *cx, JS::Handle<JSObject*> iterobj, jsid *idp);
+JS_NextProperty(JSContext *cx, JS::HandleObject iterobj, JS::MutableHandleId idp);
 
 extern JS_PUBLIC_API(jsval)
 JS_GetReservedSlot(JSObject *obj, uint32_t index);
@@ -3348,6 +3381,20 @@ extern JS_PUBLIC_API(uint16_t)
 JS_GetFunctionArity(JSFunction *fun);
 
 /*
+ * API for determining callability and constructability. This does the right
+ * thing for proxies.
+ */
+namespace JS {
+
+extern JS_PUBLIC_API(bool)
+IsCallable(JSObject *obj);
+
+extern JS_PUBLIC_API(bool)
+IsConstructor(JSObject *obj);
+
+} /* namespace JS */
+
+/*
  * Infallible predicate to test whether obj is a function object (faster than
  * comparing obj's class name to "Function", but equivalent unless someone has
  * overwritten the "Function" identifier with a different constructor and then
@@ -3355,9 +3402,6 @@ JS_GetFunctionArity(JSFunction *fun);
  */
 extern JS_PUBLIC_API(bool)
 JS_ObjectIsFunction(JSContext *cx, JSObject *obj);
-
-extern JS_PUBLIC_API(bool)
-JS_ObjectIsCallable(JSContext *cx, JSObject *obj);
 
 extern JS_PUBLIC_API(bool)
 JS_IsNativeFunction(JSObject *funobj, JSNative call);
@@ -3500,7 +3544,18 @@ class JS_FRIEND_API(ReadOnlyCompileOptions)
     friend class CompileOptions;
 
   protected:
-    JSPrincipals *originPrincipals_;
+    // The Web Platform allows scripts to be loaded from arbitrary cross-origin
+    // sources. This allows an attack by which a malicious website loads a
+    // sensitive file (say, a bank statement) cross-origin (using the user's
+    // cookies), and sniffs the generated syntax errors (via a window.onerror
+    // handler) for juicy morsels of its contents.
+    //
+    // To counter this attack, HTML5 specifies that script errors should be
+    // sanitized ("muted") when the script is not same-origin with the global
+    // for which it is loaded. Callers should set this flag for cross-origin
+    // scripts, and it will be propagated appropriately to child scripts and
+    // passed back in JSErrorReports.
+    bool mutedErrors_;
     const char *filename_;
     const char *introducerFilename_;
     const char16_t *sourceMapURL_;
@@ -3510,7 +3565,7 @@ class JS_FRIEND_API(ReadOnlyCompileOptions)
     // classes' constructors take care of that, in ways appropriate to their
     // purpose.
     ReadOnlyCompileOptions()
-      : originPrincipals_(nullptr),
+      : mutedErrors_(false),
         filename_(nullptr),
         introducerFilename_(nullptr),
         sourceMapURL_(nullptr),
@@ -3545,7 +3600,7 @@ class JS_FRIEND_API(ReadOnlyCompileOptions)
   public:
     // Read-only accessors for non-POD options. The proper way to set these
     // depends on the derived type.
-    JSPrincipals *originPrincipals(js::ExclusiveContext *cx) const;
+    bool mutedErrors() const { return mutedErrors_; }
     const char *filename() const { return filename_; }
     const char *introducerFilename() const { return introducerFilename_; }
     const char16_t *sourceMapURL() const { return sourceMapURL_; }
@@ -3640,10 +3695,8 @@ class JS_FRIEND_API(OwningCompileOptions) : public ReadOnlyCompileOptions
         introductionScriptRoot = s;
         return *this;
     }
-    OwningCompileOptions &setOriginPrincipals(JSPrincipals *p) {
-        if (p) JS_HoldPrincipals(p);
-        if (originPrincipals_) JS_DropPrincipals(runtime, originPrincipals_);
-        originPrincipals_ = p;
+    OwningCompileOptions &setMutedErrors(bool mute) {
+        mutedErrors_ = mute;
         return *this;
     }
     OwningCompileOptions &setVersion(JSVersion v) {
@@ -3699,7 +3752,7 @@ class MOZ_STACK_CLASS JS_FRIEND_API(CompileOptions) : public ReadOnlyCompileOpti
     {
         copyPODOptions(rhs);
 
-        originPrincipals_ = rhs.originPrincipals_;
+        mutedErrors_ = rhs.mutedErrors_;
         filename_ = rhs.filename();
         sourceMapURL_ = rhs.sourceMapURL();
         elementRoot = rhs.element();
@@ -3726,8 +3779,8 @@ class MOZ_STACK_CLASS JS_FRIEND_API(CompileOptions) : public ReadOnlyCompileOpti
         introductionScriptRoot = s;
         return *this;
     }
-    CompileOptions &setOriginPrincipals(JSPrincipals *p) {
-        originPrincipals_ = p;
+    CompileOptions &setMutedErrors(bool mute) {
+        mutedErrors_ = mute;
         return *this;
     }
     CompileOptions &setVersion(JSVersion v) {
@@ -4594,7 +4647,7 @@ JS_ReportAllocationOverflow(JSContext *cx);
 
 struct JSErrorReport {
     const char      *filename;      /* source file name, URL, etc., or null */
-    JSPrincipals    *originPrincipals; /* see 'originPrincipals' comment above */
+    bool            isMuted;        /* See the comment in ReadOnlyCompileOptions. */
     unsigned        lineno;         /* source line number */
     const char      *linebuf;       /* offending source line without final \n */
     const char      *tokenptr;      /* pointer to error token in linebuf */
@@ -5020,11 +5073,10 @@ extern JS_PUBLIC_API(void *)
 JS_EncodeInterpretedFunction(JSContext *cx, JS::HandleObject funobj, uint32_t *lengthp);
 
 extern JS_PUBLIC_API(JSScript *)
-JS_DecodeScript(JSContext *cx, const void *data, uint32_t length, JSPrincipals *originPrincipals);
+JS_DecodeScript(JSContext *cx, const void *data, uint32_t length);
 
 extern JS_PUBLIC_API(JSObject *)
-JS_DecodeInterpretedFunction(JSContext *cx, const void *data, uint32_t length,
-                             JSPrincipals *originPrincipals);
+JS_DecodeInterpretedFunction(JSContext *cx, const void *data, uint32_t length);
 
 namespace JS {
 
@@ -5139,10 +5191,10 @@ class MOZ_STACK_CLASS JS_PUBLIC_API(ForOfIterator) {
     };
 
     /*
-     * Initialize the iterator.  If AllowNonIterable is passed then if iterable
-     * does not have a callable @@iterator init() will just return true instead
-     * of throwing.  Callers should then check valueIsIterable() before
-     * continuing with the iteration.
+     * Initialize the iterator.  If AllowNonIterable is passed then if getting
+     * the @@iterator property from iterable returns undefined init() will just
+     * return true instead of throwing.  Callers must then check
+     * valueIsIterable() before continuing with the iteration.
      */
     bool init(JS::HandleValue iterable,
               NonIterableBehavior nonIterableBehavior = ThrowOnNonIterable);

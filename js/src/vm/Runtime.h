@@ -315,18 +315,23 @@ class NewObjectCache
     void invalidateEntriesForShape(JSContext *cx, HandleShape shape, HandleObject proto);
 
   private:
-    bool lookup(const Class *clasp, gc::Cell *key, gc::AllocKind kind, EntryIndex *pentry) {
+    EntryIndex makeIndex(const Class *clasp, gc::Cell *key, gc::AllocKind kind) {
         uintptr_t hash = (uintptr_t(clasp) ^ uintptr_t(key)) + kind;
-        *pentry = hash % mozilla::ArrayLength(entries);
+        return hash % mozilla::ArrayLength(entries);
+    }
 
+    bool lookup(const Class *clasp, gc::Cell *key, gc::AllocKind kind, EntryIndex *pentry) {
+        *pentry = makeIndex(clasp, key, kind);
         Entry *entry = &entries[*pentry];
 
         /* N.B. Lookups with the same clasp/key but different kinds map to different entries. */
         return entry->clasp == clasp && entry->key == key;
     }
 
-    void fill(EntryIndex entry_, const Class *clasp, gc::Cell *key, gc::AllocKind kind, JSObject *obj) {
+    void fill(EntryIndex entry_, const Class *clasp, gc::Cell *key, gc::AllocKind kind,
+              JSObject *obj) {
         JS_ASSERT(unsigned(entry_) < mozilla::ArrayLength(entries));
+        JS_ASSERT(entry_ == makeIndex(clasp, key, kind));
         Entry *entry = &entries[entry_];
 
         JS_ASSERT(!obj->hasDynamicSlots() && !obj->hasDynamicElements());
@@ -345,30 +350,6 @@ class NewObjectCache
         Shape::writeBarrierPost(dst->shape_, &dst->shape_);
         types::TypeObject::writeBarrierPost(dst->type_, &dst->type_);
 #endif
-    }
-};
-
-class RegExpObject;
-
-// One slot cache for speeding up RegExp.test() executions, by stripping
-// unnecessary leading or trailing .* from the RegExp.
-struct RegExpTestCache
-{
-    RegExpObject *key;
-    RegExpObject *value;
-
-    RegExpTestCache()
-      : key(nullptr), value(nullptr)
-    {}
-
-    void purge() {
-        key = nullptr;
-        value = nullptr;
-    }
-
-    void fill(RegExpObject *key, RegExpObject *value) {
-        this->key = key;
-        this->value = value;
     }
 };
 
@@ -1133,7 +1114,6 @@ struct JSRuntime : public JS::shadow::Runtime,
     js::UncompressedSourceCache uncompressedSourceCache;
     js::EvalCache       evalCache;
     js::LazyScriptCache lazyScriptCache;
-    js::RegExpTestCache regExpTestCache;
 
     js::CompressedSourceSet compressedSourceSet;
     js::DateTimeInfo    dateTimeInfo;
@@ -1427,6 +1407,12 @@ struct JSRuntime : public JS::shadow::Runtime,
         }
         return (T *)onOutOfMemoryCanGC(p, newSize * sizeof(T));
     }
+
+    /*
+     * Debugger.Memory functions like takeCensus use this embedding-provided
+     * function to assess the size of malloc'd blocks of memory.
+     */
+    mozilla::MallocSizeOf debuggerMallocSizeOf;
 };
 
 namespace js {

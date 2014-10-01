@@ -252,7 +252,7 @@ this.ContentSearch = {
     controller.maxLocalResults = ok ? 2 : 6;
     controller.maxRemoteResults = ok ? 6 : 0;
     controller.remoteTimeout = data.remoteTimeout || undefined;
-    let priv = PrivateBrowsingUtils.isWindowPrivate(msg.target.contentWindow);
+    let priv = PrivateBrowsingUtils.isBrowserPrivate(msg.target);
     // fetch() rejects its promise if there's a pending request, but since we
     // process our event queue serially, there's never a pending request.
     let suggestions = yield controller.fetch(data.searchString, priv, engine);
@@ -278,7 +278,7 @@ this.ContentSearch = {
     // been destroyed by the time we receive this message, and as a result
     // contentWindow is undefined.
     if (!msg.target.contentWindow ||
-        PrivateBrowsingUtils.isWindowPrivate(msg.target.contentWindow)) {
+        PrivateBrowsingUtils.isBrowserPrivate(msg.target)) {
       return Promise.resolve();
     }
     let browserData = this._suggestionDataForBrowser(msg.target, true);
@@ -386,10 +386,12 @@ this.ContentSearch = {
 
   _currentEngineObj: Task.async(function* () {
     let engine = Services.search.currentEngine;
+    let favicon = engine.getIconURLBySize(16, 16);
     let uri1x = engine.getIconURLBySize(65, 26);
     let uri2x = engine.getIconURLBySize(130, 52);
     let obj = {
       name: engine.name,
+      iconBuffer: yield this._arrayBufferFromDataURI(favicon),
       logoBuffer: yield this._arrayBufferFromDataURI(uri1x),
       logo2xBuffer: yield this._arrayBufferFromDataURI(uri2x),
     };

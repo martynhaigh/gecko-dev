@@ -416,6 +416,7 @@ class LDefinition
         MUST_REUSE_INPUT
     };
 
+    // This should be kept in sync with LIR.cpp's TypeChars.
     enum Type {
         GENERAL,    // Generic, integer or pointer-width data (GPR).
         INT32,      // int32 data (GPR).
@@ -507,7 +508,7 @@ class LDefinition
     }
     uint32_t virtualRegister() const {
         uint32_t index = (bits_ >> VREG_SHIFT) & VREG_MASK;
-        JS_ASSERT(index != 0);
+        //JS_ASSERT(index != 0);
         return index;
     }
     LAllocation *output() {

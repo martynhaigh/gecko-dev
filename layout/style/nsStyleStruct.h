@@ -430,8 +430,8 @@ struct nsStyleBackground {
     // frame size; see DependsOnDependsOnPositioningAreaSizeSize.
     enum DimensionType {
       // If one of mWidth and mHeight is eContain or eCover, then both are.
-      // Also, these two values must equal the corresponding values in
-      // kBackgroundSizeKTable.
+      // NOTE: eContain and eCover *must* be equal to NS_STYLE_BG_SIZE_CONTAIN
+      // and NS_STYLE_BG_SIZE_COVER (in kBackgroundSizeKTable).
       eContain, eCover,
 
       eAuto,
@@ -593,9 +593,8 @@ struct nsStyleMargin {
   void RecalcData();
   nsChangeHint CalcDifference(const nsStyleMargin& aOther) const;
   static nsChangeHint MaxDifference() {
-    return NS_SubtractHint(NS_STYLE_HINT_REFLOW,
-                           NS_CombineHint(nsChangeHint_ClearDescendantIntrinsics,
-                                          nsChangeHint_NeedDirtyReflow));
+    return NS_CombineHint(nsChangeHint_NeedReflow,
+                          nsChangeHint_ClearAncestorIntrinsics);
   }
   static nsChangeHint MaxDifferenceNeverInherited() {
     // CalcDifference can return both nsChangeHint_ClearAncestorIntrinsics and
@@ -1155,7 +1154,8 @@ struct nsStyleList {
 
   nsChangeHint CalcDifference(const nsStyleList& aOther) const;
   static nsChangeHint MaxDifference() {
-    return NS_STYLE_HINT_FRAMECHANGE;
+    return NS_CombineHint(NS_STYLE_HINT_FRAMECHANGE,
+                          nsChangeHint_NeutralChange);
   }
   static nsChangeHint MaxDifferenceNeverInherited() {
     // CalcDifference never returns nsChangeHint_NeedReflow or
@@ -2599,6 +2599,7 @@ struct nsStyleUserInterface {
   uint8_t   mUserInput;       // [inherited]
   uint8_t   mUserModify;      // [inherited] (modify-content)
   uint8_t   mUserFocus;       // [inherited] (auto-select)
+  uint8_t   mWindowDragging;  // [inherited]
 
   uint8_t   mCursor;          // [inherited] See nsStyleConsts.h
 
@@ -2826,6 +2827,107 @@ struct nsStyleSVG {
   }
 };
 
+class nsStyleBasicShape MOZ_FINAL {
+public:
+  enum Type {
+    // eInset,
+    // eCircle,
+    // eEllipse,
+    ePolygon
+  };
+
+  nsStyleBasicShape(Type type)
+    : mType(type)
+  {
+  }
+
+  Type GetShapeType() const { return mType; }
+
+  int32_t GetFillRule() const { return mFillRule; }
+  void SetFillRule(int32_t aFillRule)
+  {
+    NS_ASSERTION(mType == ePolygon, "expected polygon");
+    mFillRule = aFillRule;
+  }
+
+  nsTArray<nsStyleCoord>& Coordinates()
+  {
+    NS_ASSERTION(mType == ePolygon, "expected polygon");
+    return mCoordinates;
+  }
+
+  const nsTArray<nsStyleCoord>& Coordinates() const
+  {
+    NS_ASSERTION(mType == ePolygon, "expected polygon");
+    return mCoordinates;
+  }
+
+  bool operator==(const nsStyleBasicShape& aOther) const
+  {
+    return mType == aOther.mType &&
+           mFillRule == aOther.mFillRule &&
+           mCoordinates == aOther.mCoordinates;
+  }
+  bool operator!=(const nsStyleBasicShape& aOther) const {
+    return !(*this == aOther);
+  }
+
+  NS_INLINE_DECL_REFCOUNTING(nsStyleBasicShape);
+
+private:
+  ~nsStyleBasicShape() {}
+
+  Type mType;
+  int32_t mFillRule;
+  nsTArray<nsStyleCoord> mCoordinates;
+};
+
+struct nsStyleClipPath
+{
+  nsStyleClipPath();
+  nsStyleClipPath(const nsStyleClipPath& aSource);
+  ~nsStyleClipPath();
+
+  nsStyleClipPath& operator=(const nsStyleClipPath& aOther);
+
+  bool operator==(const nsStyleClipPath& aOther) const;
+  bool operator!=(const nsStyleClipPath& aOther) const {
+    return !(*this == aOther);
+  }
+
+  int32_t GetType() const {
+    return mType;
+  }
+
+  nsIURI* GetURL() const {
+    NS_ASSERTION(mType == NS_STYLE_CLIP_PATH_URL, "wrong clip-path type");
+    return mURL;
+  }
+  void SetURL(nsIURI* aURL);
+
+  nsStyleBasicShape* GetBasicShape() const {
+    NS_ASSERTION(mType == NS_STYLE_CLIP_PATH_SHAPE, "wrong clip-path type");
+    return mBasicShape;
+  }
+
+  void SetBasicShape(nsStyleBasicShape* mBasicShape,
+                     uint8_t aSizingBox = NS_STYLE_CLIP_SHAPE_SIZING_NOBOX);
+
+  uint8_t GetSizingBox() const { return mSizingBox; }
+  void SetSizingBox(uint8_t aSizingBox);
+
+private:
+  void ReleaseRef();
+  void* operator new(size_t) MOZ_DELETE;
+
+  int32_t mType; // see NS_STYLE_CLIP_PATH_* constants in nsStyleConsts.h
+  union {
+    nsStyleBasicShape* mBasicShape;
+    nsIURI* mURL;
+  };
+  uint8_t mSizingBox; // see NS_STYLE_CLIP_SHAPE_SIZING_* constants in nsStyleConsts.h
+};
+
 struct nsStyleFilter {
   nsStyleFilter();
   nsStyleFilter(const nsStyleFilter& aSource);
@@ -2910,7 +3012,7 @@ struct nsStyleSVGReset {
     return mFilters.Length() > 0;
   }
 
-  nsCOMPtr<nsIURI> mClipPath;         // [reset]
+  nsStyleClipPath mClipPath;          // [reset]
   nsTArray<nsStyleFilter> mFilters;   // [reset]
   nsCOMPtr<nsIURI> mMask;             // [reset]
   nscolor          mStopColor;        // [reset]

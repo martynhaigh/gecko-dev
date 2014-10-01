@@ -13,7 +13,7 @@
 using namespace mozilla;
 
 WebGLBuffer::WebGLBuffer(WebGLContext *context)
-    : WebGLBindableName()
+    : WebGLBindableName<BufferBinding>()
     , WebGLContextBoundObject(context)
     , mByteLength(0)
 {

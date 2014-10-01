@@ -23,10 +23,10 @@ sys.path.insert(0, SCRIPT_DIRECTORY)
 from automation import Automation
 from automationutils import (
         addCommonOptions,
-        getDebuggerInfo,
         isURL,
         processLeakLog
 )
+import mozdebug
 import mozprofile
 
 def categoriesToRegex(categoryList):
@@ -320,7 +320,7 @@ class RefTest(object):
     return int(any(t.retcode != 0 for t in threads))
 
   def runSerialTests(self, testPath, options, cmdlineArgs = None):
-    debuggerInfo = getDebuggerInfo(self.oldcwd, options.debugger, options.debuggerArgs,
+    debuggerInfo = mozdebug.get_debugger_info(options.debugger, options.debuggerArgs,
         options.debuggerInteractive);
 
     profileDir = None
@@ -344,7 +344,7 @@ class RefTest(object):
                                  # give the JS harness 30 seconds to deal
                                  # with its own timeouts
                                  timeout=options.timeout + 30.0)
-      processLeakLog(self.leakLogFile, options.leakThreshold)
+      processLeakLog(self.leakLogFile, options.leakThresholds, options.ignoreMissingLeaks)
       self.automation.log.info("\nREFTEST INFO | runreftest.py | Running tests: end.")
     finally:
       self.cleanup(profileDir)
@@ -394,12 +394,12 @@ class ReftestOptions(OptionParser):
                     default = 5 * 60, # 5 minutes per bug 479518
                     help = "reftest will timeout in specified number of seconds. [default %default s].")
     self.add_option("--leak-threshold",
-                    action = "store", type = "int", dest = "leakThreshold",
+                    action = "store", type = "int", dest = "defaultLeakThreshold",
                     default = 0,
-                    help = "fail if the number of bytes leaked through "
-                           "refcounted objects (or bytes in classes with "
-                           "MOZ_COUNT_CTOR and MOZ_COUNT_DTOR) is greater "
-                           "than the given number")
+                    help = "fail if the number of bytes leaked in default "
+                           "processes through refcounted objects (or bytes "
+                           "in classes with MOZ_COUNT_CTOR and MOZ_COUNT_DTOR) "
+                           "is greater than the given number")
     self.add_option("--utility-path",
                     action = "store", type = "string", dest = "utilityPath",
                     default = self.automation.DIST_BIN,
@@ -510,6 +510,10 @@ class ReftestOptions(OptionParser):
         self.error("cannot specify focusFilterMode with parallel tests")
       if options.debugger is not None:
         self.error("cannot specify a debugger with parallel tests")
+
+      options.leakThresholds = {"default": options.defaultLeakThreshold}
+
+      options.ignoreMissingLeaks = []
 
     return options
 

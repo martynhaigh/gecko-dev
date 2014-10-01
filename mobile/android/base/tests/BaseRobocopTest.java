@@ -15,9 +15,12 @@ import org.mozilla.gecko.FennecTalosAssert;
 import org.mozilla.gecko.AppConstants;
 
 import android.app.Activity;
+import android.content.Context;
+import android.os.PowerManager;
 import android.test.ActivityInstrumentationTestCase2;
 import android.util.Log;
 
+@SuppressWarnings("unchecked")
 public abstract class BaseRobocopTest extends ActivityInstrumentationTestCase2<Activity> {
     public enum Type {
         MOCHITEST,
@@ -60,7 +63,6 @@ public abstract class BaseRobocopTest extends ActivityInstrumentationTestCase2<A
      * specify a different activity class to the one-argument constructor. To do
      * as little as possible, specify <code>Activity.class</code>.
      */
-    @SuppressWarnings("unchecked")
     public BaseRobocopTest() {
         this((Class<Activity>) BROWSER_INTENT_CLASS);
     }
@@ -96,7 +98,7 @@ public abstract class BaseRobocopTest extends ActivityInstrumentationTestCase2<A
         }
         String configFile = FennecNativeDriver.getFile(mRootPath + "/robotium.config");
         mConfig = FennecNativeDriver.convertTextToTable(configFile);
-        mLogFile = (String) mConfig.get("logfile");
+        mLogFile = mConfig.get("logfile");
 
         // Initialize the asserter.
         if (getTestType() == Type.TALOS) {
@@ -105,6 +107,15 @@ public abstract class BaseRobocopTest extends ActivityInstrumentationTestCase2<A
             mAsserter = new FennecMochitestAssert();
         }
         mAsserter.setLogFile(mLogFile);
-        mAsserter.setTestName(this.getClass().getName());
+        mAsserter.setTestName(getClass().getName());
+    }
+
+    /**
+     * Ensure that the screen on the test device is powered on during tests.
+     */
+    public void throwIfScreenNotOn() {
+        final PowerManager pm = (PowerManager) getActivity().getSystemService(Context.POWER_SERVICE);
+        mAsserter.ok(pm.isScreenOn(),
+            "Robocop tests need the test device screen to be powered on.", "");
     }
 }

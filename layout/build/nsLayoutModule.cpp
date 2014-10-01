@@ -125,15 +125,6 @@ using mozilla::dom::gonk::AudioManager;
 using mozilla::system::nsVolumeService;
 #endif
 
-#ifdef MOZ_B2G_RIL
-#include "nsIMobileConnectionService.h"
-#include "mozilla/dom/mobileconnection/MobileConnectionIPCService.h"
-using mozilla::dom::mobileconnection::MobileConnectionIPCService;
-#ifdef MOZ_WIDGET_GONK
-#include "nsIMobileConnectionGonkService.h"
-#endif
-#endif
-
 #include "AudioChannelAgent.h"
 using mozilla::dom::AudioChannelAgent;
 
@@ -223,12 +214,12 @@ static void Shutdown();
 #endif
 #include "nsCSPService.h"
 #include "nsCSPContext.h"
+#include "nsICellBroadcastService.h"
 #include "nsISmsService.h"
 #include "nsIMmsService.h"
+#include "nsIMobileConnectionService.h"
 #include "nsIMobileMessageService.h"
 #include "nsIMobileMessageDatabaseService.h"
-#include "mozilla/dom/mobilemessage/MobileMessageService.h"
-#include "mozilla/dom/mobilemessage/SmsServicesFactory.h"
 #include "nsIPowerManagerService.h"
 #include "nsIAlarmHalService.h"
 #include "nsIMediaManager.h"
@@ -243,8 +234,8 @@ static void Shutdown();
 #include "mozilla/dom/time/TimeService.h"
 #include "StreamingProtocolService.h"
 
-#include "mozilla/dom/telephony/TelephonyFactory.h"
 #include "nsITelephonyService.h"
+#include "nsIVoicemailService.h"
 
 #ifdef MOZ_WIDGET_GONK
 #include "GonkGPSGeolocationProvider.h"
@@ -255,8 +246,6 @@ static void Shutdown();
 
 using namespace mozilla;
 using namespace mozilla::dom;
-using namespace mozilla::dom::mobilemessage;
-using namespace mozilla::dom::telephony;
 using mozilla::dom::alarm::AlarmHalService;
 using mozilla::dom::power::PowerManagerService;
 using mozilla::dom::quota::QuotaManager;
@@ -330,14 +319,14 @@ NS_GENERIC_FACTORY_CONSTRUCTOR(nsHapticFeedback)
 #endif
 #endif
 NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(ThirdPartyUtil, Init)
-NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsISmsService,
-                                         SmsServicesFactory::CreateSmsService)
-NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsIMmsService,
-                                         SmsServicesFactory::CreateMmsService)
+NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsICellBroadcastService,
+                                         NS_CreateCellBroadcastService)
+NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsISmsService, NS_CreateSmsService)
+NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsIMmsService, NS_CreateMmsService)
 NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsIMobileMessageService,
-                                         MobileMessageService::GetInstance)
+                                         NS_CreateMobileMessageService)
 NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsIMobileMessageDatabaseService,
-                                         SmsServicesFactory::CreateMobileMessageDatabaseService)
+                                         NS_CreateMobileMessageDatabaseService)
 NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsIPowerManagerService,
                                          PowerManagerService::GetInstance)
 NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsIAlarmHalService,
@@ -363,8 +352,12 @@ NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsVolumeService,
 #endif
 NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsIMediaManagerService,
                                          MediaManager::GetInstance)
+NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsIMobileConnectionService,
+                                         NS_CreateMobileConnectionService)
 NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsITelephonyService,
-                                         TelephonyFactory::CreateTelephonyService)
+                                         NS_CreateTelephonyService)
+NS_GENERIC_FACTORY_SINGLETON_CONSTRUCTOR(nsIVoicemailService,
+                                         NS_CreateVoicemailService)
 
 //-----------------------------------------------------------------------------
 
@@ -774,6 +767,7 @@ NS_DEFINE_NAMED_CID(NS_DEVICE_SENSORS_CID);
 NS_DEFINE_NAMED_CID(NS_HAPTICFEEDBACK_CID);
 #endif
 #endif
+NS_DEFINE_NAMED_CID(CELLBROADCAST_SERVICE_CID);
 NS_DEFINE_NAMED_CID(SMS_SERVICE_CID);
 NS_DEFINE_NAMED_CID(MMS_SERVICE_CID);
 NS_DEFINE_NAMED_CID(MOBILE_MESSAGE_SERVICE_CID);
@@ -803,12 +797,11 @@ NS_DEFINE_NAMED_CID(NS_SYNTHVOICEREGISTRY_CID);
 NS_DEFINE_NAMED_CID(NS_ACCESSIBILITY_SERVICE_CID);
 #endif
 NS_DEFINE_NAMED_CID(TELEPHONY_SERVICE_CID);
+NS_DEFINE_NAMED_CID(NS_VOICEMAIL_SERVICE_CID);
 
 NS_DEFINE_NAMED_CID(GECKO_MEDIA_PLUGIN_SERVICE_CID);
 
-#ifdef MOZ_B2G_RIL
 NS_DEFINE_NAMED_CID(NS_MOBILE_CONNECTION_SERVICE_CID);
-#endif
 
 static nsresult
 CreateWindowCommandTableConstructor(nsISupports *aOuter,
@@ -937,31 +930,6 @@ nsEditingCommandTableConstructor(nsISupports *aOuter, REFNSIID aIID,
 
   return commandTable->QueryInterface(aIID, aResult);
 }
-
-#ifdef MOZ_B2G_RIL
-
-static nsresult
-nsIMobileConnectionServiceConstructor(nsISupports *aOuter, REFNSIID aIID,
-                                      void **aResult)
-{
-  nsCOMPtr<nsIMobileConnectionService> service;
-
-  if (XRE_GetProcessType() == GeckoProcessType_Content) {
-    service = MobileConnectionIPCService::GetSingleton();
-  } else {
-#ifdef MOZ_WIDGET_GONK
-    service = do_CreateInstance(NS_MOBILECONNECTION_GONK_SERVICE_CONTRACTID);
-#endif
-  }
-
-  if (!service) {
-    return NS_ERROR_NOT_AVAILABLE;
-  }
-
-  return service->QueryInterface(aIID, aResult);
-}
-
-#endif
 
 static const mozilla::Module::CIDEntry kLayoutCIDs[] = {
   XPCONNECT_CIDENTRIES
@@ -1093,6 +1061,7 @@ static const mozilla::Module::CIDEntry kLayoutCIDs[] = {
 #endif
   { &kTHIRDPARTYUTIL_CID, false, nullptr, ThirdPartyUtilConstructor },
   { &kNS_STRUCTUREDCLONECONTAINER_CID, false, nullptr, nsStructuredCloneContainerConstructor },
+  { &kCELLBROADCAST_SERVICE_CID, false, nullptr, nsICellBroadcastServiceConstructor },
   { &kSMS_SERVICE_CID, false, nullptr, nsISmsServiceConstructor },
   { &kMMS_SERVICE_CID, false, nullptr, nsIMmsServiceConstructor },
   { &kMOBILE_MESSAGE_SERVICE_CID, false, nullptr, nsIMobileMessageServiceConstructor },
@@ -1118,9 +1087,8 @@ static const mozilla::Module::CIDEntry kLayoutCIDs[] = {
   { &kNS_ACCESSIBILITY_SERVICE_CID, false, nullptr, CreateA11yService },
 #endif
   { &kTELEPHONY_SERVICE_CID, false, nullptr, nsITelephonyServiceConstructor },
-#ifdef MOZ_B2G_RIL
-  { &kNS_MOBILE_CONNECTION_SERVICE_CID, true, NULL, nsIMobileConnectionServiceConstructor },
-#endif
+  { &kNS_MOBILE_CONNECTION_SERVICE_CID, false, NULL, nsIMobileConnectionServiceConstructor },
+  { &kNS_VOICEMAIL_SERVICE_CID, false, nullptr, nsIVoicemailServiceConstructor },
   { nullptr }
 };
 
@@ -1252,6 +1220,7 @@ static const mozilla::Module::ContractIDEntry kLayoutContracts[] = {
 #endif
   { THIRDPARTYUTIL_CONTRACTID, &kTHIRDPARTYUTIL_CID },
   { NS_STRUCTUREDCLONECONTAINER_CONTRACTID, &kNS_STRUCTUREDCLONECONTAINER_CID },
+  { CELLBROADCAST_SERVICE_CONTRACTID, &kCELLBROADCAST_SERVICE_CID },
   { SMS_SERVICE_CONTRACTID, &kSMS_SERVICE_CID },
   { MMS_SERVICE_CONTRACTID, &kMMS_SERVICE_CID },
   { MOBILE_MESSAGE_SERVICE_CONTRACTID, &kMOBILE_MESSAGE_SERVICE_CID },
@@ -1278,9 +1247,8 @@ static const mozilla::Module::ContractIDEntry kLayoutContracts[] = {
 #endif
   { TELEPHONY_SERVICE_CONTRACTID, &kTELEPHONY_SERVICE_CID },
   { "@mozilla.org/gecko-media-plugin-service;1",  &kGECKO_MEDIA_PLUGIN_SERVICE_CID },
-#ifdef MOZ_B2G_RIL
   { NS_MOBILE_CONNECTION_SERVICE_CONTRACTID, &kNS_MOBILE_CONNECTION_SERVICE_CID },
-#endif
+  { NS_VOICEMAIL_SERVICE_CONTRACTID, &kNS_VOICEMAIL_SERVICE_CID },
   { nullptr }
 };
 
@@ -1303,9 +1271,7 @@ static const mozilla::Module::CategoryEntry kLayoutCategories[] = {
 #ifdef MOZ_B2G_BT
   { "profile-after-change", "Bluetooth Service", BLUETOOTHSERVICE_CONTRACTID },
 #endif
-#ifdef MOZ_B2G_RIL
   { "profile-after-change", "MobileConnection Service", NS_MOBILE_CONNECTION_SERVICE_CONTRACTID },
-#endif
   { nullptr }
 };
 

@@ -907,6 +907,8 @@ JSObject::putProperty(typename ExecutionModeTraits<mode>::ExclusiveContextType c
         else
             shape->base_ = nbase;
 
+        JS_ASSERT_IF(attrs & (JSPROP_GETTER | JSPROP_SETTER), attrs & JSPROP_SHARED);
+
         shape->setSlot(slot);
         shape->attrs = uint8_t(attrs);
         shape->flags = flags | Shape::IN_DICTIONARY;
@@ -979,6 +981,7 @@ JSObject::changeProperty(typename ExecutionModeTraits<mode>::ExclusiveContextTyp
     JS_ASSERT(obj->nativeContainsPure(shape));
 
     attrs |= shape->attrs & mask;
+    JS_ASSERT_IF(attrs & (JSPROP_GETTER | JSPROP_SETTER), attrs & JSPROP_SHARED);
 
     /* Allow only shared (slotless) => unshared (slotful) transition. */
     JS_ASSERT(!((attrs ^ shape->attrs) & JSPROP_SHARED) ||
@@ -1338,19 +1341,13 @@ Shape::setObjectMetadata(JSContext *cx, JSObject *metadata, TaggedProto proto, S
 /* static */ bool
 js::ObjectImpl::preventExtensions(JSContext *cx, Handle<ObjectImpl*> obj)
 {
-#ifdef DEBUG
-    bool extensible;
-    if (!JSObject::isExtensible(cx, obj, &extensible))
-        return false;
-    MOZ_ASSERT(extensible,
-               "Callers must ensure |obj| is extensible before calling "
-               "preventExtensions");
-#endif
-
     if (Downcast(obj)->is<ProxyObject>()) {
         RootedObject object(cx, obj->asObjectPtr());
         return js::Proxy::preventExtensions(cx, object);
     }
+
+    if (!obj->nonProxyIsExtensible())
+        return true;
 
     RootedObject self(cx, obj->asObjectPtr());
 
@@ -1542,10 +1539,6 @@ BaseShape::assertConsistency()
 void
 JSCompartment::sweepBaseShapeTable()
 {
-    GCRuntime &gc = runtimeFromMainThread()->gc;
-    gcstats::MaybeAutoPhase ap(gc.stats, !gc.isHeapCompacting(),
-                               gcstats::PHASE_SWEEP_TABLES_BASE_SHAPE);
-
     if (baseShapes.initialized()) {
         for (BaseShapeSet::Enum e(baseShapes); !e.empty(); e.popFront()) {
             UnownedBaseShape *base = e.front().unbarrieredGet();
@@ -1840,10 +1833,6 @@ EmptyShape::insertInitialShape(ExclusiveContext *cx, HandleShape shape, HandleOb
 void
 JSCompartment::sweepInitialShapeTable()
 {
-    GCRuntime &gc = runtimeFromMainThread()->gc;
-    gcstats::MaybeAutoPhase ap(gc.stats, !gc.isHeapCompacting(),
-                               gcstats::PHASE_SWEEP_TABLES_INITIAL_SHAPE);
-
     if (initialShapes.initialized()) {
         for (InitialShapeSet::Enum e(initialShapes); !e.empty(); e.popFront()) {
             const InitialShapeEntry &entry = e.front();

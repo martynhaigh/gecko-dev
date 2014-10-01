@@ -37,9 +37,13 @@
 #ifdef JS_ION_PERF
 # include "jit/PerfSpewer.h"
 #endif
+#include "vm/ArrayBufferObject.h"
+#include "vm/SharedArrayObject.h"
 #include "vm/StringBuffer.h"
 
 #include "jsobjinlines.h"
+
+#include "vm/ArrayBufferObject-inl.h"
 
 using namespace js;
 using namespace js::jit;
@@ -222,8 +226,11 @@ ValidateArrayView(JSContext *cx, AsmJSModule::Global &global, HandleValue global
     if (!GetDataProperty(cx, globalVal, field, &v))
         return false;
 
-    if (!IsTypedArrayConstructor(v, global.viewType()))
+    if (!IsTypedArrayConstructor(v, global.viewType()) &&
+        !IsSharedTypedArrayConstructor(v, global.viewType()))
+    {
         return LinkFail(cx, "bad typed array constructor");
+    }
 
     return true;
 }
@@ -278,7 +285,7 @@ SimdTypeToName(JSContext *cx, AsmJSSimdType type)
     MOZ_MAKE_COMPILER_ASSUME_IS_UNREACHABLE("unexpected SIMD type");
 }
 
-static X4TypeDescr::Type
+static SimdTypeDescr::Type
 AsmJSSimdTypeToTypeDescrType(AsmJSSimdType type)
 {
     switch (type) {
@@ -309,11 +316,11 @@ ValidateSimdType(JSContext *cx, AsmJSModule::Global &global, HandleValue globalV
     if (!v.isObject())
         return LinkFail(cx, "bad SIMD type");
 
-    RootedObject x4desc(cx, &v.toObject());
-    if (!x4desc->is<X4TypeDescr>())
+    RootedObject simdDesc(cx, &v.toObject());
+    if (!simdDesc->is<SimdTypeDescr>())
         return LinkFail(cx, "bad SIMD type");
 
-    if (AsmJSSimdTypeToTypeDescrType(type) != x4desc->as<X4TypeDescr>().type())
+    if (AsmJSSimdTypeToTypeDescrType(type) != simdDesc->as<SimdTypeDescr>().type())
         return LinkFail(cx, "bad SIMD type");
 
     out.set(v);
@@ -341,46 +348,31 @@ ValidateSimdOperation(JSContext *cx, AsmJSModule::Global &global, HandleValue gl
 
     Native native = nullptr;
     switch (global.simdOperationType()) {
+#define SET_NATIVE_INT32X4(op) case AsmJSSimdOperation_##op: native = simd_int32x4_##op; break;
+#define SET_NATIVE_FLOAT32X4(op) case AsmJSSimdOperation_##op: native = simd_float32x4_##op; break;
+#define FALLTHROUGH(op) case AsmJSSimdOperation_##op:
       case AsmJSSimdType_int32x4:
         switch (global.simdOperation()) {
-          case AsmJSSimdOperation_add: native = simd_int32x4_add; break;
-          case AsmJSSimdOperation_sub: native = simd_int32x4_sub; break;
-          case AsmJSSimdOperation_lessThan: native = simd_int32x4_lessThan; break;
-          case AsmJSSimdOperation_greaterThan: native = simd_int32x4_greaterThan; break;
-          case AsmJSSimdOperation_equal: native = simd_int32x4_equal; break;
-          case AsmJSSimdOperation_and: native = simd_int32x4_and; break;
-          case AsmJSSimdOperation_or: native = simd_int32x4_or; break;
-          case AsmJSSimdOperation_xor: native = simd_int32x4_xor; break;
-          case AsmJSSimdOperation_select: native = simd_int32x4_select; break;
-          case AsmJSSimdOperation_splat: native = simd_int32x4_splat; break;
-          case AsmJSSimdOperation_lessThanOrEqual:
-          case AsmJSSimdOperation_greaterThanOrEqual:
-          case AsmJSSimdOperation_notEqual:
-          case AsmJSSimdOperation_mul:
-          case AsmJSSimdOperation_div:
+          FOREACH_INT32X4_SIMD_OP(SET_NATIVE_INT32X4)
+          FOREACH_COMMONX4_SIMD_OP(SET_NATIVE_INT32X4)
+          FOREACH_FLOAT32X4_SIMD_OP(FALLTHROUGH)
             MOZ_MAKE_COMPILER_ASSUME_IS_UNREACHABLE("shouldn't have been validated in the first "
                                                     "place");
         }
         break;
       case AsmJSSimdType_float32x4:
         switch (global.simdOperation()) {
-          case AsmJSSimdOperation_add: native = simd_float32x4_add; break;
-          case AsmJSSimdOperation_sub: native = simd_float32x4_sub; break;
-          case AsmJSSimdOperation_mul: native = simd_float32x4_mul; break;
-          case AsmJSSimdOperation_div: native = simd_float32x4_div; break;
-          case AsmJSSimdOperation_lessThan: native = simd_float32x4_lessThan ; break;
-          case AsmJSSimdOperation_lessThanOrEqual: native = simd_float32x4_lessThanOrEqual; break;
-          case AsmJSSimdOperation_equal: native = simd_float32x4_equal; break;
-          case AsmJSSimdOperation_notEqual: native = simd_float32x4_notEqual ; break;
-          case AsmJSSimdOperation_greaterThan: native = simd_float32x4_greaterThan; break;
-          case AsmJSSimdOperation_greaterThanOrEqual: native = simd_float32x4_greaterThanOrEqual ; break;
-          case AsmJSSimdOperation_and: native = simd_float32x4_and; break;
-          case AsmJSSimdOperation_or: native = simd_float32x4_or; break;
-          case AsmJSSimdOperation_xor: native = simd_float32x4_xor; break;
-          case AsmJSSimdOperation_select: native = simd_float32x4_select; break;
-          case AsmJSSimdOperation_splat: native = simd_float32x4_splat; break;
+          FOREACH_FLOAT32X4_SIMD_OP(SET_NATIVE_FLOAT32X4)
+          FOREACH_COMMONX4_SIMD_OP(SET_NATIVE_FLOAT32X4)
+          FOREACH_INT32X4_SIMD_OP(FALLTHROUGH)
+             MOZ_MAKE_COMPILER_ASSUME_IS_UNREACHABLE("shouldn't have been validated in the first "
+                                                     "place");
         }
         break;
+#undef FALLTHROUGH
+#undef SET_NATIVE_FLOAT32X4
+#undef SET_NATIVE_INT32X4
+#undef SET_NATIVE
     }
     if (!native || !IsNativeFunction(v, native))
         return LinkFail(cx, "bad SIMD.type.* operation");
@@ -417,7 +409,7 @@ ValidateConstant(JSContext *cx, AsmJSModule::Global &global, HandleValue globalV
 }
 
 static bool
-LinkModuleToHeap(JSContext *cx, AsmJSModule &module, Handle<ArrayBufferObject*> heap)
+LinkModuleToHeap(JSContext *cx, AsmJSModule &module, Handle<ArrayBufferObjectMaybeShared*> heap)
 {
     uint32_t heapLength = heap->byteLength();
 
@@ -462,8 +454,11 @@ LinkModuleToHeap(JSContext *cx, AsmJSModule &module, Handle<ArrayBufferObject*> 
     if (module.usesSignalHandlersForInterrupt() && !cx->canUseSignalHandlers())
         return LinkFail(cx, "Code generated with signal handlers but signals are deactivated");
 
-    if (!ArrayBufferObject::prepareForAsmJS(cx, heap, module.usesSignalHandlersForOOB()))
-        return LinkFail(cx, "Unable to prepare ArrayBuffer for asm.js use");
+    if (heap->is<ArrayBufferObject>()) {
+        Rooted<ArrayBufferObject *> abheap(cx, &heap->as<ArrayBufferObject>());
+        if (!ArrayBufferObject::prepareForAsmJS(cx, abheap, module.usesSignalHandlersForOOB()))
+            return LinkFail(cx, "Unable to prepare ArrayBuffer for asm.js use");
+    }
 
     module.initHeap(heap, cx);
     return true;
@@ -486,12 +481,12 @@ DynamicallyLinkModule(JSContext *cx, CallArgs args, AsmJSModule &module)
     if (args.length() > 2)
         bufferVal = args[2];
 
-    Rooted<ArrayBufferObject*> heap(cx);
+    Rooted<ArrayBufferObjectMaybeShared *> heap(cx);
     if (module.hasArrayView()) {
-        if (!IsTypedArrayBuffer(bufferVal))
+        if (IsArrayBuffer(bufferVal) || IsSharedArrayBuffer(bufferVal))
+            heap = &AsAnyArrayBuffer(bufferVal);
+        else
             return LinkFail(cx, "bad ArrayBuffer argument");
-
-        heap = &AsTypedArrayBuffer(bufferVal);
         if (!LinkModuleToHeap(cx, module, heap))
             return false;
     }
@@ -639,7 +634,10 @@ CallAsmJS(JSContext *cx, unsigned argc, Value *vp)
     // which is normally immutable except for the neuter operation that occurs
     // when an ArrayBuffer is transfered. Throw an internal error if we're
     // about to run with a neutered heap.
-    if (module.maybeHeapBufferObject() && module.maybeHeapBufferObject()->isNeutered()) {
+    if (module.maybeHeapBufferObject() &&
+        module.maybeHeapBufferObject()->is<ArrayBufferObject>() &&
+        module.maybeHeapBufferObject()->as<ArrayBufferObject>().isNeutered())
+    {
         js_ReportOverRecursed(cx);
         return false;
     }
@@ -669,7 +667,7 @@ CallAsmJS(JSContext *cx, unsigned argc, Value *vp)
         return true;
     }
 
-    JSObject *x4obj;
+    JSObject *simdObj;
     switch (func.returnType()) {
       case AsmJSModule::Return_Void:
         callArgs.rval().set(UndefinedValue());
@@ -681,16 +679,16 @@ CallAsmJS(JSContext *cx, unsigned argc, Value *vp)
         callArgs.rval().set(NumberValue(*(double*)&coercedArgs[0]));
         break;
       case AsmJSModule::Return_Int32x4:
-        x4obj = CreateSimd<Int32x4>(cx, (int32_t*)&coercedArgs[0]);
-        if (!x4obj)
+        simdObj = CreateSimd<Int32x4>(cx, (int32_t*)&coercedArgs[0]);
+        if (!simdObj)
             return false;
-        callArgs.rval().set(ObjectValue(*x4obj));
+        callArgs.rval().set(ObjectValue(*simdObj));
         break;
       case AsmJSModule::Return_Float32x4:
-        x4obj = CreateSimd<Float32x4>(cx, (float*)&coercedArgs[0]);
-        if (!x4obj)
+        simdObj = CreateSimd<Float32x4>(cx, (float*)&coercedArgs[0]);
+        if (!simdObj)
             return false;
-        callArgs.rval().set(ObjectValue(*x4obj));
+        callArgs.rval().set(ObjectValue(*simdObj));
         break;
     }
 
@@ -741,7 +739,7 @@ HandleDynamicLinkFailure(JSContext *cx, CallArgs args, AsmJSModule &module, Hand
         formals.infallibleAppend(module.bufferArgumentName());
 
     CompileOptions options(cx);
-    options.setOriginPrincipals(module.scriptSource()->originPrincipals())
+    options.setMutedErrors(module.scriptSource()->mutedErrors())
            .setFile(module.scriptSource()->filename())
            .setCompileAndGo(false)
            .setNoScriptRval(false);

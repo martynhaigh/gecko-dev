@@ -32,7 +32,6 @@ struct JitOptions
     bool checkOsiPointRegisters;
 #endif
     bool checkRangeAnalysis;
-    bool compileTryCatch;
     bool disableScalarReplacement;
     bool disableGvn;
     bool disableLicm;
@@ -40,7 +39,6 @@ struct JitOptions
     bool disableEdgeCaseAnalysis;
     bool disableRangeAnalysis;
     bool disableLoopUnrolling;
-    bool disableUce;
     bool disableEaa;
     bool eagerCompilation;
     bool forceDefaultIonWarmUpThreshold;
@@ -60,7 +58,7 @@ struct JitOptions
     JitOptions();
     bool isSmallFunction(JSScript *script) const;
     void setEagerCompilation();
-    void setCompilerWarmUpThreshold(uint32_t warmUpCounter);
+    void setCompilerWarmUpThreshold(uint32_t warmUpThreshold);
     void resetCompilerWarmUpThreshold();
 };
 

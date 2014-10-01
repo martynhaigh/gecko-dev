@@ -438,6 +438,7 @@ private:
   mozilla::dom::CSSValue* DoGetUserInput();
   mozilla::dom::CSSValue* DoGetUserModify();
   mozilla::dom::CSSValue* DoGetUserSelect();
+  mozilla::dom::CSSValue* DoGetWindowDragging();
 
   /* Column properties */
   mozilla::dom::CSSValue* DoGetColumnCount();
@@ -584,6 +585,10 @@ private:
   void SetCssTextToCoord(nsAString& aCssText, const nsStyleCoord& aCoord);
   mozilla::dom::CSSValue* CreatePrimitiveValueForStyleFilter(
     const nsStyleFilter& aStyleFilter);
+
+  // Helper function for computing basic shape styles.
+  mozilla::dom::CSSValue* CreatePrimitiveValueForClipPath(
+    const nsStyleBasicShape* aStyleBasicShape, uint8_t aSizingBox);
 
   static nsComputedStyleMap* GetComputedStyleMap();
 

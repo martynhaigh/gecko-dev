@@ -133,6 +133,7 @@ typedef struct {
   unsigned int crop_top;       /**< Pixels to crop from the top of the frame. */
   unsigned int crop_left;      /**< Pixels to crop from the left of the frame. */
   unsigned int crop_right;     /**< Pixels to crop from the right of the frame. */
+  unsigned int alpha_mode;     /**< 1 if an additional opacity stream is available, otherwise 0. */
 } nestegg_video_params;
 
 /** Parameters specific to an audio track. */
@@ -340,6 +341,19 @@ int nestegg_packet_count(nestegg_packet * packet, unsigned int * count);
 int nestegg_packet_data(nestegg_packet * packet, unsigned int item,
                         unsigned char ** data, size_t * length);
 
+/** Get a pointer to additional data with identifier @a id of additional packet
+    data. If @a id isn't present in the packet, returns -1.
+    @param packet  Packet initialized by #nestegg_read_packet.
+    @param id      Codec specific identifer. For VP8, use 1 to get a VP8 encoded
+                   frame containing an alpha channel in its Y plane.
+    @param data    Storage for the queried data pointer.
+                   The data is owned by the #nestegg_packet packet.
+    @param length  Storage for the queried data size.
+    @retval  0 Success.
+    @retval -1 Error. */
+int nestegg_packet_additional_data(nestegg_packet * packet, unsigned int id,
+                                   unsigned char ** data, size_t * length);
+
 /** Returns discard_padding for given packet
     @param packet  Packet initialized by #nestegg_read_packet.
     @param discard_padding pointer to store discard padding in.
@@ -367,8 +381,11 @@ int nestegg_sniff(unsigned char const * buffer, size_t length);
  * Set the underlying allocation function for library allocations.
  *
  * @param realloc_func The desired function.
+ * @retval 0 realloc_func(p, 0) does not act as free()
+ * @retval 1 realloc_func(p, 0) acts as free()
+ * @retval -1 malloc failed during realloc_func test
  */
-void nestegg_set_halloc_func(void * (* realloc_func)(void *, size_t));
+int nestegg_set_halloc_func(void * (* realloc_func)(void *, size_t));
 
 #if defined(__cplusplus)
 }

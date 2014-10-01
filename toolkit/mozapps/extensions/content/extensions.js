@@ -437,16 +437,19 @@ var gEventManager = {
       contextMenu.setAttribute("addontype", addon.type);
 
       var menuSep = document.getElementById("addonitem-menuseparator");
-      var countEnabledMenuCmds = 0;
+      var countMenuItemsBeforeSep = 0;
       for (let child of contextMenu.children) {
+        if (child == menuSep) {
+          break;
+        }
         if (child.nodeName == "menuitem" &&
           gViewController.isCommandEnabled(child.command)) {
-            countEnabledMenuCmds++;
+            countMenuItemsBeforeSep++;
         }
       }
 
-      // with only one menu item, we hide the menu separator
-      menuSep.hidden = (countEnabledMenuCmds <= 1);
+      // Hide the separator if there are no visible menu items before it
+      menuSep.hidden = (countMenuItemsBeforeSep == 0);
 
     }, false);
   },
@@ -2789,7 +2792,14 @@ var gDetailView = {
 
     var fullDesc = document.getElementById("detail-fulldesc");
     if (aAddon.fullDescription) {
-      fullDesc.textContent = aAddon.fullDescription;
+      // The following is part of an awful hack to include the OpenH264 license
+      // without having bug 624602 fixed yet, and intentionally ignores
+      // localisation.
+      if (aAddon.id == OPENH264_ADDON_ID)
+        fullDesc.innerHTML = aAddon.fullDescription;
+      else
+        fullDesc.textContent = aAddon.fullDescription;
+
       fullDesc.hidden = false;
     } else {
       fullDesc.hidden = true;

@@ -10,13 +10,13 @@
 
 #include "Layers.h"
 #include "ContentChild.h"
-#include "IndexedDBChild.h"
 #include "TabParent.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/ClearOnShutdown.h"
 #include "mozilla/EventListenerManager.h"
 #include "mozilla/IntentionalCrash.h"
 #include "mozilla/docshell/OfflineCacheUpdateChild.h"
+#include "mozilla/dom/indexedDB/PIndexedDBPermissionRequestChild.h"
 #include "mozilla/ipc/DocumentRendererChild.h"
 #include "mozilla/ipc/FileDescriptorUtils.h"
 #include "mozilla/layers/ActiveElementManager.h"
@@ -80,7 +80,6 @@
 #include "UnitTransforms.h"
 #include "ClientLayerManager.h"
 #include "LayersLogging.h"
-#include "nsIWebBrowserChrome3.h"
 
 #include "nsColorPickerProxy.h"
 
@@ -97,7 +96,6 @@ using namespace mozilla::ipc;
 using namespace mozilla::layers;
 using namespace mozilla::layout;
 using namespace mozilla::docshell;
-using namespace mozilla::dom::indexedDB;
 using namespace mozilla::widget;
 using namespace mozilla::jsipc;
 
@@ -108,7 +106,6 @@ static const CSSSize kDefaultViewportSize(980, 480);
 static const char BROWSER_ZOOM_TO_RECT[] = "browser-zoom-to-rect";
 static const char BEFORE_FIRST_PAINT[] = "before-first-paint";
 
-static bool sCpowsEnabled = false;
 static int32_t sActiveDurationMs = 10;
 static bool sActiveDurationMsSet = false;
 
@@ -1550,6 +1547,8 @@ TabChild::DestroyWindow()
 void
 TabChild::ActorDestroy(ActorDestroyReason why)
 {
+  DestroyWindow();
+
   if (mTabChildGlobal) {
     // The messageManager relays messages via the TabChild which
     // no longer exists.
@@ -1875,6 +1874,9 @@ TabChild::RecvAcknowledgeScrollUpdate(const ViewID& aScrollId,
 bool
 TabChild::RecvHandleDoubleTap(const CSSPoint& aPoint, const ScrollableLayerGuid& aGuid)
 {
+    TABC_LOG("Handling double tap at %s with %p %p\n",
+      Stringify(aPoint).c_str(), mGlobal.get(), mTabChildGlobal.get());
+
     if (!mGlobal || !mTabChildGlobal) {
         return true;
     }
@@ -1895,6 +1897,10 @@ TabChild::RecvHandleDoubleTap(const CSSPoint& aPoint, const ScrollableLayerGuid&
 bool
 TabChild::RecvHandleSingleTap(const CSSPoint& aPoint, const ScrollableLayerGuid& aGuid)
 {
+  TABC_LOG("Handling single tap at %s on %s with %p %p %d\n",
+    Stringify(aPoint).c_str(), Stringify(aGuid).c_str(), mGlobal.get(),
+    mTabChildGlobal.get(), mTouchEndCancelled);
+
   if (!mGlobal || !mTabChildGlobal) {
     return true;
   }
@@ -1924,6 +1930,8 @@ TabChild::FireSingleTapEvent(LayoutDevicePoint aPoint)
   if (mDestroyed) {
     return;
   }
+  TABC_LOG("Dispatching single-tap component events to %s\n",
+    Stringify(aPoint).c_str());
   int time = 0;
   DispatchSynthesizedMouseEvent(NS_MOUSE_MOVE, time, aPoint, mWidget);
   DispatchSynthesizedMouseEvent(NS_MOUSE_BUTTON_DOWN, time, aPoint, mWidget);
@@ -1933,6 +1941,9 @@ TabChild::FireSingleTapEvent(LayoutDevicePoint aPoint)
 bool
 TabChild::RecvHandleLongTap(const CSSPoint& aPoint, const ScrollableLayerGuid& aGuid)
 {
+  TABC_LOG("Handling long tap at %s with %p %p\n",
+    Stringify(aPoint).c_str(), mGlobal.get(), mTabChildGlobal.get());
+
   if (!mGlobal || !mTabChildGlobal) {
     return true;
   }
@@ -1945,6 +1956,8 @@ TabChild::RecvHandleLongTap(const CSSPoint& aPoint, const ScrollableLayerGuid& a
                          2, 1, 0, true,
                          nsIDOMMouseEvent::MOZ_SOURCE_TOUCH);
 
+  TABC_LOG("Contextmenu event handled: %d\n", eventHandled);
+
   // If no one handle context menu, fire MOZLONGTAP event
   if (!eventHandled) {
     LayoutDevicePoint currentPoint =
@@ -1953,6 +1966,7 @@ TabChild::RecvHandleLongTap(const CSSPoint& aPoint, const ScrollableLayerGuid& a
     nsEventStatus status =
       DispatchSynthesizedMouseEvent(NS_MOUSE_MOZLONGTAP, time, currentPoint, mWidget);
     eventHandled = (status == nsEventStatus_eConsumeNoDefault);
+    TABC_LOG("MOZLONGTAP event handled: %d\n", eventHandled);
   }
 
   SendContentReceivedTouch(aGuid, eventHandled);
@@ -1985,9 +1999,9 @@ TabChild::RecvNotifyAPZStateChange(const ViewID& aViewId,
     nsCOMPtr<nsIDocument> doc = GetDocument();
     if (doc) {
       nsCOMPtr<nsIDocShell> docshell(doc->GetDocShell());
-      if (docshell) {
+      if (docshell && sf) {
         nsDocShell* nsdocshell = static_cast<nsDocShell*>(docshell.get());
-        nsdocshell->NotifyAsyncPanZoomStarted();
+        nsdocshell->NotifyAsyncPanZoomStarted(sf->GetScrollPositionCSSPixels());
       }
     }
     break;
@@ -2003,9 +2017,9 @@ TabChild::RecvNotifyAPZStateChange(const ViewID& aViewId,
     nsCOMPtr<nsIDocument> doc = GetDocument();
     if (doc) {
       nsCOMPtr<nsIDocShell> docshell(doc->GetDocShell());
-      if (docshell) {
+      if (docshell && sf) {
         nsDocShell* nsdocshell = static_cast<nsDocShell*>(docshell.get());
-        nsdocshell->NotifyAsyncPanZoomStopped();
+        nsdocshell->NotifyAsyncPanZoomStopped(sf->GetScrollPositionCSSPixels());
       }
     }
     break;
@@ -2158,8 +2172,8 @@ TabChild::UpdateTapState(const WidgetTouchEvent& aEvent, nsEventStatus aStatus)
   int64_t time = aEvent.time;
   switch (aEvent.message) {
   case NS_TOUCH_MOVE:
-    if (abs(currentPoint.x - mGestureDownPoint.x) > sDragThreshold.width ||
-        abs(currentPoint.y - mGestureDownPoint.y) > sDragThreshold.height) {
+    if (std::abs(currentPoint.x - mGestureDownPoint.x) > sDragThreshold.width ||
+        std::abs(currentPoint.y - mGestureDownPoint.y) > sDragThreshold.height) {
       CancelTapTracking();
     }
     return;
@@ -2226,6 +2240,8 @@ bool
 TabChild::RecvRealTouchEvent(const WidgetTouchEvent& aEvent,
                              const ScrollableLayerGuid& aGuid)
 {
+  TABC_LOG("Receiving touch event of type %d\n", aEvent.message);
+
   WidgetTouchEvent localEvent(aEvent);
   localEvent.widget = mWidget;
   for (size_t i = 0; i < localEvent.touches.Length(); i++) {
@@ -2487,6 +2503,24 @@ TabChild::DeallocPFilePickerChild(PFilePickerChild* actor)
   return true;
 }
 
+auto
+TabChild::AllocPIndexedDBPermissionRequestChild(const Principal& aPrincipal)
+  -> PIndexedDBPermissionRequestChild*
+{
+  MOZ_CRASH("PIndexedDBPermissionRequestChild actors should always be created "
+            "manually!");
+}
+
+bool
+TabChild::DeallocPIndexedDBPermissionRequestChild(
+                                       PIndexedDBPermissionRequestChild* aActor)
+{
+  MOZ_ASSERT(aActor);
+
+  delete aActor;
+  return true;
+}
+
 bool
 TabChild::RecvActivateFrameEvent(const nsString& aType, const bool& capture)
 {
@@ -2591,12 +2625,6 @@ TabChild::RecvDestroy()
 
   observerService->RemoveObserver(this, BROWSER_ZOOM_TO_RECT);
   observerService->RemoveObserver(this, BEFORE_FIRST_PAINT);
-
-  const InfallibleTArray<PIndexedDBChild*>& idbActors =
-    ManagedPIndexedDBChild();
-  for (uint32_t i = 0; i < idbActors.Length(); ++i) {
-    static_cast<IndexedDBChild*>(idbActors[i])->Disconnect();
-  }
 
   // XXX what other code in ~TabChild() should we be running here?
   DestroyWindow();
@@ -2754,12 +2782,6 @@ TabChild::InitRenderingState()
                                      BEFORE_FIRST_PAINT,
                                      false);
     }
-
-    // This state can't change during the lifetime of the child.
-    sCpowsEnabled = BrowserTabsRemote();
-    if (Preferences::GetBool("dom.ipc.cpows.force-enabled", false))
-      sCpowsEnabled = true;
-
     return true;
 }
 
@@ -2874,22 +2896,6 @@ TabChild::SendRequestFocus(bool aCanFocus)
   PBrowserChild::SendRequestFocus(aCanFocus);
 }
 
-PIndexedDBChild*
-TabChild::AllocPIndexedDBChild(
-                            const nsCString& aGroup,
-                            const nsCString& aASCIIOrigin, bool* /* aAllowed */)
-{
-  NS_NOTREACHED("Should never get here!");
-  return nullptr;
-}
-
-bool
-TabChild::DeallocPIndexedDBChild(PIndexedDBChild* aActor)
-{
-  delete aActor;
-  return true;
-}
-
 bool
 TabChild::DoSendBlockingMessage(JSContext* aCx,
                                 const nsAString& aMessage,
@@ -2904,10 +2910,8 @@ TabChild::DoSendBlockingMessage(JSContext* aCx,
     return false;
   }
   InfallibleTArray<CpowEntry> cpows;
-  if (sCpowsEnabled) {
-    if (!Manager()->GetCPOWManager()->Wrap(aCx, aCpows, &cpows)) {
-      return false;
-    }
+  if (!Manager()->GetCPOWManager()->Wrap(aCx, aCpows, &cpows)) {
+    return false;
   }
   if (aIsSync) {
     return SendSyncMessage(PromiseFlatString(aMessage), data, cpows,
@@ -2930,10 +2934,8 @@ TabChild::DoSendAsyncMessage(JSContext* aCx,
     return false;
   }
   InfallibleTArray<CpowEntry> cpows;
-  if (sCpowsEnabled) {
-    if (!Manager()->GetCPOWManager()->Wrap(aCx, aCpows, &cpows)) {
-      return false;
-    }
+  if (!Manager()->GetCPOWManager()->Wrap(aCx, aCpows, &cpows)) {
+    return false;
   }
   return SendAsyncMessage(PromiseFlatString(aMessage), data, cpows,
                           Principal(aPrincipal));

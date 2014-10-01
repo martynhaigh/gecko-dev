@@ -76,21 +76,9 @@ enum AsmJSSimdType
 // Set of known operations, for a given SIMD type (int32x4, float32x4,...)
 enum AsmJSSimdOperation
 {
-    AsmJSSimdOperation_add,
-    AsmJSSimdOperation_sub,
-    AsmJSSimdOperation_mul,
-    AsmJSSimdOperation_div,
-    AsmJSSimdOperation_lessThan,
-    AsmJSSimdOperation_lessThanOrEqual,
-    AsmJSSimdOperation_equal,
-    AsmJSSimdOperation_notEqual,
-    AsmJSSimdOperation_greaterThan,
-    AsmJSSimdOperation_greaterThanOrEqual,
-    AsmJSSimdOperation_and,
-    AsmJSSimdOperation_or,
-    AsmJSSimdOperation_xor,
-    AsmJSSimdOperation_select,
-    AsmJSSimdOperation_splat
+#define ASMJSSIMDOPERATION(op) AsmJSSimdOperation_##op,
+    FORALL_SIMD_OP(ASMJSSIMDOPERATION)
+#undef ASMJSSIMDOPERATION
 };
 
 // These labels describe positions in the prologue/epilogue of functions while
@@ -801,7 +789,7 @@ class AsmJSModule
     uint8_t *                             code_;
     uint8_t *                             interruptExit_;
     StaticLinkData                        staticLinkData_;
-    HeapPtrArrayBufferObject              maybeHeap_;
+    HeapPtrArrayBufferObjectMaybeShared   maybeHeap_;
     bool                                  dynamicallyLinked_;
     bool                                  loadedFromCache_;
     bool                                  profilingEnabled_;
@@ -1387,9 +1375,10 @@ class AsmJSModule
         dynamicallyLinked_ = true;
         JS_ASSERT(isDynamicallyLinked());
     }
-    void initHeap(Handle<ArrayBufferObject*> heap, JSContext *cx);
+    void initHeap(Handle<ArrayBufferObjectMaybeShared*> heap, JSContext *cx);
     bool clone(JSContext *cx, ScopedJSDeletePtr<AsmJSModule> *moduleOut) const;
-    void restoreToInitialState(uint8_t *prevCode, ArrayBufferObject *maybePrevBuffer,
+    void restoreToInitialState(uint8_t *prevCode,
+                               ArrayBufferObjectMaybeShared *maybePrevBuffer,
                                ExclusiveContext *cx);
 
     /*************************************************************************/
@@ -1407,7 +1396,7 @@ class AsmJSModule
         JS_ASSERT(isDynamicallyLinked());
         return heapDatum();
     }
-    ArrayBufferObject *maybeHeapBufferObject() const {
+    ArrayBufferObjectMaybeShared *maybeHeapBufferObject() const {
         JS_ASSERT(isDynamicallyLinked());
         return maybeHeap_;
     }

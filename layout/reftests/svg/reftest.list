@@ -271,7 +271,7 @@ fuzzy-if(azureQuartz,6,47) == path-01.svg path-01-ref.svg
 # == pseudo-classes-02.svg pseudo-classes-02-ref.svg
 == radialGradient-basic-01.svg pass.svg
 == radialGradient-basic-02.svg pass.svg
-fuzzy-if(azureQuartz,3,15934) == radialGradient-basic-03.svg radialGradient-basic-03-ref.svg
+fuzzy-if(OSX==10.6&&azureQuartz,4,24) fuzzy-if(OSX==10.8&&azureQuartz,4,15038) fuzzy-if(winWidget,4,92) == radialGradient-basic-03.svg radialGradient-basic-03-ref.svg
 == radialGradient-basic-04.svg pass.svg
 == rect-01.svg pass.svg
 == rect-02.svg pass.svg
@@ -326,7 +326,7 @@ fuzzy-if(cocoaWidget&&layersGPUAccelerated,1,3) == text-layout-06.svg text-layou
 HTTP(..) == text-scale-02.svg text-scale-02-ref.svg
 HTTP(..) == text-scale-03.svg text-scale-03-ref.svg
 == text-stroke-scaling-01.svg text-stroke-scaling-01-ref.svg
-fails-if(OSX==10.8) == stroke-dasharray-01.svg stroke-dasharray-01-ref.svg # bug 896487
+== stroke-dasharray-01.svg stroke-dasharray-01-ref.svg
 == stroke-dasharray-02.svg pass.svg
 == stroke-dasharray-and-pathLength-01.svg pass.svg
 == stroke-dasharray-and-text-01.svg stroke-dasharray-and-text-01-ref.svg
