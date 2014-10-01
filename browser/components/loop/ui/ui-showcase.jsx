@@ -15,6 +15,7 @@
   var PanelView = loop.panel.PanelView;
   // 1.2. Conversation Window
   var IncomingCallView = loop.conversation.IncomingCallView;
+  var DesktopPendingConversationView = loop.conversationViews.PendingConversationView;
 
   // 2. Standalone webapp
   var HomeView = loop.webapp.HomeView;
@@ -62,6 +63,12 @@
     sdk: mockSDK
   });
   mockConversationModel.startSession = noop;
+
+  var mockWebSocket = new loop.CallConnectionWebSocket({
+    url: "fake",
+    callId: "fakeId",
+    websocketToken: "fakeToken"
+  });
 
   var notifications = new loop.shared.models.NotificationCollection();
   var errNotifications = new loop.shared.models.NotificationCollection();
@@ -149,14 +156,14 @@
           </Section>
 
           <Section name="IncomingCallView">
-            <Example summary="Default / incoming video call" dashed="true" style={{width: "280px"}}>
+            <Example summary="Default / incoming video call" dashed="true" style={{width: "260px", height: "254px"}}>
               <div className="fx-embedded">
                 <IncomingCallView model={mockConversationModel}
                                   video={true} />
               </div>
             </Example>
 
-            <Example summary="Default / incoming audio only call" dashed="true" style={{width: "280px"}}>
+            <Example summary="Default / incoming audio only call" dashed="true" style={{width: "260px", height: "254px"}}>
               <div className="fx-embedded">
                 <IncomingCallView model={mockConversationModel}
                                   video={false} />
@@ -165,7 +172,7 @@
           </Section>
 
           <Section name="IncomingCallView-ActiveState">
-            <Example summary="Default" dashed="true" style={{width: "280px"}}>
+            <Example summary="Default" dashed="true" style={{width: "260px", height: "254px"}}>
               <div className="fx-embedded" >
                 <IncomingCallView  model={mockConversationModel}
                                    showDeclineMenu={true}
@@ -223,12 +230,21 @@
           <Section name="PendingConversationView">
             <Example summary="Pending conversation view (connecting)" dashed="true">
               <div className="standalone">
-                <PendingConversationView />
+                <PendingConversationView websocket={mockWebSocket}/>
               </div>
             </Example>
             <Example summary="Pending conversation view (ringing)" dashed="true">
               <div className="standalone">
-                <PendingConversationView callState="ringing"/>
+                <PendingConversationView websocket={mockWebSocket} callState="ringing"/>
+              </div>
+            </Example>
+          </Section>
+
+          <Section name="PendingConversationView (Desktop)">
+            <Example summary="Connecting" dashed="true"
+                     style={{width: "260px", height: "265px"}}>
+              <div className="fx-embedded">
+                <DesktopPendingConversationView callState={"gather"} calleeId="Mr Smith" />
               </div>
             </Example>
           </Section>
@@ -319,13 +335,13 @@
               <strong>Note:</strong> For the useable demo, you can access submitted data at&nbsp;
               <a href="https://input.allizom.org/">input.allizom.org</a>.
             </p>
-            <Example summary="Default (useable demo)" dashed="true" style={{width: "280px"}}>
+            <Example summary="Default (useable demo)" dashed="true" style={{width: "260px"}}>
               <FeedbackView feedbackApiClient={stageFeedbackApiClient} />
             </Example>
-            <Example summary="Detailed form" dashed="true" style={{width: "280px"}}>
+            <Example summary="Detailed form" dashed="true" style={{width: "260px"}}>
               <FeedbackView feedbackApiClient={stageFeedbackApiClient} step="form" />
             </Example>
-            <Example summary="Thank you!" dashed="true" style={{width: "280px"}}>
+            <Example summary="Thank you!" dashed="true" style={{width: "260px"}}>
               <FeedbackView feedbackApiClient={stageFeedbackApiClient} step="finished" />
             </Example>
           </Section>
@@ -446,6 +462,9 @@
     React.renderComponent(<App />, body);
 
     _renderComponentsInIframes();
+
+    // Put the title back, in case views changed it.
+    document.title = "Loop UI Components Showcase";
   });
 
 })();

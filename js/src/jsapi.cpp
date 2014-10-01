@@ -1888,28 +1888,29 @@ JS_RemoveFinalizeCallback(JSRuntime *rt, JSFinalizeCallback cb)
 }
 
 JS_PUBLIC_API(bool)
-JS_AddMovingGCCallback(JSRuntime *rt, JSMovingGCCallback cb, void *data)
+JS_AddWeakPointerCallback(JSRuntime *rt, JSWeakPointerCallback cb, void *data)
 {
     AssertHeapIsIdle(rt);
-    return rt->gc.addMovingGCCallback(cb, data);
+    return rt->gc.addWeakPointerCallback(cb, data);
 }
 
 JS_PUBLIC_API(void)
-JS_RemoveMovingGCCallback(JSRuntime *rt, JSMovingGCCallback cb)
+JS_RemoveWeakPointerCallback(JSRuntime *rt, JSWeakPointerCallback cb)
 {
-    rt->gc.removeMovingGCCallback(cb);
+    rt->gc.removeWeakPointerCallback(cb);
 }
 
-JS_PUBLIC_API(bool)
-JS_IsAboutToBeFinalized(JS::Heap<JSObject *> *objp)
+JS_PUBLIC_API(void)
+JS_UpdateWeakPointerAfterGC(JS::Heap<JSObject *> *objp)
 {
-    return IsObjectAboutToBeFinalized(objp->unsafeGet());
+    JS_UpdateWeakPointerAfterGCUnbarriered(objp->unsafeGet());
 }
 
-JS_PUBLIC_API(bool)
-JS_IsAboutToBeFinalizedUnbarriered(JSObject **objp)
+JS_PUBLIC_API(void)
+JS_UpdateWeakPointerAfterGCUnbarriered(JSObject **objp)
 {
-    return IsObjectAboutToBeFinalized(objp);
+    if (IsObjectAboutToBeFinalized(objp))
+        *objp = nullptr;
 }
 
 JS_PUBLIC_API(void)
@@ -3996,16 +3997,26 @@ JS_GetFunctionArity(JSFunction *fun)
     return fun->nargs();
 }
 
+namespace JS {
+
+JS_PUBLIC_API(bool)
+IsCallable(JSObject *obj)
+{
+    return obj->isCallable();
+}
+
+JS_PUBLIC_API(bool)
+IsConstructor(JSObject *obj)
+{
+    return obj->isConstructor();
+}
+
+} /* namespace JS */
+
 JS_PUBLIC_API(bool)
 JS_ObjectIsFunction(JSContext *cx, JSObject *obj)
 {
     return obj->is<JSFunction>();
-}
-
-JS_PUBLIC_API(bool)
-JS_ObjectIsCallable(JSContext *cx, JSObject *obj)
-{
-    return obj->isCallable();
 }
 
 JS_PUBLIC_API(bool)
@@ -4324,12 +4335,6 @@ JS::ReadOnlyCompileOptions::copyPODOptions(const ReadOnlyCompileOptions &rhs)
     hasIntroductionInfo = rhs.hasIntroductionInfo;
 }
 
-JSPrincipals *
-JS::ReadOnlyCompileOptions::originPrincipals(ExclusiveContext *cx) const
-{
-    return NormalizeOriginPrincipals(cx->compartment()->principals, originPrincipals_);
-}
-
 JS::OwningCompileOptions::OwningCompileOptions(JSContext *cx)
     : ReadOnlyCompileOptions(),
       runtime(GetRuntime(cx)),
@@ -4341,9 +4346,6 @@ JS::OwningCompileOptions::OwningCompileOptions(JSContext *cx)
 
 JS::OwningCompileOptions::~OwningCompileOptions()
 {
-    if (originPrincipals_)
-        JS_DropPrincipals(runtime, originPrincipals_);
-
     // OwningCompileOptions always owns these, so these casts are okay.
     js_free(const_cast<char *>(filename_));
     js_free(const_cast<char16_t *>(sourceMapURL_));
@@ -4355,7 +4357,7 @@ JS::OwningCompileOptions::copy(JSContext *cx, const ReadOnlyCompileOptions &rhs)
 {
     copyPODOptions(rhs);
 
-    setOriginPrincipals(rhs.originPrincipals(cx));
+    setMutedErrors(rhs.mutedErrors());
     setElement(rhs.element());
     setElementAttributeName(rhs.elementAttributeName());
     setIntroductionScript(rhs.introductionScript());
@@ -4465,15 +4467,15 @@ bool
 JS::Compile(JSContext *cx, HandleObject obj, const ReadOnlyCompileOptions &options,
             const char *bytes, size_t length, MutableHandleScript script)
 {
-    mozilla::ScopedFreePtr<char16_t> chars;
+    mozilla::UniquePtr<char16_t, JS::FreePolicy> chars;
     if (options.utf8)
-        chars = UTF8CharsToNewTwoByteCharsZ(cx, UTF8Chars(bytes, length), &length).get();
+        chars.reset(UTF8CharsToNewTwoByteCharsZ(cx, UTF8Chars(bytes, length), &length).get());
     else
-        chars = InflateString(cx, bytes, &length);
+        chars.reset(InflateString(cx, bytes, &length));
     if (!chars)
         return false;
 
-    return Compile(cx, obj, options, chars, length, script);
+    return Compile(cx, obj, options, chars.get(), length, script);
 }
 
 bool
@@ -4665,15 +4667,15 @@ JS::CompileFunction(JSContext *cx, HandleObject obj, const ReadOnlyCompileOption
                     const char *name, unsigned nargs, const char *const *argnames,
                     const char *bytes, size_t length, MutableHandleFunction fun)
 {
-    mozilla::ScopedFreePtr<char16_t> chars;
+    mozilla::UniquePtr<char16_t, JS::FreePolicy> chars;
     if (options.utf8)
-        chars = UTF8CharsToNewTwoByteCharsZ(cx, UTF8Chars(bytes, length), &length).get();
+        chars.reset(UTF8CharsToNewTwoByteCharsZ(cx, UTF8Chars(bytes, length), &length).get());
     else
-        chars = InflateString(cx, bytes, &length);
+        chars.reset(InflateString(cx, bytes, &length));
     if (!chars)
         return false;
 
-    return CompileFunction(cx, obj, options, name, nargs, argnames, chars, length, fun);
+    return CompileFunction(cx, obj, options, name, nargs, argnames, chars.get(), length, fun);
 }
 
 JS_PUBLIC_API(bool)
@@ -5032,7 +5034,7 @@ JS::Construct(JSContext *cx, HandleValue fval, const JS::HandleValueArray& args,
     assertSameCompartment(cx, fval, args);
     AutoLastFrameCheck lfc(cx);
 
-    return InvokeConstructor(cx, fval, args.length(), args.begin(), rval.address());
+    return InvokeConstructor(cx, fval, args.length(), args.begin(), rval);
 }
 
 static JSObject *
@@ -6493,10 +6495,9 @@ JS_EncodeInterpretedFunction(JSContext *cx, HandleObject funobjArg, uint32_t *le
 }
 
 JS_PUBLIC_API(JSScript *)
-JS_DecodeScript(JSContext *cx, const void *data, uint32_t length,
-                JSPrincipals *originPrincipals)
+JS_DecodeScript(JSContext *cx, const void *data, uint32_t length)
 {
-    XDRDecoder decoder(cx, data, length, originPrincipals);
+    XDRDecoder decoder(cx, data, length);
     RootedScript script(cx);
     if (!decoder.codeScript(&script))
         return nullptr;
@@ -6504,10 +6505,9 @@ JS_DecodeScript(JSContext *cx, const void *data, uint32_t length,
 }
 
 JS_PUBLIC_API(JSObject *)
-JS_DecodeInterpretedFunction(JSContext *cx, const void *data, uint32_t length,
-                             JSPrincipals *originPrincipals)
+JS_DecodeInterpretedFunction(JSContext *cx, const void *data, uint32_t length)
 {
-    XDRDecoder decoder(cx, data, length, originPrincipals);
+    XDRDecoder decoder(cx, data, length);
     RootedObject funobj(cx);
     if (!decoder.codeFunction(&funobj))
         return nullptr;
@@ -6517,11 +6517,6 @@ JS_DecodeInterpretedFunction(JSContext *cx, const void *data, uint32_t length,
 JS_PUBLIC_API(bool)
 JS_PreventExtensions(JSContext *cx, JS::HandleObject obj)
 {
-    bool extensible;
-    if (!JSObject::isExtensible(cx, obj, &extensible))
-        return false;
-    if (!extensible)
-        return true;
     return JSObject::preventExtensions(cx, obj);
 }
 

@@ -143,8 +143,9 @@ JS_SetCompartmentPrincipals(JSCompartment *compartment, JSPrincipals *principals
 extern JS_FRIEND_API(JSPrincipals *)
 JS_GetScriptPrincipals(JSScript *script);
 
-extern JS_FRIEND_API(JSPrincipals *)
-JS_GetScriptOriginPrincipals(JSScript *script);
+extern JS_FRIEND_API(bool)
+JS_ScriptHasMutedErrors(JSScript *script);
+
 
 /* Safe to call with input obj == nullptr. Returns non-nullptr iff obj != nullptr. */
 extern JS_FRIEND_API(JSObject *)
@@ -244,9 +245,6 @@ JS_CopyPropertyFrom(JSContext *cx, JS::HandleId id, JS::HandleObject target,
 
 extern JS_FRIEND_API(bool)
 JS_WrapPropertyDescriptor(JSContext *cx, JS::MutableHandle<JSPropertyDescriptor> desc);
-
-extern JS_FRIEND_API(bool)
-JS_WrapAutoIdVector(JSContext *cx, JS::AutoIdVector &props);
 
 extern JS_FRIEND_API(bool)
 JS_EnumerateState(JSContext *cx, JS::HandleObject obj, JSIterateOp enum_op,
@@ -659,17 +657,14 @@ JS_FRIEND_API(const Class *)
 ProtoKeyToClass(JSProtoKey key);
 
 // Returns true if the standard class identified by |key| inherits from
-// another standard class with the same js::Class. This basically means
-// that the various properties described by our js::Class are intended
-// to live higher up on the proto chain.
+// another standard class (in addition to Object) along its proto chain.
 //
 // In practice, this only returns true for Error subtypes.
 inline bool
 StandardClassIsDependent(JSProtoKey key)
 {
-    JSProtoKey keyFromClass = JSCLASS_CACHED_PROTO_KEY(ProtoKeyToClass(key));
-    MOZ_ASSERT(keyFromClass);
-    return key != keyFromClass;
+    const Class *clasp = ProtoKeyToClass(key);
+    return clasp->spec.defined() && clasp->spec.dependent();
 }
 
 // Returns the key for the class inherited by a given standard class (that
@@ -686,10 +681,9 @@ ParentKeyForStandardClass(JSProtoKey key)
     if (key == JSProto_Object)
         return JSProto_Null;
 
-    // If we're dependent (i.e. an Error subtype), return the key of the class
-    // we depend on.
+    // If we're dependent, return the key of the class we depend on.
     if (StandardClassIsDependent(key))
-        return JSCLASS_CACHED_PROTO_KEY(ProtoKeyToClass(key));
+        return ProtoKeyToClass(key)->spec.parentKey();
 
     // Otherwise, we inherit [Object].
     return JSProto_Object;

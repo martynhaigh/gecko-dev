@@ -3077,6 +3077,12 @@ WifiWorker.prototype = {
       debug("Invalid SSID value.");
       return null;
     }
+    // Truncate ssid if its length of encoded to utf8 is longer than 32.
+    while (unescape(encodeURIComponent(ssid)).length > 32)
+    {
+      ssid = ssid.substring(0, ssid.length-1);
+    }
+
     if (securityType != WIFI_SECURITY_TYPE_NONE &&
         securityType != WIFI_SECURITY_TYPE_WPA_PSK &&
         securityType != WIFI_SECURITY_TYPE_WPA2_PSK) {
@@ -3642,17 +3648,16 @@ WifiWorker.prototype = {
   observe: function observe(subject, topic, data) {
     switch (topic) {
     case kMozSettingsChangedObserverTopic:
-      // The string we're interested in will be a JSON string that looks like:
-      // {"key":"wifi.enabled","value":"true"}.
-
-      let setting = JSON.parse(data);
       // To avoid WifiWorker setting the wifi again, don't need to deal with
       // the "mozsettings-changed" event fired from internal setting.
-      if (setting.isInternalChange) {
+      if ("wrappedJSObject" in subject) {
+        subject = subject.wrappedJSObject;
+      }
+      if (subject.isInternalChange) {
         return;
       }
 
-      this.handle(setting.key, setting.value);
+      this.handle(subject.key, subject.value);
       break;
 
     case "xpcom-shutdown":

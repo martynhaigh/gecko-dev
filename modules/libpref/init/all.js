@@ -165,7 +165,11 @@ pref("dom.undo_manager.enabled", false);
 // Whether to run add-on code in different compartments from browser code. This
 // causes a separate compartment for each (addon, global) combination, which may
 // significantly increase the number of compartments in the system.
+#ifdef NIGHTLY_BUILD
+pref("dom.compartment_per_addon", true);
+#else
 pref("dom.compartment_per_addon", false);
+#endif
 
 // Fastback caching - if this pref is negative, then we calculate the number
 // of content viewers to cache based on the amount of available memory.
@@ -349,11 +353,16 @@ pref("media.peerconnection.identity.timeout", 10000);
 // kXxxUnchanged = 0, kXxxDefault = 1, and higher values are specific to each
 // setting (for Xxx = Ec, Agc, or Ns).  Defaults are all set to kXxxDefault here.
 pref("media.peerconnection.turn.disable", false);
+#if defined(MOZ_WEBRTC_HARDWARE_AEC_NS)
+pref("media.getusermedia.aec_enabled", false);
+pref("media.getusermedia.noise_enabled", false);
+#else
 pref("media.getusermedia.aec_enabled", true);
+pref("media.getusermedia.noise_enabled", true);
+#endif
+pref("media.getusermedia.noise", 1);
 pref("media.getusermedia.agc_enabled", false);
 pref("media.getusermedia.agc", 1);
-pref("media.getusermedia.noise_enabled", true);
-pref("media.getusermedia.noise", 1);
 // Adjustments for OS-specific input delay (lower bound)
 // Adjustments for OS-specific AudioStream+cubeb+output delay (lower bound)
 #if defined(XP_MACOSX)
@@ -431,6 +440,9 @@ pref("layers.async-pan-zoom.enabled", false);
 // Whether to enable containerless async scrolling
 pref("layout.async-containerless-scrolling.enabled", true);
 
+// Whether to enable event region building during painting
+pref("layout.event-regions.enabled", false);
+
 // APZ preferences. For documentation/details on what these prefs do, check 
 // gfx/layers/apz/src/AsyncPanZoomController.cpp.
 pref("apz.allow_checkerboarding", true);
@@ -464,6 +476,7 @@ pref("apz.num_paint_duration_samples", 3);
 pref("apz.overscroll.enabled", false);
 pref("apz.overscroll.fling_friction", "0.02");
 pref("apz.overscroll.fling_stopped_threshold", "0.4");
+pref("apz.overscroll.min_pan_distance_ratio", "1.0");
 pref("apz.overscroll.stretch_factor", "0.5");
 pref("apz.overscroll.snap_back.spring_stiffness", "0.6");
 pref("apz.overscroll.snap_back.spring_friction", "0.1");
@@ -620,6 +633,7 @@ pref("ui.scrollToClick", 0);
 pref("canvas.focusring.enabled", true);
 pref("canvas.customfocusring.enabled", false);
 pref("canvas.hitregions.enabled", false);
+pref("canvas.filters.enabled", false);
 // Add support for canvas path objects
 pref("canvas.path.enabled", true);
 
@@ -1011,6 +1025,10 @@ pref("security.fileuri.strict_origin_policy", true);
 // the results
 pref("network.allow-experiments", true);
 
+// Allow the network changed event to get sent when a network topology or
+// setup change is noticed while running.
+pref("network.notify.changed", true);
+
 // Transmit UDP busy-work to the LAN when anticipating low latency
 // network reads and on wifi to mitigate 802.11 Power Save Polling delays
 pref("network.tickle-wifi.enabled", false);
@@ -1186,6 +1204,11 @@ pref("network.http.connection-retry-timeout", 250);
 // The number of seconds after sending initial SYN for an HTTP connection
 // to give up if the OS does not give up first
 pref("network.http.connection-timeout", 90);
+
+// The number of seconds to allow active connections to prove that they have
+// traffic before considered stalled, after a network change has been detected
+// and signalled.
+pref("network.http.network-changed.timeout", 5);
 
 // The maximum number of current global half open sockets allowable
 // when starting a new speculative connection.
@@ -1731,6 +1754,10 @@ pref("security.mixed_content.block_display_content", false);
 
 // Disable pinning checks by default.
 pref("security.cert_pinning.enforcement_level", 0);
+// Do not process hpkp headers rooted by not built in roots by default.
+// This is to prevent accidental pinning from MITM devices and is used
+// for tests.
+pref("security.cert_pinning.process_headers_from_non_builtin_roots", false);
 
 // Modifier key prefs: default to Windows settings,
 // menu access key = alt, accelerator key = control.
@@ -1982,6 +2009,9 @@ pref("layout.css.mix-blend-mode.enabled", true);
 
 // Is support for CSS Filters enabled?
 pref("layout.css.filters.enabled", false);
+
+// Is support for basic shapes in clip-path enabled?
+pref("layout.css.clip-path-shapes.enabled", false);
 
 // Is support for CSS sticky positioning enabled?
 pref("layout.css.sticky.enabled", true);
@@ -3646,13 +3676,7 @@ pref("image.cache.timeweight", 500);
 // The default Accept header sent for images loaded over HTTP(S)
 pref("image.http.accept", "image/png,image/*;q=0.8,*/*;q=0.5");
 
-// Whether we do high-quality image downscaling. OS X natively supports
-// high-quality image scaling.
-#ifdef XP_MACOSX
-pref("image.high_quality_downscaling.enabled", false);
-#else
 pref("image.high_quality_downscaling.enabled", true);
-#endif
 
 // The minimum percent downscaling we'll use high-quality downscaling on,
 // interpreted as a floating-point number / 1000.

@@ -651,6 +651,7 @@ LiveRangeAllocator<VREG, forLSRA>::buildLivenessInfo()
                             return false;
                     } else {
                         bool found = false;
+
                         for (size_t i = 0; i < ins->numDefs(); i++) {
                             if (ins->getDef(i)->isFixed() &&
                                 ins->getDef(i)->output()->aliases(LAllocation(*iter))) {
@@ -663,12 +664,18 @@ LiveRangeAllocator<VREG, forLSRA>::buildLivenessInfo()
                     }
                 }
             }
-
+            DebugOnly<bool> hasDoubleDef = false;
+            DebugOnly<bool> hasFloat32Def = false;
             for (size_t i = 0; i < ins->numDefs(); i++) {
                 LDefinition *def = ins->getDef(i);
                 if (def->isBogusTemp())
                     continue;
-
+#ifdef DEBUG
+                    if (def->type() == LDefinition::DOUBLE)
+                        hasDoubleDef = true;
+                    if (def->type() == LDefinition::FLOAT32)
+                        hasFloat32Def = true;
+#endif
                 CodePosition from;
                 if (def->policy() == LDefinition::FIXED && def->output()->isRegister() && forLSRA) {
                     // The fixed range covers the current instruction so the
@@ -794,8 +801,15 @@ LiveRangeAllocator<VREG, forLSRA>::buildLivenessInfo()
                             hasUseRegister = true;
                         }
                     }
-
                     JS_ASSERT(!(hasUseRegister && hasUseRegisterAtStart));
+
+                    // LSRA has issues with *AtStart, see bug 1039993.
+                    JS_ASSERT_IF(forLSRA && hasUnaliasedDouble() && hasFloat32Def
+                                 && vregs[use].type() == LDefinition::DOUBLE,
+                                 !use->usedAtStart());
+                    JS_ASSERT_IF(forLSRA && hasMultiAlias() && hasDoubleDef
+                                 && vregs[use].type() == LDefinition::FLOAT32,
+                                 !use->usedAtStart());
 #endif
 
                     // Don't treat RECOVERED_INPUT uses as keeping the vreg alive.

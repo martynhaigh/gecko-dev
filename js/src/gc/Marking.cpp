@@ -218,7 +218,9 @@ CheckMarkedThing(JSTracer *trc, T **thingp)
         JS_ASSERT_IF(gcMarker->getMarkColor() == GRAY,
                      !thing->zone()->isGCMarkingBlack() || rt->isAtomsZone(thing->zone()));
 
-        JS_ASSERT(!(thing->zone()->isGCSweeping() || thing->zone()->isGCFinished()));
+        JS_ASSERT(!(thing->zone()->isGCSweeping() ||
+                    thing->zone()->isGCFinished() ||
+                    thing->zone()->isGCCompacting()));
     }
 
     /*
@@ -1744,7 +1746,7 @@ GCMarker::processMarkStackTop(SliceBudget &budget)
         const Class *clasp = type->clasp();
         if (clasp->trace) {
             // Global objects all have the same trace hook. That hook is safe without barriers
-            // if the gloal has no custom trace hook of it's own, or has been moved to a different
+            // if the global has no custom trace hook of its own, or has been moved to a different
             // compartment, and so can't have one.
             JS_ASSERT_IF(runtime()->gc.isIncrementalGCEnabled() &&
                          !(clasp->trace == JS_GlobalObjectTraceHook &&

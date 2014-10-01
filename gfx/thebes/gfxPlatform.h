@@ -261,7 +261,9 @@ public:
     virtual bool UseAcceleratedSkiaCanvas();
     virtual void InitializeSkiaCacheLimits();
 
-    virtual bool UseTiling() { return gfxPrefs::LayersTilesEnabled(); }
+    /// This should be used instead of directly accessing the preference,
+    /// as different platforms may override the behaviour.
+    virtual bool UseTiling() { return gfxPrefs::LayersTilesEnabledDoNotUseDirectly(); }
 
     void GetAzureBackendInfo(mozilla::widget::InfoObject &aObj) {
       aObj.DefineProperty("AzureCanvasBackend", GetBackendName(mPreferredCanvasBackend));
@@ -409,6 +411,8 @@ public:
     // check whether format is supported on a platform or not (if unclear, returns true)
     virtual bool IsFontFormatSupported(nsIURI *aFontURI, uint32_t aFormatFlags) { return false; }
 
+    virtual bool DidRenderingDeviceReset() { return false; }
+
     void GetPrefFonts(nsIAtom *aLanguage, nsString& array, bool aAppendUnicode = true);
 
     // in some situations, need to make decisions about ambiguous characters, may need to look at multiple pref langs
@@ -445,7 +449,7 @@ public:
 
     // returns a list of commonly used fonts for a given character
     // these are *possible* matches, no cmap-checking is done at this level
-    virtual void GetCommonFallbackFonts(const uint32_t /*aCh*/,
+    virtual void GetCommonFallbackFonts(uint32_t /*aCh*/, uint32_t /*aNextCh*/,
                                         int32_t /*aRunScript*/,
                                         nsTArray<const char*>& /*aFontList*/)
     {

@@ -264,10 +264,10 @@ JS_GetScriptPrincipals(JSScript *script)
     return script->principals();
 }
 
-JS_FRIEND_API(JSPrincipals *)
-JS_GetScriptOriginPrincipals(JSScript *script)
+JS_FRIEND_API(bool)
+JS_ScriptHasMutedErrors(JSScript *script)
 {
-    return script->originPrincipals();
+    return script->mutedErrors();
 }
 
 JS_FRIEND_API(bool)
@@ -1235,10 +1235,11 @@ js::GetAnyCompartmentInZone(JS::Zone *zone)
     return comp.get();
 }
 
-bool
-JS::ObjectPtr::isAboutToBeFinalized()
+void
+JS::ObjectPtr::updateWeakPointerAfterGC()
 {
-    return JS_IsAboutToBeFinalized(&value);
+    if (js::gc::IsObjectAboutToBeFinalized(value.unsafeGet()))
+        value = nullptr;
 }
 
 void
@@ -1433,8 +1434,8 @@ js::IsInRequest(JSContext *cx)
 }
 
 bool
-js::HasObjectMovedOp(JSObject *obj) {
-    return !!GetObjectClass(obj)->ext.objectMovedOp;
+js::HasObjectMovedOpIfRequired(JSObject *obj) {
+    return obj->is<GlobalObject>() || !!GetObjectClass(obj)->ext.objectMovedOp;
 }
 #endif
 

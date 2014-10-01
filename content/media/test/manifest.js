@@ -251,6 +251,13 @@ var gInvalidTests = [
   { name:"invalid-preskip.webm", type:"audio/webm; codecs=opus"},
 ];
 
+var gInvalidPlayTests = [
+  { name:"invalid-excess_discard.webm", type:"audio/webm; codecs=opus"},
+  { name:"invalid-excess_neg_discard.webm", type:"audio/webm; codecs=opus"},
+  { name:"invalid-neg_discard.webm", type:"audio/webm; codecs=opus"},
+  { name:"invalid-discard_on_multi_blocks.webm", type:"audio/webm; codecs=opus"},
+];
+
 // Files to check different cases of ogg skeleton information.
 // sample-fisbone-skeleton4.ogv
 // - Skeleton v4, w/ Content-Type,Role,Name,Language,Title for both theora/vorbis
@@ -626,6 +633,20 @@ var gMetadataTests = [
     }
   },
   { name:"wavedata_u8.wav", tags: { }
+  },
+];
+
+// Test files for Encrypted Media Extensions
+var gEMETests = [
+  {
+    name:"short-cenc.mp4",
+    type:"video/mp4",
+    keys: {
+      // "keyid" : "key"
+      "7e571d017e571d017e571d017e571d01" : "7e5711117e5711117e5711117e571111",
+      "7e571d027e571d027e571d027e571d02" : "7e5722227e5722227e5722227e572222",
+    },
+    sessionType:"temporary",
   },
 ];
 
