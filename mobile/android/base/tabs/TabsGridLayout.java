@@ -98,7 +98,6 @@ class TabsGridLayout extends GridView
         @Override
         public void bindView(TabsLayoutItemView view, Tab tab) {
             super.bindView(view, tab);
-            view.close.setVisibility(View.VISIBLE);
 
             // If we're recycling this view, there's a chance it was transformed during
             // the close animation. Remove any of those properties.
