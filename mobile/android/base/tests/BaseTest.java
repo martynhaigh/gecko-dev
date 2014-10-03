@@ -595,7 +595,7 @@ abstract class BaseTest extends BaseRobocopTest {
     /**
      * Gets the AdapterView of the tabs list.
      *
-     * @return List view in the tabs layout
+     * @return List view in the tabs panel
      */
     private final AdapterView<ListAdapter> getTabsLayout() {
         Element tabs = mDriver.findElement(getActivity(), R.id.tabs);
@@ -604,7 +604,7 @@ abstract class BaseTest extends BaseRobocopTest {
     }
 
     /**
-     * Gets the view in the tabs layout at the specified index.
+     * Gets the view in the tabs panel at the specified index.
      *
      * @return View at index
      */

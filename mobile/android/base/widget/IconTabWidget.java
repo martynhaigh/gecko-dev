@@ -98,7 +98,7 @@ public class IconTabWidget extends TabWidget {
         if (!mIsIcon) {
             return;
         }
-        // We can have multiple views in the tabs layout for each child. This finds the
+        // We can have multiple views in the tabs panel for each child. This finds the
         // first view corresponding to the given tab. This varies by Android
         // version. The first view should always be our ImageButton, but let's
         // be safe.
