@@ -2352,7 +2352,7 @@ public class BrowserApp extends GeckoApp
                     return false;
             }
 
-            // If the tabs panel is showing, hide the tab tray and don't send the event to content.
+            // If the tabs panel is showing, hide the tab panel and don't send the event to content.
             if (event.getActionMasked() == MotionEvent.ACTION_DOWN && autoHideTabs()) {
                 mIsHidingTabs = true;
                 return true;

@@ -76,7 +76,7 @@ public class IconTabWidget extends TabWidget {
 
     /**
      * Fetch the Drawable icon corresponding to the given panel.
-     * @param panel to fetch icon for.
+     * @param panel index to fetch icon for.
      * @return Drawable instance, or null if no icon is being displayed, or the icon does not exist.
      */
     public Drawable getIconDrawable(int index) {
