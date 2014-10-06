@@ -80,6 +80,12 @@ public class TabCounter extends ThemedTextSwitcher
             return;
         }
 
+        // don't animate if there are still over 99 tabs open
+        if (mCount > 99 && count > 99) {
+            mCount = count;
+            return;
+        }
+
         if (mCount == count) {
             return;
         }
@@ -97,14 +103,21 @@ public class TabCounter extends ThemedTextSwitcher
         setDisplayedChild(0);
 
         // Set In value, trigger animation to Out value
-        setCurrentText(String.valueOf(mCount));
-        setText(String.valueOf(count));
+        setCurrentText(getNumberOfTabsToDisplay(mCount));
+        setText(getNumberOfTabsToDisplay(count));
 
         mCount = count;
     }
 
+    private String getNumberOfTabsToDisplay(int count) {
+        if (count > 99) {
+            return "∞";
+        }
+        return String.valueOf(count);
+    }
+
     void setCount(int count) {
-        setCurrentText(String.valueOf(count));
+        setCurrentText(getNumberOfTabsToDisplay(count));
         mCount = count;
     }
 
