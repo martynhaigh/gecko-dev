@@ -16,8 +16,11 @@ import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
 import org.mozilla.gecko.Tabs;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.util.AttributeSet;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.GridView;
 import android.view.ViewGroup;
@@ -58,6 +61,19 @@ class TabsGridLayout extends GridView
                 item.thumbnail.setImageDrawable(null);
             }
         });
+        setGravity(Gravity.CENTER);
+        Resources r = getResources();
+        float columnWidthDp = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 168, r.getDisplayMetrics());
+
+        setColumnWidth((int) columnWidthDp);
+        setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
+
+
+        float paddingDp = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 24, r.getDisplayMetrics());
+
+        setPadding((int) paddingDp, 0, (int) paddingDp, 0);
+
+        setClipToPadding(false);
     }
 
     private class TabsGridLayoutAdapter extends TabsLayoutAdapter {
