@@ -20,13 +20,15 @@ import java.util.ArrayList;
 public class TabsLayoutAdapter extends BaseAdapter {
     public static final String LOGTAG = "Gecko" + TabsLayoutAdapter.class.getSimpleName();
 
+    private final int mTabLayoutId;
     private Context mContext;
     private ArrayList<Tab> mTabs;
     private LayoutInflater mInflater;
 
-    public TabsLayoutAdapter (Context context) {
+    public TabsLayoutAdapter (Context context, int tabLayoutId) {
         mContext = context;
         mInflater = LayoutInflater.from(mContext);
+        mTabLayoutId = tabLayoutId;
     }
 
     final void setTabs (ArrayList<Tab> tabs) {
@@ -83,7 +85,7 @@ public class TabsLayoutAdapter extends BaseAdapter {
     }
 
     TabsLayoutItemView newView(int position, ViewGroup parent) {
-        return (TabsLayoutItemView) mInflater.inflate(R.layout.tabs_layout_item_view, parent, false);
+        return (TabsLayoutItemView) mInflater.inflate(mTabLayoutId, parent, false);
     }
 
     void bindView(TabsLayoutItemView view, Tab tab) {

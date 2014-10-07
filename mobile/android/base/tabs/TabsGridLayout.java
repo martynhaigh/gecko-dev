@@ -63,10 +63,14 @@ class TabsGridLayout extends GridView
         });
         setGravity(Gravity.CENTER);
         Resources r = getResources();
-        float columnWidthDp = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 168, r.getDisplayMetrics());
+        float columnWidthDp = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 270, r.getDisplayMetrics());
 
         setColumnWidth((int) columnWidthDp);
-        setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
+        //setHorizontalSpacing(10);
+
+
+
+        setStretchMode(GridView.STRETCH_SPACING);
 
 
         float paddingDp = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 24, r.getDisplayMetrics());
@@ -82,7 +86,7 @@ class TabsGridLayout extends GridView
         final private View.OnClickListener mSelectClickListener;
 
         public TabsGridLayoutAdapter (Context context) {
-            super(context);
+            super(context, R.layout.new_tablet_tabs_item_cell);
 
             mCloseClickListener = new Button.OnClickListener() {
                 @Override

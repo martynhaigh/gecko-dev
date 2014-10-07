@@ -104,6 +104,10 @@
     <dimen name="url_bar_offset_left">32dp</dimen>
     <dimen name="history_tab_indicator_height">50dp</dimen>
 
+
+    <dimen name="new_tab_thumbnail_height">240dp</dimen>
+    <dimen name="new_tab_thumbnail_width">340dp</dimen>
+
     <!-- PageActionButtons dimensions -->
     <dimen name="page_action_button_width">32dp</dimen>
 
