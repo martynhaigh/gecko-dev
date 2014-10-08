@@ -59,7 +59,7 @@ class TabsGridLayout extends GridView
             }
         });
     }
-
+ic
     private class TabsGridLayoutAdapter extends TabsLayoutAdapter {
 
         final private Button.OnClickListener mCloseClickListener;
