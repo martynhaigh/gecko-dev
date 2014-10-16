@@ -14,7 +14,11 @@ loop.conversation = (function(mozL10n) {
   var sharedViews = loop.shared.views;
   var sharedMixins = loop.shared.mixins;
   var sharedModels = loop.shared.models;
+  var sharedActions = loop.shared.actions;
+
   var OutgoingConversationView = loop.conversationViews.OutgoingConversationView;
+  var CallIdentifierView = loop.conversationViews.CallIdentifierView;
+  var EmptyRoomView = loop.roomViews.EmptyRoomView;
 
   var IncomingCallView = React.createClass({
     mixins: [sharedMixins.DropdownMenuMixin],
@@ -94,9 +98,14 @@ loop.conversation = (function(mozL10n) {
         "conversation-window-dropdown": true,
         "visually-hidden": !this.state.showMenu
       });
+
       return (
         <div className="call-window">
-          <h2>{mozL10n.get("incoming_call_title2")}</h2>
+          <CallIdentifierView video={this.props.video}
+            peerIdentifier={this.props.model.getCallIdentifier()}
+            urlCreationDate={this.props.model.get("urlCreationDate")}
+            showIcons={true} />
+
           <div className="btn-group call-action-group">
 
             <div className="fx-embedded-call-button-spacer"></div>
@@ -229,8 +238,7 @@ loop.conversation = (function(mozL10n) {
           );
         }
         case "connected": {
-          // XXX This should be the caller id (bug 1020449)
-          document.title = mozL10n.get("incoming_call_title2");
+          document.title = this.props.conversation.getCallIdentifier();
 
           var callType = this.props.conversation.get("selectedCallType");
 
@@ -386,7 +394,8 @@ loop.conversation = (function(mozL10n) {
       if (progressData.state !== "terminated")
         return;
 
-      if (progressData.reason === "cancel") {
+      if (progressData.reason === "cancel" ||
+          progressData.reason === "closed") {
         this._abortIncomingCall();
         return;
       }
@@ -474,7 +483,7 @@ loop.conversation = (function(mozL10n) {
    * Master controller view for handling if incoming or outgoing calls are
    * in progress, and hence, which view to display.
    */
-  var ConversationControllerView = React.createClass({
+  var AppControllerView = React.createClass({
     propTypes: {
       // XXX Old types required for incoming call view.
       client: React.PropTypes.instanceOf(loop.Client).isRequired,
@@ -484,7 +493,10 @@ loop.conversation = (function(mozL10n) {
 
       // XXX New types for OutgoingConversationView
       store: React.PropTypes.instanceOf(loop.store.ConversationStore).isRequired,
-      dispatcher: React.PropTypes.instanceOf(loop.Dispatcher).isRequired
+      dispatcher: React.PropTypes.instanceOf(loop.Dispatcher).isRequired,
+
+      // if not passed, this is not a room view
+      localRoomStore: React.PropTypes.instanceOf(loop.store.LocalRoomStore)
     },
 
     getInitialState: function() {
@@ -498,6 +510,15 @@ loop.conversation = (function(mozL10n) {
     },
 
     render: function() {
+      if (this.props.localRoomStore) {
+        return (
+          <EmptyRoomView
+            mozLoop={navigator.mozLoop}
+            localRoomStore={this.props.localRoomStore}
+          />
+        );
+      }
+
       // Don't display anything, until we know what type of call we are.
       if (this.state.outgoing === undefined) {
         return null;
@@ -551,10 +572,6 @@ loop.conversation = (function(mozL10n) {
       sdkDriver: sdkDriver
     });
 
-    // XXX For now key this on the pref, but this should really be
-    // set by the information from the mozLoop API when we can get it (bug 1072323).
-    var outgoingEmail = navigator.mozLoop.getLoopCharPref("outgoingemail");
-
     // XXX Old class creation for the incoming conversation view, whilst
     // we transition across (bug 1072323).
     var conversation = new sharedModels.ConversationModel(
@@ -566,19 +583,43 @@ loop.conversation = (function(mozL10n) {
     var helper = new loop.shared.utils.Helper();
     var locationHash = helper.locationHash();
     var callId;
-    if (locationHash) {
-      callId = locationHash.match(/\#incoming\/(.*)/)[1]
-      conversation.set("callId", callId);
+    var outgoing;
+    var localRoomStore;
+
+    // XXX removeMe, along with noisy comment at the beginning of
+    // conversation_test.js "when locationHash begins with #room".
+    if (navigator.mozLoop.getLoopBoolPref("test.alwaysUseRooms")) {
+      locationHash = "#room/32";
     }
+
+    var hash = locationHash.match(/#incoming\/(.*)/);
+    if (hash) {
+      callId = hash[1];
+      outgoing = false;
+    } else if (hash = locationHash.match(/#room\/(.*)/)) {
+      localRoomStore = new loop.store.LocalRoomStore({
+        dispatcher: dispatcher,
+        mozLoop: navigator.mozLoop
+      });
+    } else {
+      hash = locationHash.match(/#outgoing\/(.*)/);
+      if (hash) {
+        callId = hash[1];
+        outgoing = true;
+      }
+    }
+
+    conversation.set({callId: callId});
 
     window.addEventListener("unload", function(event) {
       // Handle direct close of dialog box via [x] control.
-      navigator.mozLoop.releaseCallData(conversation.get("callId"));
+      navigator.mozLoop.releaseCallData(callId);
     });
 
     document.body.classList.add(loop.shared.utils.getTargetPlatform());
 
-    React.renderComponent(<ConversationControllerView
+    React.renderComponent(<AppControllerView
+      localRoomStore={localRoomStore}
       store={conversationStore}
       client={client}
       conversation={conversation}
@@ -586,14 +627,20 @@ loop.conversation = (function(mozL10n) {
       sdk={window.OT}
     />, document.querySelector('#main'));
 
+   if (localRoomStore) {
+      dispatcher.dispatch(
+        new sharedActions.SetupEmptyRoom({localRoomId: hash[1]}));
+      return;
+    }
+
     dispatcher.dispatch(new loop.shared.actions.GatherCallData({
       callId: callId,
-      calleeId: outgoingEmail
+      outgoing: outgoing
     }));
   }
 
   return {
-    ConversationControllerView: ConversationControllerView,
+    AppControllerView: AppControllerView,
     IncomingConversationView: IncomingConversationView,
     IncomingCallView: IncomingCallView,
     init: init

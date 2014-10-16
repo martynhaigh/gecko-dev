@@ -4,7 +4,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-
 #include "vm/SavedStacks.h"
 
 #include "mozilla/Attributes.h"
@@ -17,6 +16,7 @@
 #include "jshashutil.h"
 #include "jsmath.h"
 #include "jsnum.h"
+#include "prmjtime.h"
 
 #include "gc/Marking.h"
 #include "js/Vector.h"
@@ -26,7 +26,7 @@
 
 #include "jscntxtinlines.h"
 
-#include "vm/ObjectImpl-inl.h"
+#include "vm/NativeObject-inl.h"
 
 using mozilla::AddToHash;
 using mozilla::HashString;
@@ -431,10 +431,10 @@ SavedStacks::sweep(JSRuntime *rt)
 {
     if (frames.initialized()) {
         for (SavedFrame::Set::Enum e(frames); !e.empty(); e.popFront()) {
-            JSObject *obj = static_cast<JSObject *>(e.front());
+            JSObject *obj = e.front().unbarrieredGet();
             JSObject *temp = obj;
 
-            if (IsObjectAboutToBeFinalized(&obj)) {
+            if (IsObjectAboutToBeFinalizedFromAnyThread(&obj)) {
                 e.removeFront();
             } else {
                 SavedFrame *frame = &obj->as<SavedFrame>();
@@ -459,7 +459,9 @@ SavedStacks::sweep(JSRuntime *rt)
 
     sweepPCLocationMap();
 
-    if (savedFrameProto && IsObjectAboutToBeFinalized(savedFrameProto.unsafeGet())) {
+    if (savedFrameProto.unbarrieredGet() &&
+        IsObjectAboutToBeFinalizedFromAnyThread(savedFrameProto.unsafeGet()))
+    {
         savedFrameProto.set(nullptr);
     }
 }
@@ -650,7 +652,7 @@ SavedStacks::sweepPCLocationMap()
     for (PCLocationMap::Enum e(pcLocationMap); !e.empty(); e.popFront()) {
         PCKey key = e.front().key();
         JSScript *script = key.script.get();
-        if (IsScriptAboutToBeFinalized(&script)) {
+        if (IsScriptAboutToBeFinalizedFromAnyThread(&script)) {
             e.removeFront();
         } else if (script != key.script.get()) {
             key.script = script;
@@ -674,10 +676,12 @@ SavedStacks::getLocation(JSContext *cx, const FrameIter &iter, MutableHandleLoca
     // that doesn't employ memoization, and update |locationp|'s slots directly.
 
     if (!iter.hasScript()) {
-        const char *filename = iter.scriptFilename();
-        if (!filename)
-            filename = "";
-        locationp->source = Atomize(cx, filename, strlen(filename));
+        if (const char16_t *displayURL = iter.scriptDisplayURL()) {
+            locationp->source = AtomizeChars(cx, displayURL, js_strlen(displayURL));
+        } else {
+            const char *filename = iter.scriptFilename() ? iter.scriptFilename() : "";
+            locationp->source = Atomize(cx, filename, strlen(filename));
+        }
         if (!locationp->source)
             return false;
 
@@ -692,8 +696,13 @@ SavedStacks::getLocation(JSContext *cx, const FrameIter &iter, MutableHandleLoca
     PCLocationMap::AddPtr p = pcLocationMap.lookupForAdd(key);
 
     if (!p) {
-        const char *filename = script->filename() ? script->filename() : "";
-        RootedAtom source(cx, Atomize(cx, filename, strlen(filename)));
+        RootedAtom source(cx);
+        if (const char16_t *displayURL = iter.scriptDisplayURL()) {
+            source = AtomizeChars(cx, displayURL, js_strlen(displayURL));
+        } else {
+            const char *filename = script->filename() ? script->filename() : "";
+            source = Atomize(cx, filename, strlen(filename));
+        }
         if (!source)
             return false;
 
@@ -807,7 +816,7 @@ SavedStacksMetadataCallback(JSContext *cx, JSObject **pmetadata)
         return false;
     *pmetadata = frame;
 
-    return Debugger::onLogAllocationSite(cx, frame);
+    return Debugger::onLogAllocationSite(cx, frame, PRMJ_Now());
 }
 
 #ifdef JS_CRASH_DIAGNOSTICS

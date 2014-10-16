@@ -248,8 +248,8 @@ private:
 
 // IID for the nsINode interface
 #define NS_INODE_IID \
-{ 0x3a60353e, 0x04e5, 0x49ca, \
-  { 0x84, 0x1c, 0x59, 0xc6, 0xde, 0xe6, 0x36, 0xcc } }
+{ 0x8deda3f4, 0x0f45, 0x497a, \
+  { 0x89, 0x7c, 0xe6, 0x09, 0x12, 0x8a, 0xad, 0xd8 } }
 
 /**
  * An internal interface that abstracts some DOMNode-related parts that both
@@ -320,7 +320,6 @@ public:
     mSubtreeRoot(MOZ_THIS_IN_INITIALIZER_LIST()),
     mSlots(nullptr)
   {
-    SetIsDOMBinding();
   }
 #endif
 
@@ -381,11 +380,7 @@ protected:
    * does some additional checks and fix-up that's common to all nodes. WrapNode
    * should just call the DOM binding's Wrap function.
    */
-  virtual JSObject* WrapNode(JSContext *aCx)
-  {
-    MOZ_ASSERT(!IsDOMBinding(), "Someone forgot to override WrapNode");
-    return nullptr;
-  }
+  virtual JSObject* WrapNode(JSContext *aCx) = 0;
 
   // Subclasses that wish to override the parent behavior should return the
   // result of GetParentObjectIntenral, which handles the XBL scope stuff.

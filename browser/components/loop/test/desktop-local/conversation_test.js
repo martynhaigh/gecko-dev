@@ -90,7 +90,7 @@ describe("loop.conversation", function() {
       delete window.OT;
     });
 
-    it("should initalize L10n", function() {
+    it("should initialize L10n", function() {
       loop.conversation.init();
 
       sinon.assert.calledOnce(document.mozL10n.initialize);
@@ -98,15 +98,52 @@ describe("loop.conversation", function() {
         navigator.mozLoop);
     });
 
-    it("should create the ConversationControllerView", function() {
+    it("should create the AppControllerView", function() {
       loop.conversation.init();
 
       sinon.assert.calledOnce(React.renderComponent);
       sinon.assert.calledWith(React.renderComponent,
         sinon.match(function(value) {
           return TestUtils.isDescriptorOfType(value,
-            loop.conversation.ConversationControllerView);
+            loop.conversation.AppControllerView);
       }));
+    });
+
+    describe("when locationHash begins with #room", function () {
+      // XXX must stay in sync with "test.alwaysUseRooms" pref check
+      // in conversation.jsx:init until we remove that code, which should
+      // happen in the second patch in bug 1074686, at which time this comment
+      // can go away as well.
+      var fakeRoomID = "32";
+
+      beforeEach(function() {
+        loop.shared.utils.Helper.prototype.locationHash
+          .returns("#room/" + fakeRoomID);
+
+        sandbox.stub(loop.store, "LocalRoomStore");
+      });
+
+      it("should create a localRoomStore", function() {
+        loop.conversation.init();
+
+        sinon.assert.calledOnce(loop.store.LocalRoomStore);
+        sinon.assert.calledWithNew(loop.store.LocalRoomStore);
+        sinon.assert.calledWithExactly(loop.store.LocalRoomStore,
+          sinon.match({
+            dispatcher: sinon.match.instanceOf(loop.Dispatcher),
+            mozLoop: sinon.match.same(navigator.mozLoop)
+          }));
+      });
+
+      it("should dispatch SetupEmptyRoom with localRoomId from locationHash",
+        function() {
+
+          loop.conversation.init();
+
+          sinon.assert.calledOnce(loop.Dispatcher.prototype.dispatch);
+          sinon.assert.calledWithExactly(loop.Dispatcher.prototype.dispatch,
+            new loop.shared.actions.SetupEmptyRoom({localRoomId: fakeRoomID}));
+        });
     });
 
     it("should trigger a gatherCallData action", function() {
@@ -115,20 +152,35 @@ describe("loop.conversation", function() {
       sinon.assert.calledOnce(loop.Dispatcher.prototype.dispatch);
       sinon.assert.calledWithExactly(loop.Dispatcher.prototype.dispatch,
         new loop.shared.actions.GatherCallData({
-          calleeId: null,
-          callId: "42"
+          callId: "42",
+          outgoing: false
         }));
     });
+
+    it("should trigger an outgoing gatherCallData action for outgoing calls",
+      function() {
+        loop.shared.utils.Helper.prototype.locationHash.returns("#outgoing/24");
+
+        loop.conversation.init();
+
+        sinon.assert.calledOnce(loop.Dispatcher.prototype.dispatch);
+        sinon.assert.calledWithExactly(loop.Dispatcher.prototype.dispatch,
+          new loop.shared.actions.GatherCallData({
+            callId: "24",
+            outgoing: true
+          }));
+      });
   });
 
   describe("ConversationControllerView", function() {
     var store, conversation, client, ccView, oldTitle, dispatcher;
 
-    function mountTestComponent() {
+    function mountTestComponent(localRoomStore) {
       return TestUtils.renderIntoDocument(
-        loop.conversation.ConversationControllerView({
+        loop.conversation.AppControllerView({
           client: client,
           conversation: conversation,
+          localRoomStore: localRoomStore,
           sdk: {},
           store: store
         }));
@@ -141,7 +193,16 @@ describe("loop.conversation", function() {
         sdk: {}
       });
       dispatcher = new loop.Dispatcher();
-      store = new loop.store.ConversationStore({}, {
+      store = new loop.store.ConversationStore({
+        contact: {
+          name: [ "Mr Smith" ],
+          email: [{
+            type: "home",
+            value: "fakeEmail",
+            pref: true
+          }]
+        }
+      }, {
         client: client,
         dispatcher: dispatcher,
         sdkDriver: {}
@@ -169,6 +230,22 @@ describe("loop.conversation", function() {
 
       TestUtils.findRenderedComponentWithType(ccView,
         loop.conversation.IncomingConversationView);
+    });
+
+    it("should display the EmptyRoomView for rooms", function() {
+      navigator.mozLoop.rooms = {
+        addCallback: function() {},
+        removeCallback: function() {}
+      };
+      var localRoomStore = new loop.store.LocalRoomStore({
+        mozLoop: navigator.mozLoop,
+        dispatcher: dispatcher
+      });
+
+      ccView = mountTestComponent(localRoomStore);
+
+      TestUtils.findRenderedComponentWithType(ccView,
+        loop.roomViews.EmptyRoomView);
     });
   });
 
@@ -383,6 +460,46 @@ describe("loop.conversation", function() {
               });
             });
 
+            describe("progress - terminated - closed", function() {
+              it("should stop alerting", function(done) {
+                promise.then(function() {
+                  icView._websocket.trigger("progress", {
+                    state: "terminated",
+                    reason: "closed"
+                  });
+
+                  sinon.assert.calledOnce(navigator.mozLoop.stopAlerting);
+                  done();
+                });
+              });
+
+              it("should close the websocket", function(done) {
+                promise.then(function() {
+                  icView._websocket.trigger("progress", {
+                    state: "terminated",
+                    reason: "closed"
+                  });
+
+                  sinon.assert.calledOnce(icView._websocket.close);
+                  done();
+                });
+              });
+
+              it("should close the window", function(done) {
+                promise.then(function() {
+                  icView._websocket.trigger("progress", {
+                    state: "terminated",
+                    reason: "closed"
+                  });
+
+                  sandbox.clock.tick(1);
+
+                  sinon.assert.calledOnce(window.close);
+                  done();
+                });
+              });
+            });
+
             describe("progress - terminated - timeout (previousState = alerting)", function() {
               it("should stop alerting", function(done) {
                 promise.then(function() {
@@ -586,6 +703,14 @@ describe("loop.conversation", function() {
             TestUtils.findRenderedComponentWithType(icView,
               sharedView.ConversationView);
           });
+
+        it("should set the title to the call identifier", function() {
+          sandbox.stub(conversation, "getCallIdentifier").returns("fakeId");
+
+          conversation.accepted();
+
+          expect(document.title).eql("fakeId");
+        });
       });
 
       describe("session:ended", function() {
@@ -673,7 +798,9 @@ describe("loop.conversation", function() {
     var view, model;
 
     beforeEach(function() {
-      var Model = Backbone.Model.extend({});
+      var Model = Backbone.Model.extend({
+        getCallIdentifier: function() {return "fakeId";}
+      });
       model = new Model();
       sandbox.spy(model, "trigger");
       sandbox.stub(model, "set");

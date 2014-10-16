@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <fcntl.h>
 #include "ElfLoader.h"
+#include "BaseElf.h"
 #include "CustomElf.h"
 #include "Mappable.h"
 #include "Logging.h"
@@ -37,6 +38,10 @@ inline int sigaltstack(const stack_t *ss, stack_t *oss) {
 extern "C" MOZ_EXPORT const void *
 __gnu_Unwind_Find_exidx(void *pc, int *pcount) __attribute__((weak));
 #endif
+
+/* Pointer to the PT_DYNAMIC section of the executable or library
+ * containing this code. */
+extern "C" Elf::Dyn _DYNAMIC[];
 
 using namespace mozilla;
 
@@ -331,6 +336,10 @@ ElfLoader::Load(const char *path, int flags, LibHandle *parent)
   /* Ensure logging is initialized or refresh if environment changed. */
   Logging::Init();
 
+  /* Ensure self_elf initialization. */
+  if (!self_elf)
+    Init();
+
   RefPtr<LibHandle> handle;
 
   /* Handle dlopen(nullptr) directly. */
@@ -443,8 +452,15 @@ void
 ElfLoader::Register(LibHandle *handle)
 {
   handles.push_back(handle);
-  if (dbg && !handle->IsSystemElf())
-    dbg.Add(static_cast<CustomElf *>(handle));
+}
+
+void
+ElfLoader::Register(CustomElf *handle)
+{
+  Register(static_cast<LibHandle *>(handle));
+  if (dbg) {
+    dbg.Add(handle);
+  }
 }
 
 void
@@ -457,8 +473,6 @@ ElfLoader::Forget(LibHandle *handle)
   if (it != handles.end()) {
     DEBUG_LOG("ElfLoader::Forget(%p [\"%s\"])", reinterpret_cast<void *>(handle),
                                                 handle->GetPath());
-    if (dbg && !handle->IsSystemElf())
-      dbg.Remove(static_cast<CustomElf *>(handle));
     handles.erase(it);
   } else {
     DEBUG_LOG("ElfLoader::Forget(%p [\"%s\"]): Handle not found",
@@ -466,9 +480,40 @@ ElfLoader::Forget(LibHandle *handle)
   }
 }
 
+void
+ElfLoader::Forget(CustomElf *handle)
+{
+  Forget(static_cast<LibHandle *>(handle));
+  if (dbg) {
+    dbg.Remove(handle);
+  }
+}
+
+void
+ElfLoader::Init()
+{
+  Dl_info info;
+  /* On Android < 4.1 can't reenter dl* functions. So when the library
+   * containing this code is dlopen()ed, it can't call dladdr from a
+   * static initializer. */
+  if (dladdr(_DYNAMIC, &info) != 0) {
+    self_elf = LoadedElf::Create(info.dli_fname, info.dli_fbase);
+  }
+#if defined(ANDROID)
+  if (dladdr(FunctionPtr(syscall), &info) != 0) {
+    libc = LoadedElf::Create(info.dli_fname, info.dli_fbase);
+  }
+#endif
+}
+
 ElfLoader::~ElfLoader()
 {
   LibHandleList list;
+
+  /* Release self_elf and libc */
+  self_elf = nullptr;
+  libc = nullptr;
+
   /* Build up a list of all library handles with direct (external) references.
    * We actually skip system library handles because we want to keep at least
    * some of these open. Most notably, Mozilla codebase keeps a few libgnome
@@ -477,8 +522,8 @@ ElfLoader::~ElfLoader()
   for (LibHandleList::reverse_iterator it = handles.rbegin();
        it < handles.rend(); ++it) {
     if ((*it)->DirectRefCount()) {
-      if ((*it)->IsSystemElf()) {
-        static_cast<SystemElf *>(*it)->Forget();
+      if (SystemElf *se = (*it)->AsSystemElf()) {
+        se->Forget();
       } else {
         list.push_back(*it);
       }
@@ -493,7 +538,7 @@ ElfLoader::~ElfLoader()
     list = handles;
     for (LibHandleList::reverse_iterator it = list.rbegin();
          it < list.rend(); ++it) {
-      if ((*it)->IsSystemElf()) {
+      if ((*it)->AsSystemElf()) {
         DEBUG_LOG("ElfLoader::~ElfLoader(): Remaining handle for \"%s\" "
                   "[%d direct refs, %d refs total]", (*it)->GetPath(),
                   (*it)->DirectRefCount(), (*it)->refCount());
@@ -512,10 +557,12 @@ ElfLoader::~ElfLoader()
 void
 ElfLoader::stats(const char *when)
 {
+  if (MOZ_LIKELY(!Logging::isVerbose()))
+    return;
+
   for (LibHandleList::iterator it = Singleton.handles.begin();
        it < Singleton.handles.end(); ++it)
-    if (!(*it)->IsSystemElf())
-      static_cast<CustomElf *>(*it)->stats(when);
+    (*it)->stats(when);
 }
 
 #ifdef __ARM_EABI__
@@ -1140,11 +1187,12 @@ void SEGVHandler::handler(int signum, siginfo_t *info, void *context)
   if (info->si_code == SEGV_ACCERR) {
     mozilla::RefPtr<LibHandle> handle =
       ElfLoader::Singleton.GetHandleByPtr(info->si_addr);
-    if (handle && !handle->IsSystemElf()) {
-      DEBUG_LOG("Within the address space of a CustomElf");
-      CustomElf *elf = static_cast<CustomElf *>(static_cast<LibHandle *>(handle));
-      if (elf->mappable->ensure(info->si_addr))
+    BaseElf *elf;
+    if (handle && (elf = handle->AsBaseElf())) {
+      DEBUG_LOG("Within the address space of %s", handle->GetPath());
+      if (elf->mappable && elf->mappable->ensure(info->si_addr)) {
         return;
+      }
     }
   }
 

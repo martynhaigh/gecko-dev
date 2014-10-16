@@ -36,18 +36,13 @@ class AutoTraceSession;
 
 class ChunkPool
 {
-    Chunk   *emptyChunkListHead;
-    size_t  emptyCount;
+    Chunk *head_;
+    size_t count_;
 
   public:
-    ChunkPool()
-      : emptyChunkListHead(nullptr),
-        emptyCount(0)
-    {}
+    ChunkPool() : head_(nullptr), count_(0) {}
 
-    size_t getEmptyCount() const {
-        return emptyCount;
-    }
+    size_t count() const { return count_; }
 
     /* Must be called with the GC lock taken. */
     inline Chunk *get(JSRuntime *rt);
@@ -57,7 +52,7 @@ class ChunkPool
 
     class Enum {
       public:
-        explicit Enum(ChunkPool &pool) : pool(pool), chunkp(&pool.emptyChunkListHead) {}
+        explicit Enum(ChunkPool &pool) : pool(pool), chunkp(&pool.head_) {}
         bool empty() { return !*chunkp; }
         Chunk *front();
         inline void popFront();
@@ -66,42 +61,6 @@ class ChunkPool
         ChunkPool &pool;
         Chunk **chunkp;
     };
-};
-
-struct ConservativeGCData
-{
-    /*
-     * The GC scans conservatively between ThreadData::nativeStackBase and
-     * nativeStackTop unless the latter is nullptr.
-     */
-    uintptr_t           *nativeStackTop;
-
-    union {
-        jmp_buf         jmpbuf;
-        uintptr_t       words[JS_HOWMANY(sizeof(jmp_buf), sizeof(uintptr_t))];
-    } registerSnapshot;
-
-    ConservativeGCData() {
-        mozilla::PodZero(this);
-    }
-
-    ~ConservativeGCData() {
-        /*
-         * The conservative GC scanner should be disabled when the thread leaves
-         * the last request.
-         */
-        MOZ_ASSERT(!hasStackToScan());
-    }
-
-    MOZ_NEVER_INLINE void recordStackTop();
-
-    void updateForRequestEnd() {
-        nativeStackTop = nullptr;
-    }
-
-    bool hasStackToScan() const {
-        return !!nativeStackTop;
-    }
 };
 
 /*
@@ -326,8 +285,6 @@ class GCRuntime
   public:
     // Internal public interface
     js::gc::State state() { return incrementalState; }
-    void recordNativeStackTop();
-    void notifyRequestEnd() { conservativeGC.updateForRequestEnd(); }
     bool isBackgroundSweeping() { return helperState.isBackgroundSweeping(); }
     void waitBackgroundSweepEnd() { helperState.waitBackgroundSweepEnd(); }
     void waitBackgroundSweepOrAllocEnd() { helperState.waitBackgroundSweepOrAllocEnd(); }
@@ -473,11 +430,20 @@ class GCRuntime
     bool isVerifyPreBarriersEnabled() const { return false; }
 #endif
 
+    template <AllowGC allowGC>
+    static void *refillFreeListFromAnyThread(ThreadSafeContext *cx, AllocKind thingKind);
+    static void *refillFreeListInGC(Zone *zone, AllocKind thingKind);
+
   private:
-    // For ArenaLists::allocateFromArenaInline()
+    // For ArenaLists::allocateFromArena()
     friend class ArenaLists;
-    Chunk *pickChunk(Zone *zone, AutoMaybeStartBackgroundAllocation &maybeStartBackgroundAllocation);
+    Chunk *pickChunk(Zone *zone, AutoMaybeStartBackgroundAllocation &maybeStartBGAlloc);
     inline void arenaAllocatedDuringGC(JS::Zone *zone, ArenaHeader *arena);
+
+    template <AllowGC allowGC>
+    static void *refillFreeListFromMainThread(JSContext *cx, AllocKind thingKind);
+    static void *refillFreeListOffMainThread(ExclusiveContext *cx, AllocKind thingKind);
+    static void *refillFreeListPJS(ForkJoinContext *cx, AllocKind thingKind);
 
     /*
      * Return the list of chunks that can be released outside the GC lock.
@@ -528,7 +494,7 @@ class GCRuntime
     void decommitArenasFromAvailableList(Chunk **availableListHeadp);
     void decommitArenas();
     void expireChunksAndArenas(bool shouldShrink);
-    void sweepBackgroundThings(bool onBackgroundThread);
+    void sweepBackgroundThings();
     void assertBackgroundSweepingFinished();
     bool shouldCompact();
 #ifdef JSGC_COMPACTING
@@ -595,7 +561,7 @@ class GCRuntime
      */
     js::gc::Chunk         *systemAvailableChunkListHead;
     js::gc::Chunk         *userAvailableChunkListHead;
-    js::gc::ChunkPool     chunkPool;
+    js::gc::ChunkPool     emptyChunks;
 
     js::RootedValueMap    rootsHash;
 
@@ -696,6 +662,12 @@ class GCRuntime
     JS::Zone              *sweepZone;
     int                   sweepKindIndex;
     bool                  abortSweepAfterCurrentGroup;
+
+    /*
+     * Concurrent sweep infrastructure.
+     */
+    void startTask(GCParallelTask &task, gcstats::Phase phase);
+    void joinTask(GCParallelTask &task, gcstats::Phase phase);
 
     /*
      * List head of arenas allocated during the sweep phase.
@@ -857,8 +829,6 @@ class GCRuntime
      * the current AllocKind being swept in order of increasing free space.
      */
     SortedArenaList incrementalSweepList;
-
-    ConservativeGCData conservativeGC;
 
     friend class js::GCHelperState;
     friend class js::gc::MarkingValidator;
