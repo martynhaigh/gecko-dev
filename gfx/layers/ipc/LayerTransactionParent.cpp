@@ -161,6 +161,13 @@ LayerTransactionParent::~LayerTransactionParent()
   MOZ_COUNT_DTOR(LayerTransactionParent);
 }
 
+bool
+LayerTransactionParent::RecvShutdown()
+{
+  Destroy();
+  return Send__delete__(this);
+}
+
 void
 LayerTransactionParent::Destroy()
 {
@@ -663,7 +670,7 @@ LayerTransactionParent::RecvGetAnimationTransform(PLayerParent* aParent,
   Matrix4x4 transform = layer->AsLayerComposite()->GetShadowTransform();
   if (ContainerLayer* c = layer->AsContainerLayer()) {
     // Undo the scale transform applied by AsyncCompositionManager::SampleValue
-    transform.ScalePost(1.0f/c->GetInheritedXScale(),
+    transform.PostScale(1.0f/c->GetInheritedXScale(),
                         1.0f/c->GetInheritedYScale(),
                         1.0f);
   }
@@ -687,7 +694,7 @@ LayerTransactionParent::RecvGetAnimationTransform(PLayerParent* aParent,
 
   // Undo the translation to the origin of the reference frame applied by
   // AsyncCompositionManager::SampleValue
-  transform.Translate(-scaledOrigin.x, -scaledOrigin.y, -scaledOrigin.z);
+  transform.PreTranslate(-scaledOrigin.x, -scaledOrigin.y, -scaledOrigin.z);
 
   // Undo the rebasing applied by
   // nsDisplayTransform::GetResultingTransformMatrixInternal
@@ -858,6 +865,8 @@ LayerTransactionParent::DeallocPTextureParent(PTextureParent* actor)
 bool
 LayerTransactionParent::RecvChildAsyncMessages(const InfallibleTArray<AsyncChildMessageData>& aMessages)
 {
+  AutoLayerTransactionParentAsyncMessageSender autoAsyncMessageSender(this);
+
   for (AsyncChildMessageArray::index_type i = 0; i < aMessages.Length(); ++i) {
     const AsyncChildMessageData& message = aMessages[i];
 
@@ -886,6 +895,30 @@ LayerTransactionParent::RecvChildAsyncMessages(const InfallibleTArray<AsyncChild
       case AsyncChildMessageData::TOpReplyDeliverFence: {
         const OpReplyDeliverFence& op = message.get_OpReplyDeliverFence();
         TransactionCompleteted(op.transactionId());
+        break;
+      }
+      case AsyncChildMessageData::TOpRemoveTextureAsync: {
+        const OpRemoveTextureAsync& op = message.get_OpRemoveTextureAsync();
+        CompositableHost* compositable = CompositableHost::FromIPDLActor(op.compositableParent());
+        RefPtr<TextureHost> tex = TextureHost::AsTextureHost(op.textureParent());
+
+        MOZ_ASSERT(tex.get());
+        compositable->RemoveTextureHost(tex);
+
+        // send FenceHandle if present via ImageBridge.
+        ImageBridgeParent::SendFenceHandleToTrackerIfPresent(
+                             GetChildProcessId(),
+                             op.holderId(),
+                             op.transactionId(),
+                             op.textureParent(),
+                             compositable);
+
+        // Send message back via PImageBridge.
+        ImageBridgeParent::ReplyRemoveTexture(
+                             GetChildProcessId(),
+                             OpReplyRemoveTexture(true, // isMain
+                                                  op.holderId(),
+                                                  op.transactionId()));
         break;
       }
       default:

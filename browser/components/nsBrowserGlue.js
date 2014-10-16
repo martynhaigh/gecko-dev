@@ -99,6 +99,9 @@ XPCOMUtils.defineLazyModuleGetter(this, "AsyncShutdown",
 XPCOMUtils.defineLazyModuleGetter(this, "LoginManagerParent",
                                   "resource://gre/modules/LoginManagerParent.jsm");
 
+XPCOMUtils.defineLazyModuleGetter(this, "SimpleServiceDiscovery",
+                                  "resource://gre/modules/SimpleServiceDiscovery.jsm");
+
 #ifdef NIGHTLY_BUILD
 XPCOMUtils.defineLazyModuleGetter(this, "SignInToWebsiteUX",
                                   "resource:///modules/SignInToWebsite.jsm");
@@ -106,6 +109,11 @@ XPCOMUtils.defineLazyModuleGetter(this, "SignInToWebsiteUX",
 
 XPCOMUtils.defineLazyModuleGetter(this, "ContentSearch",
                                   "resource:///modules/ContentSearch.jsm");
+
+#ifdef E10S_TESTING_ONLY
+XPCOMUtils.defineLazyModuleGetter(this, "UpdateChannel",
+                                  "resource://gre/modules/UpdateChannel.jsm");
+#endif
 
 XPCOMUtils.defineLazyGetter(this, "ShellService", function() {
   try {
@@ -637,8 +645,8 @@ BrowserGlue.prototype = {
     let message = resetBundle.formatStringFromName("resetUnusedProfile.message", [productName], 1);
     let buttons = [
       {
-        label:     resetBundle.formatStringFromName("resetProfile.resetButton.label", [productName], 1),
-        accessKey: resetBundle.GetStringFromName("resetProfile.resetButton.accesskey"),
+        label:     resetBundle.formatStringFromName("refreshProfile.resetButton.label", [productName], 1),
+        accessKey: resetBundle.GetStringFromName("refreshProfile.resetButton.accesskey"),
         callback: function () {
           ResetProfile.openConfirmationDialog(win);
         }
@@ -740,14 +748,32 @@ BrowserGlue.prototype = {
 #endif
     webrtcUI.uninit();
     FormValidationHandler.uninit();
+  },
 
-    // XXX: Temporary hack to allow Loop FxA login after a restart to work.
-    // Remove this once bug 1071247 is deployed.
-    Services.prefs.clearUserPref("loop.hawk-session-token.fxa");
+  _initServiceDiscovery: function () {
+    var rokuDevice = {
+      id: "roku:ecp",
+      target: "roku:ecp",
+      factory: function(aService) {
+        Cu.import("resource://gre/modules/RokuApp.jsm");
+        return new RokuApp(aService);
+      },
+      mirror: false,
+      types: ["video/mp4"],
+      extensions: ["mp4"]
+    };
+
+    // Register targets
+    SimpleServiceDiscovery.registerDevice(rokuDevice);
+
+    // Search for devices continuously every 120 seconds
+    SimpleServiceDiscovery.search(120 * 1000);
   },
 
   // All initial windows have opened.
   _onWindowsRestored: function BG__onWindowsRestored() {
+    this._initServiceDiscovery();
+
     // Show update notification, if needed.
     if (Services.prefs.prefHasUserValue("app.update.postupdate"))
       this._showUpdateNotification();
@@ -2265,12 +2291,15 @@ let DefaultBrowserCheck = {
 let E10SUINotification = {
   // Increase this number each time we want to roll out an
   // e10s testing period to Nightly users.
-  CURRENT_NOTICE_COUNT: 0,
+  CURRENT_NOTICE_COUNT: 1,
+  CURRENT_PROMPT_PREF: "browser.displayedE10SPrompt.1",
+  PREVIOUS_PROMPT_PREF: "browser.displayedE10SPrompt",
 
   checkStatus: function() {
     let skipE10sChecks = false;
     try {
-      skipE10sChecks = Services.prefs.getBoolPref("browser.tabs.remote.autostart.disabled-because-using-a11y");
+      skipE10sChecks = (UpdateChannel.get() != "nightly") ||
+                       Services.prefs.getBoolPref("browser.tabs.remote.autostart.disabled-because-using-a11y");
     } catch(e) {}
 
     if (skipE10sChecks) {
@@ -2316,17 +2345,26 @@ let E10SUINotification = {
 
       let e10sPromptShownCount = 0;
       try {
-        e10sPromptShownCount = Services.prefs.getIntPref("browser.displayedE10SPrompt");
+        e10sPromptShownCount = Services.prefs.getIntPref(this.CURRENT_PROMPT_PREF);
       } catch(e) {}
+
+      let isHardwareAccelerated = true;
+      try {
+        let win = RecentWindow.getMostRecentBrowserWindow();
+        let winutils = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+        isHardwareAccelerated = winutils.layerManagerType != "Basic";
+      } catch (e) {}
 
       if (!Services.appinfo.inSafeMode &&
           !Services.appinfo.accessibilityEnabled &&
           !Services.appinfo.keyboardMayHaveIME &&
+          isHardwareAccelerated &&
           e10sPromptShownCount < 5) {
         Services.tm.mainThread.dispatch(() => {
           try {
             this._showE10SPrompt();
-            Services.prefs.setIntPref("browser.displayedE10SPrompt", e10sPromptShownCount + 1);
+            Services.prefs.setIntPref(this.CURRENT_PROMPT_PREF, e10sPromptShownCount + 1);
+            Services.prefs.clearUserPref(this.PREVIOUS_PROMPT_PREF);
           } catch (ex) {
             Cu.reportError("Failed to show e10s prompt: " + ex);
           }
@@ -2373,7 +2411,7 @@ let E10SUINotification = {
 
     let browser = win.gBrowser.selectedBrowser;
 
-    let promptMessage = "Would you like to help us test multiprocess Nightly (e10s)? You can also enable e10s in Nightly preferences.";
+    let promptMessage = "Would you like to help us test multiprocess Nightly (e10s)? You can also enable e10s in Nightly preferences. Notable fixes:";
     let mainAction = {
       label: "Enable and Restart",
       accessKey: "E",
@@ -2393,7 +2431,7 @@ let E10SUINotification = {
         label: "No thanks",
         accessKey: "N",
         callback: function () {
-          Services.prefs.setIntPref("browser.displayedE10SPrompt", 5);
+          Services.prefs.setIntPref(E10SUINotification.CURRENT_PROMPT_PREF, 5);
         }
       }
     ];
@@ -2403,7 +2441,21 @@ let E10SUINotification = {
       persistWhileVisible: true
     };
 
-    win.PopupNotifications.show(browser, "enable_e10s", promptMessage, null, mainAction, secondaryActions, options);
+    win.PopupNotifications.show(browser, "enable-e10s", promptMessage, null, mainAction, secondaryActions, options);
+
+    let highlights = [
+      "Less crashing!",
+      "Improved add-on compatibility and DevTools",
+      "PDF.js, Web Console, Spellchecking, WebRTC now work"
+    ];
+
+    let doorhangerExtraContent = win.document.getElementById("enable-e10s-notification")
+                                             .querySelector("popupnotificationcontent");
+    for (let highlight of highlights) {
+      let highlightLabel = win.document.createElement("label");
+      highlightLabel.setAttribute("value", highlight);
+      doorhangerExtraContent.appendChild(highlightLabel);
+    }
   },
 
   _warnedAboutAccessibility: false,

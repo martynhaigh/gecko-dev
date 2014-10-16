@@ -122,6 +122,7 @@ public:
     virtual bool RecvMoveFocus(const bool& aForward) MOZ_OVERRIDE;
     virtual bool RecvEvent(const RemoteDOMEvent& aEvent) MOZ_OVERRIDE;
     virtual bool RecvReplyKeyEvent(const WidgetKeyboardEvent& event);
+    virtual bool RecvDispatchAfterKeyboardEvent(const WidgetKeyboardEvent& event);
     virtual bool RecvPRenderFrameConstructor(PRenderFrameParent* aActor,
                                              ScrollingBehavior* aScrolling,
                                              TextureFactoryIdentifier* aFactoryIdentifier,
@@ -147,11 +148,11 @@ public:
                                  const InfallibleTArray<CpowEntry>& aCpows,
                                  const IPC::Principal& aPrincipal,
                                  InfallibleTArray<nsString>* aJSONRetVal) MOZ_OVERRIDE;
-    virtual bool AnswerRpcMessage(const nsString& aMessage,
-                                  const ClonedMessageData& aData,
-                                  const InfallibleTArray<CpowEntry>& aCpows,
-                                  const IPC::Principal& aPrincipal,
-                                  InfallibleTArray<nsString>* aJSONRetVal) MOZ_OVERRIDE;
+    virtual bool RecvRpcMessage(const nsString& aMessage,
+                                const ClonedMessageData& aData,
+                                const InfallibleTArray<CpowEntry>& aCpows,
+                                const IPC::Principal& aPrincipal,
+                                InfallibleTArray<nsString>* aJSONRetVal) MOZ_OVERRIDE;
     virtual bool RecvAsyncMessage(const nsString& aMessage,
                                   const ClonedMessageData& aData,
                                   const InfallibleTArray<CpowEntry>& aCpows,
