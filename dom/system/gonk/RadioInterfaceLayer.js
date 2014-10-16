@@ -396,13 +396,6 @@ XPCOMUtils.defineLazyGetter(this, "gMessageManager", function() {
       }
     },
 
-    sendMobileConnectionMessage: function(message, clientId, data) {
-      this._sendTargetMessage("mobileconnection", message, {
-        clientId: clientId,
-        data: data
-      });
-    },
-
     sendIccMessage: function(message, clientId, data) {
       this._sendTargetMessage("icc", message, {
         clientId: clientId,
@@ -1160,17 +1153,25 @@ DataConnectionHandler.prototype = {
      }
   },
 
+  _compareDataCallOptions: function(dataCall, newDataCall) {
+    return dataCall.apnProfile.apn == newDataCall.apn &&
+           dataCall.apnProfile.user == newDataCall.user &&
+           dataCall.apnProfile.password == newDataCall.passwd &&
+           dataCall.chappap == newDataCall.chappap &&
+           dataCall.pdptype == newDataCall.pdptype;
+  },
+
   _deliverDataCallMessage: function(name, args) {
     for (let i = 0; i < this._dataCalls.length; i++) {
       let datacall = this._dataCalls[i];
-      // Send message only to the DataCall that matches apn.
+      // Send message only to the DataCall that matches the data call options.
       // Currently, args always contain only one datacall info.
-      if (!args[0].apn || args[0].apn != datacall.apnProfile.apn) {
+      if (!this._compareDataCallOptions(datacall, args[0])) {
         continue;
       }
       // Do not deliver message to DataCall that contains cid but mistmaches
       // with the cid in the current message.
-      if (args[0].cid && datacall.linkInfo.cid &&
+      if (args[0].cid !== undefined && datacall.linkInfo.cid != null &&
           args[0].cid != datacall.linkInfo.cid) {
         continue;
       }
@@ -1486,9 +1487,17 @@ DataConnectionHandler.prototype = {
     // Notify data call error only for data APN
     let networkInterface = this.dataNetworkInterfaces.get("default");
     if (networkInterface && networkInterface.enabled) {
-      let apnSetting = networkInterface.apnSetting;
-      if (message.apn == apnSetting.apn) {
-        gMobileConnectionService.notifyDataError(this.clientId, message);
+      let dataCall = networkInterface.dataCall;
+      // If there is a cid, compare cid; otherwise it is probably an error on
+      // data call setup.
+      if (message.cid !== undefined) {
+        if (message.cid == dataCall.linkInfo.cid) {
+          gMobileConnectionService.notifyDataError(this.clientId, message);
+        }
+      } else {
+        if (this._compareDataCallOptions(dataCall, message)) {
+          gMobileConnectionService.notifyDataError(this.clientId, message);
+        }
       }
     }
 
@@ -2075,8 +2084,7 @@ RadioInterface.prototype = {
         gMessageManager.sendIccMessage("RIL:StkSessionEnd", this.clientId, null);
         break;
       case "cdma-info-rec-received":
-        if (DEBUG) this.debug("cdma-info-rec-received: " + JSON.stringify(message));
-        gSystemMessenger.broadcastMessage("cdma-info-rec-received", message);
+        this.handleCdmaInformationRecords(message.records);
         break;
       default:
         throw new Error("Don't know about this message type: " +
@@ -2902,6 +2910,99 @@ RadioInterface.prototype = {
                                : Ci.nsICellBroadcastService.GSM_ETWS_WARNING_INVALID,
                              hasEtwsInfo ? etwsInfo.emergencyUserAlert : false,
                              hasEtwsInfo ? etwsInfo.popup : false);
+  },
+
+  handleCdmaInformationRecords: function(aRecords) {
+    if (DEBUG) this.debug("cdma-info-rec-received: " + JSON.stringify(aRecords));
+
+    let clientId = this.clientId;
+
+    aRecords.forEach(function(aRecord) {
+      if (aRecord.display) {
+        gMobileConnectionService
+          .notifyCdmaInfoRecDisplay(clientId, aRecord.display);
+        return;
+      }
+
+      if (aRecord.calledNumber) {
+        gMobileConnectionService
+          .notifyCdmaInfoRecCalledPartyNumber(clientId,
+                                              aRecord.calledNumber.type,
+                                              aRecord.calledNumber.plan,
+                                              aRecord.calledNumber.number,
+                                              aRecord.calledNumber.pi,
+                                              aRecord.calledNumber.si);
+        return;
+      }
+
+      if (aRecord.callingNumber) {
+        gMobileConnectionService
+          .notifyCdmaInfoRecCallingPartyNumber(clientId,
+                                               aRecord.callingNumber.type,
+                                               aRecord.callingNumber.plan,
+                                               aRecord.callingNumber.number,
+                                               aRecord.callingNumber.pi,
+                                               aRecord.callingNumber.si);
+        return;
+      }
+
+      if (aRecord.connectedNumber) {
+        gMobileConnectionService
+          .notifyCdmaInfoRecConnectedPartyNumber(clientId,
+                                                 aRecord.connectedNumber.type,
+                                                 aRecord.connectedNumber.plan,
+                                                 aRecord.connectedNumber.number,
+                                                 aRecord.connectedNumber.pi,
+                                                 aRecord.connectedNumber.si);
+        return;
+      }
+
+      if (aRecord.signal) {
+        gMobileConnectionService
+          .notifyCdmaInfoRecSignal(clientId,
+                                   aRecord.signal.type,
+                                   aRecord.signal.alertPitch,
+                                   aRecord.signal.signal);
+        return;
+      }
+
+      if (aRecord.redirect) {
+        gMobileConnectionService
+          .notifyCdmaInfoRecRedirectingNumber(clientId,
+                                              aRecord.redirect.type,
+                                              aRecord.redirect.plan,
+                                              aRecord.redirect.number,
+                                              aRecord.redirect.pi,
+                                              aRecord.redirect.si,
+                                              aRecord.redirect.reason);
+        return;
+      }
+
+      if (aRecord.lineControl) {
+        gMobileConnectionService
+          .notifyCdmaInfoRecLineControl(clientId,
+                                        aRecord.lineControl.polarityIncluded,
+                                        aRecord.lineControl.toggle,
+                                        aRecord.lineControl.reverse,
+                                        aRecord.lineControl.powerDenial);
+        return;
+      }
+
+      if (aRecord.clirCause) {
+        gMobileConnectionService
+          .notifyCdmaInfoRecClir(clientId,
+                                 aRecord.clirCause);
+        return;
+      }
+
+      if (aRecord.audioControl) {
+        gMobileConnectionService
+          .notifyCdmaInfoRecAudioControl(clientId,
+                                         aRecord.audioControl.upLink,
+                                         aRecord.audioControl.downLink);
+        return;
+      }
+    });
   },
 
   // nsIObserver
@@ -3894,6 +3995,12 @@ DataCall.prototype = {
   // Array to hold RILNetworkInterfaces that requested this DataCall.
   requestedNetworkIfaces: null,
 
+  // Holds the pdp type sent to ril worker.
+  pdptype: null,
+
+  // Holds the authentication type sent to ril worker.
+  chappap: null,
+
   dataCallError: function(message) {
     if (DEBUG) this.debug("Data call error on APN: " + message.apn);
     this.state = RIL.GECKO_NETWORK_STATE_DISCONNECTED;
@@ -4012,10 +4119,18 @@ DataCall.prototype = {
   },
 
   canHandleApn: function(apnSetting) {
-    // TODO: compare authtype?
-    return (this.apnProfile.apn == apnSetting.apn &&
-            (this.apnProfile.user || '') == (apnSetting.user || '') &&
-            (this.apnProfile.password || '') == (apnSetting.password || ''));
+    let isIdentical = this.apnProfile.apn == apnSetting.apn &&
+                      (this.apnProfile.user || '') == (apnSetting.user || '') &&
+                      (this.apnProfile.password || '') == (apnSetting.password || '') &&
+                      (this.apnProfile.authType || '') == (apnSetting.authtype || '');
+
+    if (RILQUIRKS_HAVE_IPV6) {
+      isIdentical = isIdentical &&
+                    (this.apnProfile.protocol || '') == (apnSetting.protocol || '') &&
+                    (this.apnProfile.roaming_protocol || '') == (apnSetting.roaming_protocol || '');
+    }
+
+    return isIdentical;
   },
 
   reset: function() {
@@ -4027,6 +4142,9 @@ DataCall.prototype = {
     this.linkInfo.gateways = [];
 
     this.state = RIL.GECKO_NETWORK_STATE_UNKNOWN;
+
+    this.chappap = null;
+    this.pdptype = null;
   },
 
   connect: function(networkInterface) {
@@ -4079,7 +4197,7 @@ DataCall.prototype = {
 
     let radioTechType = dataInfo.type;
     let radioTechnology = RIL.GECKO_RADIO_TECH.indexOf(radioTechType);
-    let authType = RIL.RIL_DATACALL_AUTH_TO_GECKO.indexOf(this.apnProfile.authtype);
+    let authType = RIL.RIL_DATACALL_AUTH_TO_GECKO.indexOf(this.apnProfile.authType);
     // Use the default authType if the value in database is invalid.
     // For the case that user might not select the authentication type.
     if (authType == -1) {
@@ -4088,6 +4206,8 @@ DataCall.prototype = {
       }
       authType = RIL.RIL_DATACALL_AUTH_TO_GECKO.indexOf(RIL.GECKO_DATACALL_AUTH_DEFAULT);
     }
+    this.chappap = authType;
+
     let pdpType = RIL.GECKO_DATACALL_PDP_TYPE_IP;
     if (RILQUIRKS_HAVE_IPV6) {
       pdpType = !dataInfo.roaming
@@ -4101,6 +4221,7 @@ DataCall.prototype = {
         pdpType = RIL.GECKO_DATACALL_PDP_TYPE_DEFAULT;
       }
     }
+    this.pdptype = pdpType;
 
     let radioInterface = this.gRIL.getRadioInterface(this.clientId);
     radioInterface.sendWorkerMessage("setupDataCall", {
