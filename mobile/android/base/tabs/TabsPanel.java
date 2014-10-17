@@ -501,7 +501,7 @@ public class TabsPanel extends LinearLayout
     public void refresh() {
         removeAllViews();
 
-        LayoutInflater.from(mContext).inflate(R.layout.tabs_panel, this);
+        inflateLayout(mContext);
         initialize();
 
         if (mVisible)
