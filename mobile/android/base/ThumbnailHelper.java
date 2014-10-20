@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class ThumbnailHelper {
     private static final String LOGTAG = "GeckoThumbnailHelper";
 
-    public static final float THUMBNAIL_ASPECT_RATIO = 0.571f;  // this is a 4:7 ratio (as per UX decision)
+    public static final float THUMBNAIL_ASPECT_RATIO = 1.5f;//0.571f;  // this is a 4:7 ratio (as per UX decision)
 
     public static enum CachePolicy {
         STORE,
