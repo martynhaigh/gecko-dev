@@ -290,6 +290,10 @@ public class TabsPanel extends LinearLayout
         int actionBarHeight = resources.getDimensionPixelSize(R.dimen.browser_toolbar_height);
         int screenHeight = resources.getDisplayMetrics().heightPixels;
 
+        if(NewTabletUI.isEnabled(tabsContainer.getContext())){
+            return screenHeight;
+        }
+
         Rect windowRect = new Rect();
         tabsContainer.getWindowVisibleDisplayFrame(windowRect);
         int windowHeight = windowRect.bottom - windowRect.top;
