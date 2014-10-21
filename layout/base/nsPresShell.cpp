@@ -3071,7 +3071,7 @@ PresShell::CreateReferenceRenderingContext()
   nsRefPtr<nsRenderingContext> rc;
   if (mPresContext->IsScreen()) {
     rc = new nsRenderingContext();
-    rc->Init(devCtx, gfxPlatform::GetPlatform()->ScreenReferenceDrawTarget());
+    rc->Init(gfxPlatform::GetPlatform()->ScreenReferenceDrawTarget());
   } else {
     rc = devCtx->CreateRenderingContext();
   }
@@ -3943,7 +3943,7 @@ PresShell::UnsuppressAndInvalidate()
     rootFrame->InvalidateFrame();
 
     if (mTouchCaret) {
-      mTouchCaret->UpdatePositionIfNeeded();
+      mTouchCaret->SyncVisibilityWithCaret();
     }
   }
 
@@ -4807,7 +4807,7 @@ PresShell::RenderDocument(const nsRect& aRect, uint32_t aFlags,
   AutoSaveRestoreRenderingState _(this);
 
   nsRefPtr<nsRenderingContext> rc = new nsRenderingContext();
-  rc->Init(devCtx, aThebesContext);
+  rc->Init(aThebesContext);
 
   bool wouldFlushRetainedLayers = false;
   uint32_t flags = nsLayoutUtils::PAINT_IGNORE_SUPPRESSION;
@@ -5061,8 +5061,6 @@ PresShell::PaintRangePaintInfo(nsTArray<nsAutoPtr<RangePaintInfo> >* aItems,
   if (!pc || aArea.width == 0 || aArea.height == 0)
     return nullptr;
 
-  nsDeviceContext* deviceContext = pc->DeviceContext();
-
   // use the rectangle to create the surface
   nsIntRect pixelArea = aArea.ToOutsidePixels(pc->AppUnitsPerDevPixel());
 
@@ -5075,7 +5073,7 @@ PresShell::PaintRangePaintInfo(nsTArray<nsAutoPtr<RangePaintInfo> >* aItems,
   // if the image is larger in one or both directions than half the size of
   // the available screen area, scale the image down to that size.
   nsRect maxSize;
-  deviceContext->GetClientRect(maxSize);
+  pc->DeviceContext()->GetClientRect(maxSize);
   nscoord maxWidth = pc->AppUnitsToDevPixels(maxSize.width >> 1);
   nscoord maxHeight = pc->AppUnitsToDevPixels(maxSize.height >> 1);
   bool resize = (pixelArea.width > maxWidth || pixelArea.height > maxHeight);
@@ -5114,16 +5112,21 @@ PresShell::PaintRangePaintInfo(nsTArray<nsAutoPtr<RangePaintInfo> >* aItems,
   }
 
   nsRefPtr<gfxContext> ctx = new gfxContext(dt);
-  nsRefPtr<nsRenderingContext> rc = new nsRenderingContext();
-  rc->Init(deviceContext, ctx);
 
   if (aRegion) {
     // Convert aRegion from CSS pixels to dev pixels
     nsIntRegion region =
       aRegion->ToAppUnits(nsPresContext::AppUnitsPerCSSPixel())
         .ToOutsidePixels(pc->AppUnitsPerDevPixel());
-    rc->SetClip(region);
+    nsIntRegionRectIterator iter(region);
+    const nsIntRect* rect;
+    while ((rect = iter.Next())) {
+      ctx->Clip(gfxRect(rect->x, rect->y, rect->width, rect->height));
+    }
   }
+
+  nsRefPtr<nsRenderingContext> rc = new nsRenderingContext();
+  rc->Init(ctx);
 
   gfxMatrix initialTM = ctx->CurrentMatrix();
 
@@ -7269,7 +7272,9 @@ PresShell::HandleEvent(nsIFrame* aFrame,
           if (nsIFrame* capturingFrame = pointerCapturingContent->GetPrimaryFrame()) {
             // If pointer capture is set, we should suppress pointerover/pointerenter events
             // for all elements except element which have pointer capture. (Code in EventStateManager)
-            pointerEvent->retargetedByPointerCapture = (frame != capturingFrame);
+            pointerEvent->retargetedByPointerCapture =
+              frame && frame->GetContent() &&
+              !nsContentUtils::ContentIsDescendantOf(frame->GetContent(), pointerCapturingContent);
             frame = capturingFrame;
           }
 
@@ -10048,10 +10053,12 @@ void ReflowCountMgr::PaintCount(const char*     aName,
     IndiReflowCounter * counter =
       (IndiReflowCounter *)PL_HashTableLookup(mIndiFrameCounts, key);
     if (counter != nullptr && counter->mName.EqualsASCII(aName)) {
+      DrawTarget* drawTarget = aRenderingContext->GetDrawTarget();
+      int32_t appUnitsPerDevPixel = aPresContext->AppUnitsPerDevPixel();
+
       aRenderingContext->ThebesContext()->Save();
       gfxPoint devPixelOffset =
-        nsLayoutUtils::PointToGfxPoint(aOffset,
-                                       aPresContext->AppUnitsPerDevPixel());
+        nsLayoutUtils::PointToGfxPoint(aOffset, appUnitsPerDevPixel);
       aRenderingContext->ThebesContext()->SetMatrix(
         aRenderingContext->ThebesContext()->CurrentMatrix().Translate(devPixelOffset));
       nsFont font(eFamily_serif, NS_FONT_STYLE_NORMAL,
@@ -10096,11 +10103,13 @@ void ReflowCountMgr::PaintCount(const char*     aName,
       }
 
       nsRect rect(0,0, width+15, height+15);
-      aRenderingContext->SetColor(NS_RGB(0,0,0));
-      aRenderingContext->FillRect(rect);
-      aRenderingContext->SetColor(color2);
+      Rect devPxRect = NSRectToRect(rect, appUnitsPerDevPixel, *drawTarget);
+      ColorPattern black(ToDeviceColor(Color(0.f, 0.f, 0.f, 1.f)));
+      drawTarget->FillRect(devPxRect, black);
+
+      aRenderingContext->ThebesContext()->SetColor(color2);
       aRenderingContext->DrawString(buf, strlen(buf), x+15,y+15);
-      aRenderingContext->SetColor(color);
+      aRenderingContext->ThebesContext()->SetColor(color);
       aRenderingContext->DrawString(buf, strlen(buf), x,y);
 
       aRenderingContext->ThebesContext()->Restore();
