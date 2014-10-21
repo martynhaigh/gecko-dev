@@ -9,8 +9,10 @@ import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
 
 import android.content.Context;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
+import android.view.TouchDelegate;
 import android.view.View;
 import android.widget.Checkable;
 import android.widget.ImageButton;
@@ -84,6 +86,18 @@ public class TabsLayoutItemView extends LinearLayout
         mThumbnail = (ImageView) findViewById(R.id.thumbnail);
         mCloseButton = (ImageButton) findViewById(R.id.close);
         mThumbnailWrapper = (TabThumbnailWrapper) findViewById(R.id.wrapper);
+
+        post(new Runnable() {
+            // Post in the parent's message queue to make sure the parent
+            // lays out its children before we call getHitRect()
+            public void run() {
+                final Rect r = new Rect();
+                mCloseButton.getHitRect(r);
+                r.left -= 20;
+                r.bottom += 20;
+                setTouchDelegate(new TouchDelegate(r, mCloseButton));
+            }
+        });
     }
 
     protected void assignValues(Tab tab)  {
