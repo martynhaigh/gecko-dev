@@ -32,7 +32,9 @@ public final class ThumbnailHelper {
     private static final String LOGTAG = "GeckoThumbnailHelper";
 
     public static final float THUMBNAIL_ASPECT_RATIO = 0.571f;  // this is a 4:7 ratio (as per UX decision)
-    public static final float NEW_TABLET_THUMBNAIL_ASPECT_RATIO = 1.5f;
+
+    // Should actually be more like 0.83 (140/168) but various roundings mean that 0.9 works better
+    public static final float NEW_TABLET_THUMBNAIL_ASPECT_RATIO = 0.9f;
 
     public static enum CachePolicy {
         STORE,
@@ -119,11 +121,15 @@ public final class ThumbnailHelper {
         // Apply any pending width updates.
         mWidth = mPendingWidth.get();
 
-        mHeight = Math.round(mWidth * THUMBNAIL_ASPECT_RATIO);
+        if(NewTabletUI.isEnabled(GeckoAppShell.getContext())) {
+            mHeight = Math.round(mWidth * NEW_TABLET_THUMBNAIL_ASPECT_RATIO);
+        } else {
+            mHeight = Math.round(mWidth * THUMBNAIL_ASPECT_RATIO);
+        }
 
         int pixelSize = (GeckoAppShell.getScreenDepth() == 24) ? 4 : 2;
         int capacity = mWidth * mHeight * pixelSize;
-        Log.d(LOGTAG, "Using new thumbnail size: " + capacity + " (width " + mWidth + ")");
+        Log.d(LOGTAG, "Using new thumbnail size: " + capacity + " (width " + mWidth + " - height " + mHeight + ")");
         if (mBuffer == null || mBuffer.capacity() != capacity) {
             if (mBuffer != null) {
                 mBuffer = DirectBufferAllocator.free(mBuffer);

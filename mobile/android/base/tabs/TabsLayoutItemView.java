@@ -4,6 +4,7 @@
 
 package org.mozilla.gecko.tabs;
 
+import org.mozilla.gecko.NewTabletUI;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
@@ -97,13 +98,22 @@ public class TabsLayoutItemView extends LinearLayout
         if (thumbnailImage != null) {
             mThumbnail.setImageDrawable(thumbnailImage);
         } else {
-            mThumbnail.setImageResource(R.drawable.tab_thumbnail_default);
+            if(NewTabletUI.isEnabled(getContext())) {
+                mThumbnail.setImageResource(R.drawable.new_tablet_tab_thumbnail_default);
+                mThumbnail.setScaleType(ImageView.ScaleType.FIT_START);
+            } else {
+                mThumbnail.setImageResource(R.drawable.tab_thumbnail_default);
+
+            }
         }
+
+
         if (mThumbnailWrapper != null) {
             mThumbnailWrapper.setRecording(tab.isRecording());
         }
         mTitle.setText(tab.getDisplayTitle());
         mCloseButton.setTag(this);
+
     }
 
     public int getTabId() {
