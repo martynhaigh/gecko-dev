@@ -39,6 +39,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import org.lucasr.dspec.DesignSpec;
 
 public class TabsPanel extends LinearLayout
                        implements GeckoPopupMenu.OnMenuItemClickListener,
@@ -69,7 +70,22 @@ public class TabsPanel extends LinearLayout
 
     public static View createTabsLayout(final Context context, final AttributeSet attrs) {
         if (NewTabletUI.isEnabled(context)) {
-            return new TabsGridLayout(context, attrs);
+            final TabsGridLayout v = new TabsGridLayout(context, attrs);
+            final DesignSpec designSpec = DesignSpec.fromResource(v, R.raw.some_spec);
+            if(v.getOverlay() != null) {
+                v.getOverlay().add(designSpec);
+            } else {
+                v.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (v.getOverlay() != null) {
+                            v.getOverlay().add(designSpec);
+                        }
+
+                    }
+                });
+            }
+            return v;
         } else {
             return new TabsListLayout(context, attrs);
         }

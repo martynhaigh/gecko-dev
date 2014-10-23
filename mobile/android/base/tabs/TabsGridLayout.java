@@ -25,6 +25,7 @@ import android.view.View;
 import android.widget.GridView;
 import android.view.ViewGroup;
 import android.widget.Button;
+import org.lucasr.dspec.DesignSpec;
 
 /**
  * A tabs layout implementation for the tablet redesign (bug 1014156).
@@ -71,8 +72,10 @@ class TabsGridLayout extends GridView
         final int columnWidth = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_thumbnail_width);
         setColumnWidth(columnWidth);
 
-        final int padding = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding);
-        setPadding(padding, 0, padding, 0);
+        final int sidePadding = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_side_padding);
+        final int topPadding = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_side_padding);
+        setPadding(sidePadding, topPadding, sidePadding, 0);
+
     }
 
     private class TabsGridLayoutAdapter extends TabsLayoutAdapter {

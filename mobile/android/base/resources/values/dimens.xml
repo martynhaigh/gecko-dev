@@ -125,7 +125,8 @@
 
     <dimen name="new_tablet_tab_thumbnail_height">180dp</dimen>
     <dimen name="new_tablet_tab_thumbnail_width">180dp</dimen>
-    <dimen name="new_tablet_tab_panel_grid_padding">24dp</dimen>
+    <dimen name="new_tablet_tab_panel_grid_side_padding">19dp</dimen>
+    <dimen name="new_tablet_tab_panel_grid_top_padding">8dp</dimen>
 
     <!-- PageActionButtons dimensions -->
     <dimen name="page_action_button_width">32dp</dimen>

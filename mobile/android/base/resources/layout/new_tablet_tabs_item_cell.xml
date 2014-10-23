@@ -27,7 +27,7 @@
                   android:layout_weight="1.0"
                   android:paddingTop="4dip"
                   style="@style/TabLayoutItemTextAppearance"
-                  android:textSize="12sp"
+                  android:textSize="14sp"
                   android:textColor="#FFFFFFFF"
                   android:singleLine="true"
                   android:duplicateParentState="true"/>
