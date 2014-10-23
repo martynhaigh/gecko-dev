@@ -1,0 +1,31 @@
+{
+    "baselineGridVisible": true,
+    "baselineGridCellSize": 8,
+    "keylines": [
+        {
+            "offset": 19,
+            "from": "LEFT"
+        }, {
+            "offset": 24,
+            "from": "RIGHT"
+        }, {
+            "offset": 24,
+            "from": "TOP"
+        }
+    ],
+    "spacings": [
+        {
+            "offset": 0,
+            "size": 24,
+            "from": "LEFT"
+        }, {
+            "offset": 192,
+            "size": 24,
+            "from": "LEFT"
+        },  {
+            "offset": 0,
+            "size": 16,
+            "from": "RIGHT"
+        }
+    ]
+}
