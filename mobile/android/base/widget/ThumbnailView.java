@@ -36,7 +36,7 @@ public class ThumbnailView extends ImageView {
             int h1 = d.getIntrinsicHeight();
             int w2 = getWidth();
             int h2 = getHeight();
-
+    
             float scale = (w2/h2 < w1/h1) ? (float)h2/h1 : (float)w2/w1;
             mMatrix.setScale(scale, scale);
         }
