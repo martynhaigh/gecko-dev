@@ -32,8 +32,6 @@ public class TopSitesGridItemView extends RelativeLayout {
     private static final int[] STATE_EMPTY = { android.R.attr.state_empty };
 
     private static final ScaleType SCALE_TYPE_FAVICON   = ScaleType.CENTER;
-    private static final ScaleType NEW_TABLET_SCALE_TYPE_THUMBNAIL = ScaleType.CENTER_INSIDE;
-
     private static final ScaleType SCALE_TYPE_RESOURCE  = ScaleType.CENTER;
     private static final ScaleType SCALE_TYPE_THUMBNAIL = ScaleType.CENTER_CROP;
     private static final ScaleType SCALE_TYPE_URL       = ScaleType.CENTER_INSIDE;
@@ -226,11 +224,7 @@ public class TopSitesGridItemView extends RelativeLayout {
         Favicons.cancelFaviconLoad(mLoadId);
         ImageLoader.with(getContext()).cancelRequest(mThumbnailView);
 
-        if(NewTabletUI.isEnabled(getContext())) {
-            mThumbnailView.setScaleType(NEW_TABLET_SCALE_TYPE_THUMBNAIL);
-        } else {
-            mThumbnailView.setScaleType(SCALE_TYPE_THUMBNAIL);
-        }
+        mThumbnailView.setScaleType(SCALE_TYPE_THUMBNAIL);
         mThumbnailView.setImageBitmap(thumbnail, true);
         mThumbnailView.setBackgroundDrawable(null);
     }
