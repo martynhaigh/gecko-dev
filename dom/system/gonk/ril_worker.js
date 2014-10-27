@@ -1987,7 +1987,7 @@ RilObject.prototype = {
       call.hangUpLocal = true;
       this.sendHangUpRequest(1);
     } else {
-      if (this.currentConference.state === CALL_STATE_ACTIVE) {
+      if (this.currentConferenceState === CALL_STATE_ACTIVE) {
         this.sendHangUpForegroundRequest(options);
       } else {
         this.sendHangUpBackgroundRequest(options);
@@ -11259,7 +11259,7 @@ StkProactiveCmdHelperObject.prototype = {
     };
 
     length--; // -1 for the codingScheme.
-    switch (text.codingScheme & 0x0f) {
+    switch (text.codingScheme & 0x0c) {
       case STK_TEXT_CODING_GSM_7BIT_PACKED:
         text.textString = GsmPDUHelper.readSeptetsToString(length * 8 / 7, 0, 0, 0);
         break;
