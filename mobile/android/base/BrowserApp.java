@@ -129,6 +129,7 @@ import android.widget.Toast;
 import android.widget.ViewFlipper;
 
 import com.readystatesoftware.systembartint.SystemBarTintManager;
+import org.lucasr.dspec.DesignSpec;
 
 public class BrowserApp extends GeckoApp
                         implements TabsPanel.TabsLayoutChangeListener,
@@ -1621,6 +1622,9 @@ public class BrowserApp extends GeckoApp
 
         mTabsPanel.setTabsLayoutChangeListener(this);
         updateSideBarState();
+
+        final DesignSpec designSpec = DesignSpec.fromResource(mTabsPanel, R.raw.some_spec);
+        mTabsPanel.getOverlay().add(designSpec);
 
         return true;
     }
