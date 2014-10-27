@@ -5,13 +5,17 @@
 
 package org.mozilla.gecko.home;
 
+import org.mozilla.gecko.NewTabletUI;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.ThumbnailHelper;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PorterDuff.Mode;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.widget.ImageView;
@@ -34,6 +38,8 @@ public class TopSitesThumbnailView extends ImageView {
     // Paint for drawing the border.
     private static final Paint sBorderPaint;
 
+    private boolean mResize = false;
+
     // Initializing the static border paint.
     static {
         sBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -46,6 +52,7 @@ public class TopSitesThumbnailView extends ImageView {
 
         // A border will be drawn if needed.
         setWillNotDraw(false);
+
     }
 
     public TopSitesThumbnailView(Context context, AttributeSet attrs) {
@@ -54,6 +61,23 @@ public class TopSitesThumbnailView extends ImageView {
 
     public TopSitesThumbnailView(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
+    }
+
+    public void setImageBitmap(Bitmap bm, boolean resize) {
+        super.setImageBitmap(bm);
+        mResize = resize;
+    }
+
+    @Override
+    public void setImageResource(int resId) {
+        super.setImageResource(resId);
+        mResize = false;
+    }
+
+    @Override
+    public void setImageDrawable(Drawable drawable) {
+        super.setImageDrawable(drawable);
+        mResize = false;
     }
 
     /**
@@ -72,6 +96,15 @@ public class TopSitesThumbnailView extends ImageView {
         final int width = getMeasuredWidth();
         final int height = (int) (width * ThumbnailHelper.THUMBNAIL_ASPECT_RATIO);
         setMeasuredDimension(width, height);
+
+
+        if(NewTabletUI.isEnabled(getContext()) && mResize) {
+            setScaleType(ScaleType.MATRIX);
+            RectF rect = new RectF(0, 0, width, height);
+            Matrix matrix = new Matrix();
+            matrix.setRectToRect(rect, rect, Matrix.ScaleToFit.CENTER);
+            setImageMatrix(matrix);
+        }
     }
 
     /**
