@@ -100,7 +100,6 @@ public class TabsLayoutItemView extends LinearLayout
         } else {
             if(NewTabletUI.isEnabled(getContext())) {
                 mThumbnail.setImageResource(R.drawable.new_tablet_tab_thumbnail_default);
-                mThumbnail.setScaleType(ImageView.ScaleType.FIT_START);
             } else {
                 mThumbnail.setImageResource(R.drawable.tab_thumbnail_default);
 
