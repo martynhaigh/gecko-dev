@@ -150,5 +150,6 @@
   <!-- Top sites thumbnail colors -->
   <color name="top_site_default">#FFECF0F3</color>
   <color name="top_site_border">#FFCFD9E1</color>
+  <color name="globe_background">#FFEFEFF3</color>
 
 </resources>

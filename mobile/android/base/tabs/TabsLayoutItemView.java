@@ -95,7 +95,7 @@ public class TabsLayoutItemView extends LinearLayout
 
         Drawable thumbnailImage = tab.getThumbnail();
         if (thumbnailImage != null) {
-            mThumbnail.setImageDrawable(thumbnailImage);
+            setThumbnail(thumbnailImage);
         } else {
             mThumbnail.setImageResource(R.drawable.tab_thumbnail_default);
         }
@@ -112,6 +112,7 @@ public class TabsLayoutItemView extends LinearLayout
 
     public void setThumbnail(Drawable thumbnail) {
         mThumbnail.setImageDrawable(thumbnail);
+        //mThumbnail.setScaleType(ImageView.ScaleType.FIT_CENTER);
     }
 
     public void setCloseVisible(boolean visible) {
