@@ -3,32 +3,20 @@
     "baselineGridCellSize": 8,
     "keylines": [
         {
-            "offset": 24,
+            "offset": 19,
             "from": "LEFT"
         }, {
-           "comment": "24 + 168",
-           "offset": 192,
-           "from": "LEFT"
-        }, {
             "offset": 24,
             "from": "RIGHT"
         }, {
-            "comment": "24 + 168",
-            "offset": 192,
-            "from": "RIGHT"
-        }, {
-            "comment": "56 + 24",
-            "offset": 80,
+            "offset": 24,
             "from": "TOP"
-        }, {
-             "offset": 56,
-             "from": "TOP"
-         }
+        }
     ],
-    "spaclings": [
+    "spacings": [
         {
             "offset": 0,
-            "size": 19,
+            "size": 24,
             "from": "LEFT"
         }, {
             "offset": 192,
@@ -36,7 +24,7 @@
             "from": "LEFT"
         },  {
             "offset": 0,
-            "size": 19,
+            "size": 16,
             "from": "RIGHT"
         }
     ]
