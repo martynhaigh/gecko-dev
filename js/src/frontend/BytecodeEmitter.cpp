@@ -10,6 +10,7 @@
 
 #include "frontend/BytecodeEmitter.h"
 
+#include "mozilla/ArrayUtils.h"
 #include "mozilla/DebugOnly.h"
 #include "mozilla/FloatingPoint.h"
 #include "mozilla/PodOperations.h"
@@ -160,6 +161,7 @@ EmitCheck(ExclusiveContext *cx, BytecodeEmitter *bce, ptrdiff_t delta)
     ptrdiff_t offset = bce->code().length();
 
     // Start it off moderately large to avoid repeated resizings early on.
+    // ~98% of cases fit within 1024 bytes.
     if (bce->code().capacity() == 0 && !bce->code().reserve(1024))
         return -1;
 
@@ -343,7 +345,8 @@ static const char * const statementName[] = {
     "spread",                /* SPREAD */
 };
 
-JS_STATIC_ASSERT(JS_ARRAY_LENGTH(statementName) == STMT_LIMIT);
+static_assert(MOZ_ARRAY_LENGTH(statementName) == STMT_LIMIT,
+              "statementName array and StmtType enum must be consistent");
 
 static const char *
 StatementName(StmtInfoBCE *topStmt)
@@ -2225,8 +2228,6 @@ EmitFinishIteratorResult(ExclusiveContext *cx, BytecodeEmitter *bce, bool done)
         return false;
     if (!EmitIndex32(cx, JSOP_INITPROP, done_id, bce))
         return false;
-    if (Emit1(cx, bce, JSOP_ENDINIT) < 0)
-        return false;
     return true;
 }
 
@@ -3386,8 +3387,6 @@ EmitDestructuringOpsArrayHelper(ExclusiveContext *cx, BytecodeEmitter *bce, Pars
             if (!EmitSpread(cx, bce))                                  // ... OBJ? ARRAY INDEX
                 return false;
             if (Emit1(cx, bce, JSOP_POP) < 0)                          // ... OBJ? ARRAY
-                return false;
-            if (Emit1(cx, bce, JSOP_ENDINIT) < 0)
                 return false;
             needToPopIterator = false;
         } else {
@@ -6421,9 +6420,6 @@ EmitObject(ExclusiveContext *cx, BytecodeEmitter *bce, ParseNode *pn)
         }
     }
 
-    if (Emit1(cx, bce, JSOP_ENDINIT) < 0)
-        return false;
-
     if (obj) {
         /*
          * The object survived and has a predictable shape: update the original
@@ -6466,8 +6462,7 @@ EmitArrayComp(ExclusiveContext *cx, BytecodeEmitter *bce, ParseNode *pn)
         return false;
     bce->arrayCompDepth = saveDepth;
 
-    /* Emit the usual op needed for decompilation. */
-    return Emit1(cx, bce, JSOP_ENDINIT) >= 0;
+    return true;
 }
 
 /**
@@ -6555,9 +6550,7 @@ EmitArray(ExclusiveContext *cx, BytecodeEmitter *bce, ParseNode *pn, uint32_t co
         if (Emit1(cx, bce, JSOP_POP) < 0)                                // ARRAY
             return false;
     }
-
-    /* Emit an op to finish the array and aid in decompilation. */
-    return Emit1(cx, bce, JSOP_ENDINIT) >= 0;
+    return true;
 }
 
 static bool
@@ -7082,7 +7075,8 @@ static int
 AllocSrcNote(ExclusiveContext *cx, SrcNotesVector &notes)
 {
     // Start it off moderately large to avoid repeated resizings early on.
-    if (notes.capacity() == 0 && !notes.reserve(1024))
+    // ~99% of cases fit within 256 bytes.
+    if (notes.capacity() == 0 && !notes.reserve(256))
         return -1;
 
     jssrcnote dummy = 0;

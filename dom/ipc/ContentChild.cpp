@@ -175,6 +175,7 @@ using namespace mozilla::dom::mobileconnection;
 using namespace mozilla::dom::mobilemessage;
 using namespace mozilla::dom::telephony;
 using namespace mozilla::dom::voicemail;
+using namespace mozilla::embedding;
 using namespace mozilla::hal_sandbox;
 using namespace mozilla::ipc;
 using namespace mozilla::layers;
@@ -1109,45 +1110,40 @@ ContentChild::DeallocPJavaScriptChild(PJavaScriptChild *aChild)
 }
 
 PBrowserChild*
-ContentChild::AllocPBrowserChild(const TabId& aTabId,
-                                 const IPCTabContext& aContext,
+ContentChild::AllocPBrowserChild(const IPCTabContext& aContext,
                                  const uint32_t& aChromeFlags,
-                                 const ContentParentId& aCpID,
+                                 const uint64_t& aID,
                                  const bool& aIsForApp,
                                  const bool& aIsForBrowser)
 {
-    return nsIContentChild::AllocPBrowserChild(aTabId,
-                                               aContext,
+    return nsIContentChild::AllocPBrowserChild(aContext,
                                                aChromeFlags,
-                                               aCpID,
+                                               aID,
                                                aIsForApp,
                                                aIsForBrowser);
 }
 
 bool
 ContentChild::SendPBrowserConstructor(PBrowserChild* aActor,
-                                      const TabId& aTabId,
                                       const IPCTabContext& aContext,
                                       const uint32_t& aChromeFlags,
-                                      const ContentParentId& aCpID,
+                                      const uint64_t& aID,
                                       const bool& aIsForApp,
                                       const bool& aIsForBrowser)
 {
     return PContentChild::SendPBrowserConstructor(aActor,
-                                                  aTabId,
                                                   aContext,
                                                   aChromeFlags,
-                                                  aCpID,
+                                                  aID,
                                                   aIsForApp,
                                                   aIsForBrowser);
 }
 
 bool
 ContentChild::RecvPBrowserConstructor(PBrowserChild* aActor,
-                                      const TabId& aTabId,
                                       const IPCTabContext& aContext,
                                       const uint32_t& aChromeFlags,
-                                      const ContentParentId& aCpID,
+                                      const uint64_t& aID,
                                       const bool& aIsForApp,
                                       const bool& aIsForBrowser)
 {
@@ -1171,7 +1167,7 @@ ContentChild::RecvPBrowserConstructor(PBrowserChild* aActor,
 
         // Redo InitProcessAttributes() when the app or browser is really
         // launching so the attributes will be correct.
-        mID = aCpID;
+        mID = aID;
         mIsForApp = aIsForApp;
         mIsForBrowser = aIsForBrowser;
         InitProcessAttributes();
@@ -1393,6 +1389,24 @@ bool
 ContentChild::DeallocPNeckoChild(PNeckoChild* necko)
 {
     delete necko;
+    return true;
+}
+
+PPrintingChild*
+ContentChild::AllocPPrintingChild()
+{
+    // The ContentParent should never attempt to allocate the
+    // nsPrintingPromptServiceProxy, which implements PPrintingChild. Instead,
+    // the nsPrintingPromptServiceProxy service is requested and instantiated
+    // via XPCOM, and the constructor of nsPrintingPromptServiceProxy sets up
+    // the IPC connection.
+    NS_NOTREACHED("Should never get here!");
+    return nullptr;
+}
+
+bool
+ContentChild::DeallocPPrintingChild(PPrintingChild* printing)
+{
     return true;
 }
 

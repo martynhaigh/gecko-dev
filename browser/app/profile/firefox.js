@@ -1386,6 +1386,8 @@ pref("devtools.timeline.enabled", false);
   pref("devtools.performance_dev.enabled", false);
 #endif
 
+pref("devtools.performance.ui.show-timeline-memory", false);
+
 // The default Profiler UI settings
 pref("devtools.profiler.ui.show-platform-data", false);
 
@@ -1764,3 +1766,10 @@ pref("browser.apps.URL", "https://marketplace.firefox.com/discovery/");
 
 pref("browser.polaris.enabled", false);
 pref("privacy.trackingprotection.ui.enabled", false);
+
+// Temporary pref to allow printing in e10s windows on some platforms.
+#ifdef UNIX_BUT_NOT_MAC
+pref("print.enable_e10s_testing", false);
+#else
+pref("print.enable_e10s_testing", true);
+#endif
