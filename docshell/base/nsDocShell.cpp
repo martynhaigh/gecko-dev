@@ -2873,7 +2873,7 @@ nsDocShell::PopProfileTimelineMarkers(JSContext* aCx,
   // If we see an unpaired START, we keep it around for the next call
   // to PopProfileTimelineMarkers.  We store the kept START objects in
   // this array.
-  decltype(mProfileTimelineMarkers) keptMarkers;
+  nsTArray<InternalProfileTimelineMarker*> keptMarkers;
 
   for (uint32_t i = 0; i < mProfileTimelineMarkers.Length(); ++i) {
     ProfilerMarkerTracing* startPayload = static_cast<ProfilerMarkerTracing*>(
@@ -2884,6 +2884,11 @@ nsDocShell::PopProfileTimelineMarkers(JSContext* aCx,
 
     if (startPayload->GetMetaData() == TRACING_INTERVAL_START) {
       bool hasSeenEnd = false;
+
+      // DOM events can be nested, so we must take care when searching
+      // for the matching end.  It doesn't hurt to apply this logic to
+      // all event types.
+      uint32_t markerDepth = 0;
 
       // The assumption is that the devtools timeline flushes markers frequently
       // enough for the amount of markers to always be small enough that the
@@ -2898,24 +2903,32 @@ nsDocShell::PopProfileTimelineMarkers(JSContext* aCx,
           hasSeenPaintedLayer = true;
         }
 
-        bool isSameMarkerType = strcmp(startMarkerName, endMarkerName) == 0;
+        if (strcmp(startMarkerName, endMarkerName) != 0) {
+          continue;
+        }
         bool isPaint = strcmp(startMarkerName, "Paint") == 0;
 
         // Pair start and end markers.
-        if (endPayload->GetMetaData() == TRACING_INTERVAL_END && isSameMarkerType) {
-          // But ignore paint start/end if no layer has been painted.
-          if (!isPaint || (isPaint && hasSeenPaintedLayer)) {
-            mozilla::dom::ProfileTimelineMarker marker;
-            marker.mName = NS_ConvertUTF8toUTF16(startMarkerName);
-            marker.mStart = mProfileTimelineMarkers[i]->mTime;
-            marker.mEnd = mProfileTimelineMarkers[j]->mTime;
-            profileTimelineMarkers.AppendElement(marker);
+        if (endPayload->GetMetaData() == TRACING_INTERVAL_START) {
+          ++markerDepth;
+        } else if (endPayload->GetMetaData() == TRACING_INTERVAL_END) {
+          if (markerDepth > 0) {
+            --markerDepth;
+          } else {
+            // But ignore paint start/end if no layer has been painted.
+            if (!isPaint || (isPaint && hasSeenPaintedLayer)) {
+              mozilla::dom::ProfileTimelineMarker marker;
+              marker.mName = NS_ConvertUTF8toUTF16(startMarkerName);
+              marker.mStart = mProfileTimelineMarkers[i]->mTime;
+              marker.mEnd = mProfileTimelineMarkers[j]->mTime;
+              profileTimelineMarkers.AppendElement(marker);
+            }
+
+            // We want the start to be dropped either way.
+            hasSeenEnd = true;
+
+            break;
           }
-
-          // We want the start to be dropped either way.
-          hasSeenEnd = true;
-
-          break;
         }
       }
 
@@ -9642,7 +9655,7 @@ nsDocShell::InternalLoad(nsIURI * aURI,
         // Disallow external chrome: loads targetted at content windows
         bool isChrome = false;
         if (NS_SUCCEEDED(aURI->SchemeIs("chrome", &isChrome)) && isChrome) {
-            NS_WARNING("blocked external chrome: url -- use '-chrome' option");
+            NS_WARNING("blocked external chrome: url -- use '--chrome' option");
             return NS_ERROR_FAILURE;
         }
 

@@ -853,6 +853,7 @@ var gBrowserInit = {
 
     let mm = window.getGroupMessageManager("browsers");
     mm.loadFrameScript("chrome://browser/content/content.js", true);
+    mm.loadFrameScript("chrome://browser/content/content-UITour.js", true);
 
     // initialize observers and listeners
     // and give C++ access to gBrowser
@@ -1662,7 +1663,8 @@ function HandleAppCommandEvent(evt) {
     BrowserOpenFileWindow();
     break;
   case "Print":
-    PrintUtils.print();
+    PrintUtils.print(gBrowser.selectedBrowser.contentWindowAsCPOW,
+                     gBrowser.selectedBrowser);
     break;
   case "Save":
     saveDocument(window.content.document);
@@ -4259,7 +4261,7 @@ nsBrowserAccess.prototype = {
     var isExternal = (aContext == Ci.nsIBrowserDOMWindow.OPEN_EXTERNAL);
 
     if (isExternal && aURI && aURI.schemeIs("chrome")) {
-      dump("use -chrome command-line option to load external chrome urls\n");
+      dump("use --chrome command-line option to load external chrome urls\n");
       return null;
     }
 
