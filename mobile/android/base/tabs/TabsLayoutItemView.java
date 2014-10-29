@@ -112,7 +112,6 @@ public class TabsLayoutItemView extends LinearLayout
 
     public void setThumbnail(Drawable thumbnail) {
         mThumbnail.setImageDrawable(thumbnail);
-        //mThumbnail.setScaleType(ImageView.ScaleType.FIT_CENTER);
     }
 
     public void setCloseVisible(boolean visible) {
