@@ -9,11 +9,11 @@
       android:sharedUserId="@MOZ_ANDROID_SHARED_ID@"
 #endif
       >
-    <uses-sdk android:minSdkVersion="18"
+    <uses-sdk android:minSdkVersion="@MOZ_ANDROID_MIN_SDK_VERSION@"
 #ifdef MOZ_ANDROID_MAX_SDK_VERSION
-              android:maxSdkVersion="18"
+              android:maxSdkVersion="@MOZ_ANDROID_MAX_SDK_VERSION@"
 #endif
-              android:targetSdkVersion="18"/>
+              android:targetSdkVersion="@ANDROID_TARGET_SDK@"/>
 
 #include ../services/manifests/FxAccountAndroidManifest_permissions.xml.in
 #include ../services/manifests/HealthReportAndroidManifest_permissions.xml.in

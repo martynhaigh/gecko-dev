@@ -97,7 +97,7 @@ public class TabsLayoutItemView extends LinearLayout
         if (thumbnailImage != null) {
             setThumbnail(thumbnailImage);
         } else {
-            mThumbnail.setImageResource(R.drawable.tab_thumbnail_default);
+            mThumbnail.setImageResource(R.drawable.new_tablet_tab_thumbnail_default);
         }
         if (mThumbnailWrapper != null) {
             mThumbnailWrapper.setRecording(tab.isRecording());
