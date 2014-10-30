@@ -5,13 +5,13 @@
 
 package org.mozilla.gecko.widget;
 
+import org.mozilla.gecko.R;
+
 import android.content.Context;
-import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
-import android.util.TypedValue;
 import android.widget.ImageView;
 
 /* Special version of ImageView for thumbnails. Scales a thumbnail so that it maintains its aspect
@@ -67,7 +67,7 @@ public class ThumbnailView extends ImageView {
     @Override
     public void setImageDrawable(Drawable drawable) {
         if (drawable == null) {
-            drawable = getResources().getDrawable(org.mozilla.gecko.R.drawable.new_tablet_tab_background);
+            drawable = getResources().getDrawable(R.drawable.tab_panel_tab_background);
             setScaleType(ScaleType.FIT_XY);
             mScale = false;
         } else {
