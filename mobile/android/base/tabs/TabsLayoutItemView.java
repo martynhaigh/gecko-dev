@@ -15,6 +15,7 @@ import android.view.View;
 import android.widget.Checkable;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.ImageView.ScaleType;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
