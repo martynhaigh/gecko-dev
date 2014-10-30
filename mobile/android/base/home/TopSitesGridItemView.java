@@ -5,6 +5,7 @@
 
 package org.mozilla.gecko.home;
 
+import org.mozilla.gecko.NewTabletUI;
 import org.mozilla.gecko.db.BrowserContract.TopSites;
 import org.mozilla.gecko.favicons.Favicons;
 import org.mozilla.gecko.R;
@@ -31,6 +32,9 @@ public class TopSitesGridItemView extends RelativeLayout {
     private static final int[] STATE_EMPTY = { android.R.attr.state_empty };
 
     private static final ScaleType SCALE_TYPE_FAVICON   = ScaleType.CENTER;
+    private static final ScaleType NEW_TABLET_SCALE_TYPE_RESOURCE  = ScaleType.CENTER_INSIDE;
+    private static final ScaleType NEW_TABLET_SCALE_TYPE_THUMBNAIL = ScaleType.CENTER_INSIDE;
+
     private static final ScaleType SCALE_TYPE_RESOURCE  = ScaleType.CENTER;
     private static final ScaleType SCALE_TYPE_THUMBNAIL = ScaleType.CENTER_CROP;
     private static final ScaleType SCALE_TYPE_URL       = ScaleType.CENTER_INSIDE;
@@ -202,7 +206,11 @@ public class TopSitesGridItemView extends RelativeLayout {
      * @param resId Resource ID of the drawable to show.
      */
     public void displayThumbnail(int resId) {
-        mThumbnailView.setScaleType(SCALE_TYPE_RESOURCE);
+        if(NewTabletUI.isEnabled(getContext())) {
+            mThumbnailView.setScaleType(NEW_TABLET_SCALE_TYPE_RESOURCE);
+        } else {
+            mThumbnailView.setScaleType(SCALE_TYPE_RESOURCE);
+        }
         mThumbnailView.setImageResource(resId);
         mThumbnailView.setBackgroundColor(0x0);
         mThumbnailSet = false;
@@ -223,7 +231,11 @@ public class TopSitesGridItemView extends RelativeLayout {
         Favicons.cancelFaviconLoad(mLoadId);
         ImageLoader.with(getContext()).cancelRequest(mThumbnailView);
 
-        mThumbnailView.setScaleType(SCALE_TYPE_THUMBNAIL);
+        if(NewTabletUI.isEnabled(getContext())) {
+            mThumbnailView.setScaleType(NEW_TABLET_SCALE_TYPE_THUMBNAIL);
+        } else {
+            mThumbnailView.setScaleType(SCALE_TYPE_THUMBNAIL);
+        }
         mThumbnailView.setImageBitmap(thumbnail);
         mThumbnailView.setBackgroundDrawable(null);
     }

@@ -45,14 +45,14 @@
 
     <RelativeLayout android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:padding="3dp"
+                    android:padding="5dp"
                     android:background="@drawable/tab_thumbnail"
                     android:duplicateParentState="true">
 
         <org.mozilla.gecko.widget.ThumbnailView android:id="@+id/thumbnail"
                                                 android:layout_width="@dimen/new_tablet_tab_thumbnail_width"
                                                 android:layout_height="@dimen/new_tablet_tab_thumbnail_height"
-                                                android:src="@drawable/tab_thumbnail_default"/>
+                                                android:src="@drawable/new_tablet_tab_thumbnail_default"/>
 
     </RelativeLayout>
 
