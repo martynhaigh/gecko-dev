@@ -128,8 +128,8 @@
     <dimen name="history_tab_indicator_height">50dp</dimen>
 
 
-    <dimen name="new_tablet_tab_thumbnail_height">140dp</dimen>
-    <dimen name="new_tablet_tab_thumbnail_width">168dp</dimen>
+    <dimen name="new_tablet_tab_thumbnail_height">180dp</dimen>
+    <dimen name="new_tablet_tab_thumbnail_width">180dp</dimen>
     <dimen name="new_tablet_tab_panel_grid_padding">24dp</dimen>
 
     <!-- PageActionButtons dimensions -->

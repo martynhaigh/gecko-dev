@@ -40,6 +40,8 @@ public class TopSitesThumbnailView extends ImageView {
     private final Paint mBorderPaint;
 
     private boolean mResize = false;
+    private int mWidth;
+    private int mHeight;
 
     public TopSitesThumbnailView(Context context) {
         this(context, null);
@@ -80,6 +82,18 @@ public class TopSitesThumbnailView extends ImageView {
         mResize = false;
     }
 
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        if(NewTabletUI.isEnabled(getContext()) && mResize) {
+            setScaleType(ScaleType.MATRIX);
+            RectF rect = new RectF(0, 0, mWidth, mHeight);
+            Matrix matrix = new Matrix();
+            matrix.setRectToRect(rect, rect, Matrix.ScaleToFit.CENTER);
+            setImageMatrix(matrix);
+        }
+    }
+
     /**
      * Measure the view to determine the measured width and height.
      * The height is constrained by the measured width.
@@ -93,18 +107,9 @@ public class TopSitesThumbnailView extends ImageView {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
         // Force the height based on the aspect ratio.
-        final int width = getMeasuredWidth();
-        final int height = (int) (width * ThumbnailHelper.THUMBNAIL_ASPECT_RATIO);
-        setMeasuredDimension(width, height);
-
-
-        if(NewTabletUI.isEnabled(getContext()) && mResize) {
-            setScaleType(ScaleType.MATRIX);
-            RectF rect = new RectF(0, 0, width, height);
-            Matrix matrix = new Matrix();
-            matrix.setRectToRect(rect, rect, Matrix.ScaleToFit.CENTER);
-            setImageMatrix(matrix);
-        }
+        mWidth = getMeasuredWidth();
+        mHeight = (int) (mWidth * ThumbnailHelper.THUMBNAIL_ASPECT_RATIO);
+        setMeasuredDimension(mWidth, mHeight);
     }
 
     /**

@@ -33,8 +33,13 @@ public class ThumbnailView extends ImageView {
 
     @Override
     public void onDraw(Canvas canvas) {
+        if (!mScale) {
+            super.onDraw(canvas);
+            return;
+        }
+
         Drawable d = getDrawable();
-        if (mLayoutChanged && mScale) {
+        if (mLayoutChanged) {
             int w1 = d.getIntrinsicWidth();
             int h1 = d.getIntrinsicHeight();
             int w2 = getWidth();
@@ -74,6 +79,7 @@ public class ThumbnailView extends ImageView {
             mScale = true;
             setScaleType(ScaleType.FIT_CENTER);
         }
+        
         super.setImageDrawable(drawable);
     }
 }
