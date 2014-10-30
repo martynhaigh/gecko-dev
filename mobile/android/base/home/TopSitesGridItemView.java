@@ -5,7 +5,6 @@
 
 package org.mozilla.gecko.home;
 
-import org.mozilla.gecko.NewTabletUI;
 import org.mozilla.gecko.db.BrowserContract.TopSites;
 import org.mozilla.gecko.favicons.Favicons;
 import org.mozilla.gecko.R;
