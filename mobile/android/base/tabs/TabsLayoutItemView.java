@@ -4,10 +4,10 @@
 
 package org.mozilla.gecko.tabs;
 
-import org.mozilla.gecko.NewTabletUI;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
+import org.mozilla.gecko.widget.ThumbnailView;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
@@ -15,7 +15,6 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.widget.Checkable;
 import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -27,7 +26,7 @@ public class TabsLayoutItemView extends LinearLayout
 
     private int mTabId;
     private TextView mTitle;
-    private ImageView mThumbnail;
+    private ThumbnailView mThumbnail;
     private ImageButton mCloseButton;
     private TabThumbnailWrapper mThumbnailWrapper;
 
@@ -82,7 +81,7 @@ public class TabsLayoutItemView extends LinearLayout
     protected void onFinishInflate() {
         super.onFinishInflate();
         mTitle = (TextView) findViewById(R.id.title);
-        mThumbnail = (ImageView) findViewById(R.id.thumbnail);
+        mThumbnail = (ThumbnailView) findViewById(R.id.thumbnail);
         mCloseButton = (ImageButton) findViewById(R.id.close);
         mThumbnailWrapper = (TabThumbnailWrapper) findViewById(R.id.wrapper);
     }
@@ -95,13 +94,7 @@ public class TabsLayoutItemView extends LinearLayout
         mTabId = tab.getId();
 
         Drawable thumbnailImage = tab.getThumbnail();
-        if (thumbnailImage != null) {
-            mThumbnail.setImageDrawable(thumbnailImage);
-        } else {
-            mThumbnail.setImageResource(R.drawable.new_tablet_tab_background);
-            mThumbnail.setScaleType(ImageView.ScaleType.CENTER);
-        }
-
+        mThumbnail.setImageDrawable(thumbnailImage);
 
         if (mThumbnailWrapper != null) {
             mThumbnailWrapper.setRecording(tab.isRecording());

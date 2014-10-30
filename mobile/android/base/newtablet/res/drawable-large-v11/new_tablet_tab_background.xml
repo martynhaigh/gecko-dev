@@ -11,6 +11,7 @@
     </item>
     <item>
         <bitmap android:src="@drawable/new_tablet_tab_globe"
-                android:gravity="center"/>
+                android:gravity="center"
+                />
     </item>
 </layer-list>
