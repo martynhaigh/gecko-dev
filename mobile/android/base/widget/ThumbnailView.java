@@ -28,35 +28,35 @@ public class ThumbnailView extends ImageView {
         mLayoutChanged = true;
     }
 
-    @Override
-    public void onDraw(Canvas canvas) {
-        Drawable d = getDrawable();
-        if (mLayoutChanged) {
-            int w1 = d.getIntrinsicWidth();
-            int h1 = d.getIntrinsicHeight();
-            int w2 = getWidth();
-            int h2 = getHeight();
-    
-            float scale = (w2/h2 < w1/h1) ? (float)h2/h1 : (float)w2/w1;
-            mMatrix.setScale(scale, scale);
-        }
-
-        int saveCount = canvas.save();
-        canvas.concat(mMatrix);
-        d.draw(canvas);
-        canvas.restoreToCount(saveCount);
-    }
-
-    @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        // OnLayout.changed isn't a reliable measure of whether or not the size of this view has changed
-        // neither is onSizeChanged called often enough. Instead, we track changes in size ourselves, and
-        // only invalidate this matrix if we have a new width/height spec
-        if (widthMeasureSpec != mWidthSpec || heightMeasureSpec != mHeightSpec) {
-            mWidthSpec = widthMeasureSpec;
-            mHeightSpec = heightMeasureSpec;
-            mLayoutChanged = true;
-        }
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-    }
+//    @Override
+//    public void onDraw(Canvas canvas) {
+//        Drawable d = getDrawable();
+//        if (mLayoutChanged) {
+//            int w1 = d.getIntrinsicWidth();
+//            int h1 = d.getIntrinsicHeight();
+//            int w2 = getWidth();
+//            int h2 = getHeight();
+//
+//            float scale = (w2/h2 < w1/h1) ? (float)h2/h1 : (float)w2/w1;
+//            mMatrix.setScale(scale, scale);
+//        }
+//
+//        int saveCount = canvas.save();
+//        canvas.concat(mMatrix);
+//        d.draw(canvas);
+//        canvas.restoreToCount(saveCount);
+//    }
+//
+//    @Override
+//    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+//        // OnLayout.changed isn't a reliable measure of whether or not the size of this view has changed
+//        // neither is onSizeChanged called often enough. Instead, we track changes in size ourselves, and
+//        // only invalidate this matrix if we have a new width/height spec
+//        if (widthMeasureSpec != mWidthSpec || heightMeasureSpec != mHeightSpec) {
+//            mWidthSpec = widthMeasureSpec;
+//            mHeightSpec = heightMeasureSpec;
+//            mLayoutChanged = true;
+//        }
+//        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+//    }
 }
