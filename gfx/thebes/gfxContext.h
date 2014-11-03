@@ -22,6 +22,12 @@ typedef struct _cairo cairo_t;
 class GlyphBufferAzure;
 template <typename T> class FallibleTArray;
 
+namespace mozilla {
+namespace gfx {
+struct RectCornerRadii;
+}
+}
+
 /**
  * This is the main class for doing actual drawing. It is initialized using
  * a surface and can be drawn on. It manages various state information like
@@ -41,6 +47,7 @@ class gfxContext MOZ_FINAL {
     typedef mozilla::gfx::Path Path;
     typedef mozilla::gfx::Pattern Pattern;
     typedef mozilla::gfx::Rect Rect;
+    typedef mozilla::gfx::RectCornerRadii RectCornerRadii;
 
     NS_INLINE_DECL_REFCOUNTING(gfxContext)
 
@@ -193,7 +200,7 @@ public:
      * then it's drawn counterclockwise.
      */
     void RoundedRectangle(const gfxRect& rect,
-                          const gfxCornerSizes& corners,
+                          const RectCornerRadii& corners,
                           bool draw_clockwise = true);
 
     /**
@@ -505,6 +512,7 @@ public:
      */
     void Clip(const Rect& rect);
     void Clip(const gfxRect& rect); // will clip to a rect
+    void Clip(Path* aPath);
 
     /**
      * This will ensure that the surface actually has its clip set.

@@ -13,6 +13,7 @@
 #include "mozilla/DebugOnly.h"
 #include "mozilla/gfx/2D.h"
 #include "mozilla/gfx/Helpers.h"
+#include "mozilla/gfx/PathHelpers.h"
 #include "mozilla/HashFunctions.h"
 #include "mozilla/MathAlgorithms.h"
 
@@ -456,7 +457,7 @@ GetRadii(nsIFrame* aForFrame, const nsStyleBorder& aBorder,
 static bool
 GetRadii(nsIFrame* aForFrame, const nsStyleBorder& aBorder,
          const nsRect& aOrigBorderArea, const nsRect& aBorderArea,
-         gfxCornerSizes* aBgRadii)
+         RectCornerRadii* aBgRadii)
 {
   nscoord radii[8];
   bool haveRoundedCorners = GetRadii(aForFrame, aBorder, aOrigBorderArea, aBorderArea, radii);
@@ -561,20 +562,20 @@ BoxDecorationRectForBackground(nsIFrame* aFrame, const nsRect& aBorderArea,
 /* static */ void
 nsCSSRendering::ComputePixelRadii(const nscoord *aAppUnitsRadii,
                                   nscoord aAppUnitsPerPixel,
-                                  gfxCornerSizes *oBorderRadii)
+                                  RectCornerRadii *oBorderRadii)
 {
-  gfxFloat radii[8];
+  Float radii[8];
   NS_FOR_CSS_HALF_CORNERS(corner)
-    radii[corner] = gfxFloat(aAppUnitsRadii[corner]) / aAppUnitsPerPixel;
+    radii[corner] = Float(aAppUnitsRadii[corner]) / aAppUnitsPerPixel;
 
-  (*oBorderRadii)[C_TL] = gfxSize(radii[NS_CORNER_TOP_LEFT_X],
-                                  radii[NS_CORNER_TOP_LEFT_Y]);
-  (*oBorderRadii)[C_TR] = gfxSize(radii[NS_CORNER_TOP_RIGHT_X],
-                                  radii[NS_CORNER_TOP_RIGHT_Y]);
-  (*oBorderRadii)[C_BR] = gfxSize(radii[NS_CORNER_BOTTOM_RIGHT_X],
-                                  radii[NS_CORNER_BOTTOM_RIGHT_Y]);
-  (*oBorderRadii)[C_BL] = gfxSize(radii[NS_CORNER_BOTTOM_LEFT_X],
-                                  radii[NS_CORNER_BOTTOM_LEFT_Y]);
+  (*oBorderRadii)[C_TL] = Size(radii[NS_CORNER_TOP_LEFT_X],
+                               radii[NS_CORNER_TOP_LEFT_Y]);
+  (*oBorderRadii)[C_TR] = Size(radii[NS_CORNER_TOP_RIGHT_X],
+                               radii[NS_CORNER_TOP_RIGHT_Y]);
+  (*oBorderRadii)[C_BR] = Size(radii[NS_CORNER_BOTTOM_RIGHT_X],
+                               radii[NS_CORNER_BOTTOM_RIGHT_Y]);
+  (*oBorderRadii)[C_BL] = Size(radii[NS_CORNER_BOTTOM_LEFT_X],
+                               radii[NS_CORNER_BOTTOM_LEFT_Y]);
 }
 
 void
@@ -671,7 +672,7 @@ nsCSSRendering::PaintBorderWithStyleBorder(nsPresContext* aPresContext,
   // Same coordinate space as aBorderArea & aBGClipRect.
   nsRect joinedBorderArea =
     ::BoxDecorationRectForBorder(aForFrame, aBorderArea, aSkipSides, &aStyleBorder);
-  gfxCornerSizes bgRadii;
+  RectCornerRadii bgRadii;
   ::GetRadii(aForFrame, aStyleBorder, aBorderArea, joinedBorderArea, &bgRadii);
 
   PrintAsFormatString(" joinedBorderArea: %d %d %d %d\n", joinedBorderArea.x, joinedBorderArea.y,
@@ -832,7 +833,7 @@ nsCSSRendering::PaintOutline(nsPresContext* aPresContext,
 
   // convert the radii
   nsMargin outlineMargin(width, width, width, width);
-  gfxCornerSizes outlineRadii;
+  RectCornerRadii outlineRadii;
   ComputePixelRadii(twipsRadii, twipsPerPixel, &outlineRadii);
 
   if (nsLayoutUtils::IsOutlineStyleAutoEnabled()) {
@@ -903,7 +904,7 @@ nsCSSRendering::PaintFocus(nsPresContext* aPresContext,
 
   gfxRect focusRect(nsLayoutUtils::RectToGfxRect(aFocusRect, oneDevPixel));
 
-  gfxCornerSizes focusRadii;
+  RectCornerRadii focusRadii;
   {
     nscoord twipsRadii[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
     ComputePixelRadii(twipsRadii, oneDevPixel, &focusRadii);
@@ -1194,6 +1195,7 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
                                     const nsRect& aDirtyRect,
                                     float aOpacity)
 {
+  DrawTarget& aDrawTarget = *aRenderingContext.GetDrawTarget();
   const nsStyleBorder* styleBorder = aForFrame->StyleBorder();
   nsCSSShadowArray* shadows = styleBorder->mBoxShadow;
   if (!shadows)
@@ -1223,7 +1225,7 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
 
   // Get any border radius, since box-shadow must also have rounded corners if
   // the frame does.
-  gfxCornerSizes borderRadii;
+  RectCornerRadii borderRadii;
   const nscoord twipsPerPixel = aPresContext->DevPixelsToAppUnits(1);
   if (hasBorderRadius) {
     nscoord twipsRadii[8];
@@ -1236,12 +1238,12 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
     }
   }
 
-  gfxRect frameGfxRect(nsLayoutUtils::RectToGfxRect(frameRect, twipsPerPixel));
+  Rect frameGfxRect = NSRectToRect(frameRect, twipsPerPixel);
   frameGfxRect.Round();
 
   // We don't show anything that intersects with the frame we're blurring on. So tell the
   // blurrer not to do unnecessary work there.
-  gfxRect skipGfxRect = frameGfxRect;
+  gfxRect skipGfxRect = ThebesRect(frameGfxRect);
   bool useSkipGfxRect = true;
   if (nativeTheme) {
     // Optimize non-leaf native-themed frames by skipping computing pixels
@@ -1258,6 +1260,8 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
         std::max(borderRadii[C_TL].height, borderRadii[C_TR].height), 0,
         std::max(borderRadii[C_BL].height, borderRadii[C_BR].height), 0));
   }
+
+  gfxContext* renderContext = aRenderingContext.ThebesContext();
 
   for (uint32_t i = shadows->Length(); i > 0; --i) {
     nsCSSShadowItem* shadowItem = shadows->ShadowAt(i - 1);
@@ -1277,9 +1281,10 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
     shadowRectPlusBlur.Inflate(
       nsContextBoxBlur::GetBlurRadiusMargin(blurRadius, twipsPerPixel));
 
-    gfxRect shadowGfxRectPlusBlur =
-      nsLayoutUtils::RectToGfxRect(shadowRectPlusBlur, twipsPerPixel);
+    Rect shadowGfxRectPlusBlur =
+      NSRectToRect(shadowRectPlusBlur, twipsPerPixel);
     shadowGfxRectPlusBlur.RoundOut();
+    MaybeSnapToDevicePixels(shadowGfxRectPlusBlur, aDrawTarget, true);
 
     // Set the shadow color; if not specified, use the foreground color
     nscolor shadowColor;
@@ -1291,7 +1296,6 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
     gfxRGBA gfxShadowColor(shadowColor);
     gfxShadowColor.a *= aOpacity;
 
-    gfxContext* renderContext = aRenderingContext.ThebesContext();
     if (nativeTheme) {
       nsContextBoxBlur blurringArea;
 
@@ -1307,7 +1311,6 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
       if (!shadowContext)
         continue;
 
-      // shadowContext is owned by either blurringArea or aRenderingContext.
       MOZ_ASSERT(shadowContext == blurringArea.GetContext());
 
       renderContext->Save();
@@ -1324,36 +1327,38 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
 
       // Draw the widget shape
       gfxContextMatrixAutoSaveRestore save(shadowContext);
-      nsRefPtr<nsRenderingContext> wrapperCtx = new nsRenderingContext();
-      wrapperCtx->Init(shadowContext);
       gfxPoint devPixelOffset =
         nsLayoutUtils::PointToGfxPoint(nsPoint(shadowItem->mXOffset,
                                                shadowItem->mYOffset),
                                        aPresContext->AppUnitsPerDevPixel());
-      wrapperCtx->ThebesContext()->SetMatrix(
-        wrapperCtx->ThebesContext()->CurrentMatrix().Translate(devPixelOffset));
+      shadowContext->SetMatrix(
+        shadowContext->CurrentMatrix().Translate(devPixelOffset));
 
       nsRect nativeRect;
       nativeRect.IntersectRect(frameRect, aDirtyRect);
-      aPresContext->GetTheme()->DrawWidgetBackground(wrapperCtx, aForFrame,
+      nsRenderingContext wrapperCtx(shadowContext);
+      aPresContext->GetTheme()->DrawWidgetBackground(&wrapperCtx, aForFrame,
           styleDisplay->mAppearance, aFrameArea, nativeRect);
 
       blurringArea.DoPaint();
       renderContext->Restore();
     } else {
       renderContext->Save();
-      // Clip out the area of the actual frame so the shadow is not shown within
-      // the frame.
-      renderContext->NewPath();
-      renderContext->Rectangle(shadowGfxRectPlusBlur);
-      if (hasBorderRadius) {
-        renderContext->RoundedRectangle(frameGfxRect, borderRadii);
-      } else {
-        renderContext->Rectangle(frameGfxRect);
-      }
 
-      renderContext->SetFillRule(FillRule::FILL_EVEN_ODD);
-      renderContext->Clip();
+      {
+        // Clip out the interior of the frame's border edge so that the shadow
+        // is only painted outside that area.
+        RefPtr<PathBuilder> builder =
+          aDrawTarget.CreatePathBuilder(FillRule::FILL_EVEN_ODD);
+        AppendRectToPath(builder, shadowGfxRectPlusBlur);
+        if (hasBorderRadius) {
+          AppendRoundedRectToPath(builder, frameGfxRect, borderRadii);
+        } else {
+          AppendRectToPath(builder, frameGfxRect);
+        }
+        RefPtr<Path> path = builder->Finish();
+        renderContext->Clip(path);
+      }
 
       // Clip the shadow so that we only get the part that applies to aForFrame.
       nsRect fragmentClip = shadowRectPlusBlur;
@@ -1383,16 +1388,16 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
           }
         }
       }
-      aRenderingContext.ThebesContext()->
+      renderContext->
         Clip(NSRectToSnappedRect(fragmentClip,
                                  aForFrame->PresContext()->AppUnitsPerDevPixel(),
-                                 *aRenderingContext.GetDrawTarget()));
+                                 aDrawTarget));
 
-      gfxCornerSizes clipRectRadii;
+      RectCornerRadii clipRectRadii;
       if (hasBorderRadius) {
-        gfxFloat spreadDistance = shadowItem->mSpread / twipsPerPixel;
+        Float spreadDistance = shadowItem->mSpread / twipsPerPixel;
 
-        gfxFloat borderSizes[4];
+        Float borderSizes[4];
 
         borderSizes[NS_SIDE_LEFT] = spreadDistance;
         borderSizes[NS_SIDE_TOP] = spreadDistance;
@@ -1454,16 +1459,16 @@ nsCSSRendering::PaintBoxShadowInner(nsPresContext* aPresContext,
   bool hasBorderRadius = aForFrame->GetBorderRadii(sz, sz, Sides(), twipsRadii);
   const nscoord twipsPerPixel = aPresContext->DevPixelsToAppUnits(1);
 
-  gfxCornerSizes innerRadii;
+  RectCornerRadii innerRadii;
   if (hasBorderRadius) {
-    gfxCornerSizes borderRadii;
+    RectCornerRadii borderRadii;
 
     ComputePixelRadii(twipsRadii, twipsPerPixel, &borderRadii);
-    gfxFloat borderSizes[4] = {
-      gfxFloat(border.top / twipsPerPixel),
-      gfxFloat(border.right / twipsPerPixel),
-      gfxFloat(border.bottom / twipsPerPixel),
-      gfxFloat(border.left / twipsPerPixel)
+    Float borderSizes[4] = {
+      Float(border.top / twipsPerPixel),
+      Float(border.right / twipsPerPixel),
+      Float(border.bottom / twipsPerPixel),
+      Float(border.left / twipsPerPixel)
     };
     nsCSSBorderRenderer::ComputeInnerRadii(borderRadii, borderSizes,
                                            &innerRadii);
@@ -1487,11 +1492,11 @@ nsCSSRendering::PaintBoxShadowInner(nsPresContext* aPresContext,
     shadowClipRect.MoveBy(shadowItem->mXOffset, shadowItem->mYOffset);
     shadowClipRect.Deflate(shadowItem->mSpread, shadowItem->mSpread);
 
-    gfxCornerSizes clipRectRadii;
+    RectCornerRadii clipRectRadii;
     if (hasBorderRadius) {
       // Calculate the radii the inner clipping rect will have
-      gfxFloat spreadDistance = shadowItem->mSpread / twipsPerPixel;
-      gfxFloat borderSizes[4] = {0, 0, 0, 0};
+      Float spreadDistance = shadowItem->mSpread / twipsPerPixel;
+      Float borderSizes[4] = {0, 0, 0, 0};
 
       // See PaintBoxShadowOuter and bug 514670
       if (innerRadii[C_TL].width > 0 || innerRadii[C_BL].width > 0) {
@@ -4891,7 +4896,8 @@ nsImageRenderer::Draw(nsPresContext*       aPresContext,
     {
       nsIntSize imageSize(nsPresContext::AppUnitsToIntCSSPixels(mSize.width),
                           nsPresContext::AppUnitsToIntCSSPixels(mSize.height));
-      nsLayoutUtils::DrawBackgroundImage(&aRenderingContext, aPresContext,
+      nsLayoutUtils::DrawBackgroundImage(*aRenderingContext.ThebesContext(),
+                                         aPresContext,
                                          mImageContainer, imageSize, filter,
                                          aDest, aFill, aAnchor, aDirtyRect,
                                          ConvertImageRendererToDrawFlags(mFlags));
@@ -4921,7 +4927,8 @@ nsImageRenderer::Draw(nsPresContext*       aPresContext,
       }
 
       nsCOMPtr<imgIContainer> image(ImageOps::CreateFromDrawable(drawable));
-      nsLayoutUtils::DrawImage(&aRenderingContext, aPresContext, image,
+      nsLayoutUtils::DrawImage(*aRenderingContext.ThebesContext(),
+                               aPresContext, image,
                                filter, aDest, aFill, aAnchor, aDirtyRect,
                                ConvertImageRendererToDrawFlags(mFlags));
 
@@ -5115,7 +5122,7 @@ nsImageRenderer::DrawBorderImageComponent(nsPresContext*       aPresContext,
       nsLayoutUtils::GetGraphicsFilterForFrame(mForFrame);
 
     if (!RequiresScaling(aFill, aHFill, aVFill, aUnitSize)) {
-      nsLayoutUtils::DrawSingleImage(&aRenderingContext,
+      nsLayoutUtils::DrawSingleImage(*aRenderingContext.ThebesContext(),
                                      aPresContext,
                                      subImage,
                                      graphicsFilter,
@@ -5126,7 +5133,7 @@ nsImageRenderer::DrawBorderImageComponent(nsPresContext*       aPresContext,
     }
 
     nsRect tile = ComputeTile(aFill, aHFill, aVFill, aUnitSize);
-    nsLayoutUtils::DrawImage(&aRenderingContext,
+    nsLayoutUtils::DrawImage(*aRenderingContext.ThebesContext(),
                              aPresContext,
                              subImage,
                              graphicsFilter,
@@ -5320,29 +5327,30 @@ nsContextBoxBlur::GetBlurRadiusMargin(nscoord aBlurRadius,
 nsContextBoxBlur::BlurRectangle(gfxContext* aDestinationCtx,
                                 const nsRect& aRect,
                                 int32_t aAppUnitsPerDevPixel,
-                                gfxCornerSizes* aCornerRadii,
+                                RectCornerRadii* aCornerRadii,
                                 nscoord aBlurRadius,
                                 const gfxRGBA& aShadowColor,
                                 const nsRect& aDirtyRect,
                                 const gfxRect& aSkipRect)
 {
+  DrawTarget& aDestDrawTarget = *aDestinationCtx->GetDrawTarget();
+
   if (aRect.IsEmpty()) {
     return;
   }
 
-  gfxRect shadowGfxRect =
-    nsLayoutUtils::RectToGfxRect(aRect, aAppUnitsPerDevPixel);
+  Rect shadowGfxRect = NSRectToRect(aRect, aAppUnitsPerDevPixel);
 
   if (aBlurRadius <= 0) {
-    aDestinationCtx->SetColor(aShadowColor);
-    aDestinationCtx->NewPath();
+    ColorPattern color(ToDeviceColor(aShadowColor));
     if (aCornerRadii) {
-      aDestinationCtx->RoundedRectangle(shadowGfxRect, *aCornerRadii);
+      RefPtr<Path> roundedRect = MakePathForRoundedRect(aDestDrawTarget,
+                                                        shadowGfxRect,
+                                                        *aCornerRadii);
+      aDestDrawTarget.Fill(roundedRect, color);
     } else {
-      aDestinationCtx->Rectangle(shadowGfxRect);
+      aDestDrawTarget.FillRect(shadowGfxRect, color);
     }
-
-    aDestinationCtx->Fill();
     return;
   }
 
@@ -5368,7 +5376,7 @@ nsContextBoxBlur::BlurRectangle(gfxContext* aDestinationCtx,
     nsLayoutUtils::RectToGfxRect(aDirtyRect, aAppUnitsPerDevPixel);
   dirtyRect.RoundOut();
 
-  shadowGfxRect = transform.TransformBounds(shadowGfxRect);
+  gfxRect shadowThebesRect = transform.TransformBounds(ThebesRect(shadowGfxRect));
   dirtyRect = transform.TransformBounds(dirtyRect);
   gfxRect skipRect = transform.TransformBounds(aSkipRect);
 
@@ -5377,7 +5385,7 @@ nsContextBoxBlur::BlurRectangle(gfxContext* aDestinationCtx,
   }
 
   gfxAlphaBoxBlur::BlurRectangle(aDestinationCtx,
-                                 shadowGfxRect,
+                                 shadowThebesRect,
                                  aCornerRadii,
                                  blurStdDev,
                                  aShadowColor,
