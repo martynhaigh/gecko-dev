@@ -57,6 +57,7 @@ JSCompartment::JSCompartment(Zone *zone, const JS::CompartmentOptions &options =
     globalWriteBarriered(false),
     propertyTree(thisForCtor()),
     selfHostingScriptSource(nullptr),
+    lazyArrayBuffers(nullptr),
     gcIncomingGrayPointers(nullptr),
     gcWeakMapList(nullptr),
     gcPreserveJitCode(options.preserveJitCode()),
@@ -83,6 +84,7 @@ JSCompartment::~JSCompartment()
     js_delete(scriptCountsMap);
     js_delete(debugScriptMap);
     js_delete(debugScopes);
+    js_delete(lazyArrayBuffers);
     js_free(enumerators);
 
     runtime_->numCompartments--;
@@ -99,8 +101,6 @@ JSCompartment::init(JSContext *cx)
      */
     if (cx)
         cx->runtime()->dateTimeInfo.updateTimeZoneAdjustment();
-
-    activeAnalysis = false;
 
     if (!crossCompartmentWrappers.init(0))
         return false;
@@ -512,7 +512,7 @@ JSCompartment::markCrossCompartmentWrappers(JSTracer *trc)
              * We have a cross-compartment wrapper. Its private pointer may
              * point into the compartment being collected, so we should mark it.
              */
-            MarkSlot(trc, wrapper->slotOfPrivate(), "cross-compartment wrapper");
+            MarkValue(trc, wrapper->slotOfPrivate(), "cross-compartment wrapper");
         }
     }
 }
@@ -871,6 +871,7 @@ JSCompartment::addSizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf,
                                       size_t *compartmentObject,
                                       size_t *compartmentTables,
                                       size_t *innerViewsArg,
+                                      size_t *lazyArrayBuffersArg,
                                       size_t *crossCompartmentWrappersArg,
                                       size_t *regexpCompartment,
                                       size_t *savedStacksSet)
@@ -883,6 +884,8 @@ JSCompartment::addSizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf,
                         + newTypeObjects.sizeOfExcludingThis(mallocSizeOf)
                         + lazyTypeObjects.sizeOfExcludingThis(mallocSizeOf);
     *innerViewsArg += innerViews.sizeOfExcludingThis(mallocSizeOf);
+    if (lazyArrayBuffers)
+        *lazyArrayBuffersArg += lazyArrayBuffers->sizeOfIncludingThis(mallocSizeOf);
     *crossCompartmentWrappersArg += crossCompartmentWrappers.sizeOfExcludingThis(mallocSizeOf);
     *regexpCompartment += regExps.sizeOfExcludingThis(mallocSizeOf);
     *savedStacksSet += savedStacks_.sizeOfExcludingThis(mallocSizeOf);

@@ -88,15 +88,15 @@ function BrowserElementParent(frameLoader, hasRemoteFrame, isPendingFrame) {
   Services.obs.addObserver(this, 'copypaste-docommand', /* ownsWeak = */ true);
 
   let defineMethod = function(name, fn) {
-    XPCNativeWrapper.unwrap(self._frameElement)[name] = function() {
+    XPCNativeWrapper.unwrap(self._frameElement)[name] = Cu.exportFunction(function() {
       if (self._isAlive()) {
         return fn.apply(self, arguments);
       }
-    };
+    }, self._frameElement);
   }
 
   let defineNoReturnMethod = function(name, fn) {
-    XPCNativeWrapper.unwrap(self._frameElement)[name] = function method() {
+    XPCNativeWrapper.unwrap(self._frameElement)[name] = Cu.exportFunction(function method() {
       if (!self._domRequestReady) {
         // Remote browser haven't been created, we just queue the API call.
         let args = Array.slice(arguments);
@@ -107,13 +107,13 @@ function BrowserElementParent(frameLoader, hasRemoteFrame, isPendingFrame) {
       if (self._isAlive()) {
         fn.apply(self, arguments);
       }
-    };
+    }, self._frameElement);
   };
 
   let defineDOMRequestMethod = function(domName, msgName) {
-    XPCNativeWrapper.unwrap(self._frameElement)[domName] = function() {
+    XPCNativeWrapper.unwrap(self._frameElement)[domName] = Cu.exportFunction(function() {
       return self._sendDOMRequest(msgName);
-    };
+    }, self._frameElement);
   }
 
   // Define methods on the frame element.
@@ -245,7 +245,6 @@ BrowserElementParent.prototype = {
       "firstpaint": this._fireProfiledEventFromMsg,
       "documentfirstpaint": this._fireProfiledEventFromMsg,
       "nextpaint": this._recvNextPaint,
-      "keyevent": this._fireKeyEvent,
       "got-purge-history": this._gotDOMRequestResult,
       "got-screenshot": this._gotDOMRequestResult,
       "got-contentdimensions": this._gotDOMRequestResult,
@@ -869,16 +868,6 @@ BrowserElementParent.prototype = {
 
     return this._sendDOMRequest('set-input-method-active',
                                 {isActive: isActive});
-  },
-
-  _fireKeyEvent: function(data) {
-    let evt = this._window.document.createEvent("KeyboardEvent");
-    evt.initKeyEvent(data.json.type, true, true, this._window,
-                     false, false, false, false, // modifiers
-                     data.json.keyCode,
-                     data.json.charCode);
-
-    this._frameElement.dispatchEvent(evt);
   },
 
   /**

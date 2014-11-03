@@ -76,16 +76,17 @@ Waterfall.prototype = {
    * @param array markers
    *        A list of markers received from the controller.
    * @param number timeStart
-   *        The delta time (in milliseconds) to start drawing from.
+   *        The time (in milliseconds) to start drawing from.
    * @param number timeEnd
-   *        The delta time (in milliseconds) to end drawing at.
+   *        The time (in milliseconds) to end drawing at.
    */
   setData: function(markers, timeStart, timeEnd) {
     this.clearView();
 
     let dataScale = this._waterfallWidth / (timeEnd - timeStart);
     this._drawWaterfallBackground(dataScale);
-    this._buildHeader(this._headerContents, timeStart, dataScale);
+    // Label the header as if the first possible marker was at T=0.
+    this._buildHeader(this._headerContents, timeStart - markers.startTime, dataScale);
     this._buildMarkers(this._listContents, markers, timeStart, timeEnd, dataScale);
   },
 
@@ -278,8 +279,20 @@ Waterfall.prototype = {
     sidebar.appendChild(bullet);
 
     let name = this._document.createElement("label");
+    name.setAttribute("crop", "end");
+    name.setAttribute("flex", "1");
     name.className = "plain timeline-marker-name";
-    name.setAttribute("value", blueprint.label);
+
+    let label;
+    if (marker.detail && marker.detail.causeName) {
+      label = this._l10n.getFormatStr("timeline.markerDetailFormat",
+                                      blueprint.label,
+                                      marker.detail.causeName);
+    } else {
+      label = blueprint.label;
+    }
+    name.setAttribute("value", label);
+    name.setAttribute("tooltiptext", label);
     sidebar.appendChild(name);
 
     container.appendChild(sidebar);

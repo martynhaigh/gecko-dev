@@ -8,10 +8,12 @@
 #include "nsBulletFrame.h"
 
 #include "gfx2DGlue.h"
+#include "gfxUtils.h"
 #include "mozilla/gfx/2D.h"
 #include "mozilla/gfx/PathHelpers.h"
 #include "mozilla/MathAlgorithms.h"
 #include "nsCOMPtr.h"
+#include "nsFontMetrics.h"
 #include "nsGkAtoms.h"
 #include "nsGenericHTMLElement.h"
 #include "nsAttrValueInlines.h"
@@ -307,7 +309,8 @@ nsBulletFrame::PaintBullet(nsRenderingContext& aRenderingContext, nsPoint aPt,
         nsRect dest(padding.left, padding.top,
                     mRect.width - (padding.left + padding.right),
                     mRect.height - (padding.top + padding.bottom));
-        nsLayoutUtils::DrawSingleImage(&aRenderingContext, PresContext(),
+        nsLayoutUtils::DrawSingleImage(*aRenderingContext.ThebesContext(),
+             PresContext(),
              imageCon, nsLayoutUtils::GetGraphicsFilterForFrame(this),
              dest + aPt, aDirtyRect, nullptr, aFlags);
         return;
@@ -316,9 +319,11 @@ nsBulletFrame::PaintBullet(nsRenderingContext& aRenderingContext, nsPoint aPt,
   }
 
   nsRefPtr<nsFontMetrics> fm;
-  nscolor col = nsLayoutUtils::GetColor(this, eCSSProperty_color);
-  Color color = nsLayoutUtils::NSColorToColor(col);
-  aRenderingContext.SetColor(col);
+  ColorPattern color(ToDeviceColor(
+                       nsLayoutUtils::GetColor(this, eCSSProperty_color)));
+
+  DrawTarget* drawTarget = aRenderingContext.GetDrawTarget();
+  int32_t appUnitsPerDevPixel = PresContext()->AppUnitsPerDevPixel();
 
   nsAutoString text;
   switch (listStyleType->GetStyle()) {
@@ -333,15 +338,14 @@ nsBulletFrame::PaintBullet(nsRenderingContext& aRenderingContext, nsPoint aPt,
                   mRect.width - (padding.left + padding.right),
                   mRect.height - (padding.top + padding.bottom));
       Rect devPxRect =
-        ToRect(nsLayoutUtils::RectToGfxRect(rect, PresContext()->AppUnitsPerDevPixel()));
-      DrawTarget* drawTarget = aRenderingContext.GetDrawTarget();
+        NSRectToSnappedRect(rect, appUnitsPerDevPixel, *drawTarget);
       RefPtr<PathBuilder> builder = drawTarget->CreatePathBuilder();
       AppendEllipseToPath(builder, devPxRect.Center(), devPxRect.Size());
       RefPtr<Path> ellipse = builder->Finish();
       if (listStyleType->GetStyle() == NS_STYLE_LIST_STYLE_DISC) {
-        drawTarget->Fill(ellipse, ColorPattern(color));
+        drawTarget->Fill(ellipse, color);
       } else {
-        drawTarget->Stroke(ellipse, ColorPattern(color));
+        drawTarget->Stroke(ellipse, color);
       }
     }
     break;
@@ -363,8 +367,9 @@ nsBulletFrame::PaintBullet(nsRenderingContext& aRenderingContext, nsPoint aPt,
                       pc->RoundAppUnitsToNearestDevPixels(rect.height));
       snapRect.MoveBy((rect.width - snapRect.width) / 2,
                       (rect.height - snapRect.height) / 2);
-      aRenderingContext.FillRect(snapRect.x, snapRect.y,
-                                 snapRect.width, snapRect.height);
+      Rect devPxRect =
+        NSRectToSnappedRect(snapRect, appUnitsPerDevPixel, *drawTarget);
+      drawTarget->FillRect(devPxRect, color);
     }
     break;
 
@@ -390,35 +395,41 @@ nsBulletFrame::PaintBullet(nsRenderingContext& aRenderingContext, nsPoint aPt,
       rect.x = pc->RoundAppUnitsToNearestDevPixels(rect.x);
       rect.y = pc->RoundAppUnitsToNearestDevPixels(rect.y);
 
-      nsPoint points[3];
+      RefPtr<PathBuilder> builder = drawTarget->CreatePathBuilder();
       if (isDown) {
         // to bottom
-        points[0] = rect.TopLeft();
-        points[1] = rect.TopRight();
-        points[2] = (rect.BottomLeft() + rect.BottomRight()) / 2;
+        builder->MoveTo(NSPointToPoint(rect.TopLeft(), appUnitsPerDevPixel));
+        builder->LineTo(NSPointToPoint(rect.TopRight(), appUnitsPerDevPixel));
+        builder->LineTo(NSPointToPoint((rect.BottomLeft() + rect.BottomRight()) / 2,
+                                       appUnitsPerDevPixel));
       } else {
         bool isLR = isVertical ? wm.IsVerticalLR() : wm.IsBidiLTR();
         if (isLR) {
           // to right
-          points[0] = rect.TopLeft();
-          points[1] = (rect.TopRight() + rect.BottomRight()) / 2;
-          points[2] = rect.BottomLeft();
+          builder->MoveTo(NSPointToPoint(rect.TopLeft(), appUnitsPerDevPixel));
+          builder->LineTo(NSPointToPoint((rect.TopRight() + rect.BottomRight()) / 2,
+                                         appUnitsPerDevPixel));
+          builder->LineTo(NSPointToPoint(rect.BottomLeft(), appUnitsPerDevPixel));
         } else {
           // to left
-          points[0] = rect.TopRight();
-          points[1] = rect.BottomRight();
-          points[2] = (rect.TopLeft() + rect.BottomLeft()) / 2;
+          builder->MoveTo(NSPointToPoint(rect.TopRight(), appUnitsPerDevPixel));
+          builder->LineTo(NSPointToPoint(rect.BottomRight(), appUnitsPerDevPixel));
+          builder->LineTo(NSPointToPoint((rect.TopLeft() + rect.BottomLeft()) / 2,
+                                         appUnitsPerDevPixel));
         }
       }
-      aRenderingContext.FillPolygon(points, 3);
+      RefPtr<Path> path = builder->Finish();
+      drawTarget->Fill(path, color);
     }
     break;
 
   default:
+    aRenderingContext.ThebesContext()->SetColor(
+                        nsLayoutUtils::GetColor(this, eCSSProperty_color));
+
     nsLayoutUtils::GetFontMetricsForFrame(this, getter_AddRefs(fm),
                                           GetFontSizeInflation());
     GetListItemText(text);
-    aRenderingContext.SetFont(fm);
     nscoord ascent = fm->MaxAscent();
     aPt.MoveBy(padding.left, padding.top);
     aPt.y = NSToCoordRound(nsLayoutUtils::GetSnappedBaselineY(
@@ -427,7 +438,7 @@ nsBulletFrame::PaintBullet(nsRenderingContext& aRenderingContext, nsPoint aPt,
     if (!presContext->BidiEnabled() && HasRTLChars(text)) {
       presContext->SetBidiEnabled();
     }
-    nsLayoutUtils::DrawString(this, &aRenderingContext,
+    nsLayoutUtils::DrawString(this, *fm, &aRenderingContext,
                               text.get(), text.Length(), aPt);
     break;
   }
@@ -591,10 +602,9 @@ nsBulletFrame::GetDesiredSize(nsPresContext*  aCX,
     default:
       GetListItemText(text);
       finalSize.BSize(wm) = fm->MaxHeight();
-      aRenderingContext->SetFont(fm);
       finalSize.ISize(wm) =
-        nsLayoutUtils::GetStringWidth(this, aRenderingContext,
-                                      text.get(), text.Length());
+        nsLayoutUtils::AppUnitWidthOfStringBidi(text, this, *fm,
+                                                *aRenderingContext);
       aMetrics.SetBlockStartAscent(fm->MaxAscent());
       break;
   }
@@ -852,7 +862,9 @@ nsBulletFrame::GetSpokenText(nsAString& aText)
   bool isBullet;
   style->GetSpokenCounterText(mOrdinal, GetWritingMode(), aText, isBullet);
   if (isBullet) {
-    aText.Append(' ');
+    if (!style->IsNone()) {
+      aText.Append(' ');
+    }
   } else {
     nsAutoString prefix, suffix;
     style->GetPrefix(prefix);

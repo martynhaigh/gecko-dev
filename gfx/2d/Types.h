@@ -43,6 +43,19 @@ MOZ_BEGIN_ENUM_CLASS(SurfaceFormat, int8_t)
   UNKNOWN
 MOZ_END_ENUM_CLASS(SurfaceFormat)
 
+inline bool IsOpaque(SurfaceFormat aFormat)
+{
+  switch (aFormat) {
+  case SurfaceFormat::B8G8R8X8:
+  case SurfaceFormat::R8G8B8X8:
+  case SurfaceFormat::R5G6B5:
+  case SurfaceFormat::YUV:
+    return true;
+  default:
+    return false;
+  }
+}
+
 MOZ_BEGIN_ENUM_CLASS(FilterType, int8_t)
   BLEND = 0,
   TRANSFORM,
@@ -232,10 +245,26 @@ public:
     return newColor;
   }
 
+  static Color FromARGB(uint32_t aColor)
+  {
+    Color newColor(((aColor >> 16) & 0xff) * (1.0f / 255.0f),
+                   ((aColor >> 8) & 0xff) * (1.0f / 255.0f),
+                   ((aColor >> 0) & 0xff) * (1.0f / 255.0f),
+                   ((aColor >> 24) & 0xff) * (1.0f / 255.0f));
+
+    return newColor;
+  }
+
   uint32_t ToABGR() const
   {
     return uint32_t(r * 255.0f) | uint32_t(g * 255.0f) << 8 |
            uint32_t(b * 255.0f) << 16 | uint32_t(a * 255.0f) << 24;
+  }
+
+  uint32_t ToARGB() const
+  {
+    return uint32_t(b * 255.0f) | uint32_t(g * 255.0f) << 8 |
+           uint32_t(r * 255.0f) << 16 | uint32_t(a * 255.0f) << 24;
   }
 
   Float r, g, b, a;

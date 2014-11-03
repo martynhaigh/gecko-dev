@@ -991,6 +991,23 @@ class AutoNewContext
     }
 };
 
+static void
+my_LargeAllocFailCallback(void *data)
+{
+    JSContext *cx = (JSContext*)data;
+    JSRuntime *rt = cx->runtime();
+
+    if (InParallelSection() || !cx->allowGC())
+        return;
+
+    MOZ_ASSERT(!rt->isHeapBusy());
+    MOZ_ASSERT(!rt->currentThreadHasExclusiveAccess());
+
+    JS::PrepareForFullGC(rt);
+    AutoKeepAtoms keepAtoms(cx->perThreadData);
+    rt->gc.gc(GC_NORMAL, JS::gcreason::SHARED_MEMORY_LIMIT);
+}
+
 static const uint32_t CacheEntry_SOURCE = 0;
 static const uint32_t CacheEntry_BYTECODE = 1;
 
@@ -1067,7 +1084,7 @@ CacheEntry_setBytecode(JSContext *cx, HandleObject cache, uint8_t *buffer, uint3
     MOZ_ASSERT(CacheEntry_isCacheEntry(cache));
 
     ArrayBufferObject::BufferContents contents =
-        ArrayBufferObject::BufferContents::create<ArrayBufferObject::PLAIN_BUFFER>(buffer);
+        ArrayBufferObject::BufferContents::create<ArrayBufferObject::PLAIN>(buffer);
     Rooted<ArrayBufferObject*> arrayBuffer(cx, ArrayBufferObject::create(cx, length, contents));
     if (!arrayBuffer)
         return false;
@@ -2335,7 +2352,6 @@ DumpHeap(JSContext *cx, unsigned argc, jsval *vp)
         thingToIgnore = args[4];
     }
 
-
     FILE *dumpFile = stdout;
     if (fileName.length()) {
         dumpFile = fopen(fileName.ptr(), "w");
@@ -2440,7 +2456,12 @@ Clone(JSContext *cx, unsigned argc, jsval *vp)
         parent = JS_GetParent(&args.callee());
     }
 
-    JSObject *clone = JS_CloneFunctionObject(cx, funobj, parent);
+    // Should it worry us that we might be getting with wrappers
+    // around with wrappers here?
+    JS::AutoObjectVector scopeChain(cx);
+    if (!parent->is<GlobalObject>() && !scopeChain.append(parent))
+        return false;
+    JSObject *clone = JS::CloneFunctionObject(cx, funobj, scopeChain);
     if (!clone)
         return false;
     args.rval().setObject(*clone);
@@ -2716,6 +2737,8 @@ WorkerMain(void *arg)
         return;
     }
 
+    JS::SetLargeAllocationFailureCallback(rt, my_LargeAllocFailCallback, (void*)cx);
+
     do {
         JSAutoRequest ar(cx);
 
@@ -2737,6 +2760,8 @@ WorkerMain(void *arg)
         RootedValue result(cx);
         JS_ExecuteScript(cx, global, script, &result);
     } while (0);
+
+    JS::SetLargeAllocationFailureCallback(rt, nullptr, nullptr);
 
     DestroyContext(cx, false);
     JS_DestroyRuntime(rt);
@@ -2887,7 +2912,6 @@ static const JSClass resolver_class = {
     resolver_enumerate, (JSResolveOp)resolver_resolve,
     JS_ConvertStub
 };
-
 
 static bool
 Resolver(JSContext *cx, unsigned argc, jsval *vp)
@@ -3218,6 +3242,7 @@ SetInterruptCallback(JSContext *cx, unsigned argc, Value *vp)
     return true;
 }
 
+#ifdef DEBUG
 static bool
 StackDump(JSContext *cx, unsigned argc, Value *vp)
 {
@@ -3238,7 +3263,7 @@ StackDump(JSContext *cx, unsigned argc, Value *vp)
     args.rval().setUndefined();
     return true;
 }
-
+#endif
 
 static bool
 Elapsed(JSContext *cx, unsigned argc, jsval *vp)
@@ -5050,9 +5075,9 @@ static const JSJitInfo doFoo_methodinfo = {
 
 static const JSPropertySpec dom_props[] = {
     {"x",
-     JSPROP_SHARED | JSPROP_ENUMERATE | JSPROP_NATIVE_ACCESSORS,
-     { { (JSPropertyOp)dom_genericGetter, &dom_x_getterinfo } },
-     { { (JSStrictPropertyOp)dom_genericSetter, &dom_x_setterinfo } }
+     JSPROP_SHARED | JSPROP_ENUMERATE,
+     { { dom_genericGetter, &dom_x_getterinfo } },
+     { { dom_genericSetter, &dom_x_setterinfo } }
     },
     JS_PS_END
 };
@@ -5996,6 +6021,7 @@ main(int argc, char **argv, char **envp)
 #ifdef JSGC_GENERATIONAL
         || !op.addBoolOption('\0', "no-ggc", "Disable Generational GC")
 #endif
+        || !op.addBoolOption('\0', "no-incremental-gc", "Disable Incremental GC")
         || !op.addIntOption('\0', "available-memory", "SIZE",
                             "Select GC settings based on available memory (MB)", 0)
 #if defined(JS_CODEGEN_ARM)
@@ -6132,6 +6158,19 @@ main(int argc, char **argv, char **envp)
     JS_SetGCParameter(rt, JSGC_MODE, JSGC_MODE_INCREMENTAL);
     JS_SetGCParameterForThread(cx, JSGC_MAX_CODE_CACHE_BYTES, 16 * 1024 * 1024);
 
+    JS::SetLargeAllocationFailureCallback(rt, my_LargeAllocFailCallback, (void*)cx);
+
+    // Set some parameters to allow incremental GC in low memory conditions,
+    // as is done for the browser, except in more-deterministic builds or when
+    // disabled by command line options.
+#ifndef JS_MORE_DETERMINISTIC
+    if (!op.getBoolOption("no-incremental-gc")) {
+        JS_SetGCParameter(rt, JSGC_DYNAMIC_HEAP_GROWTH, 1);
+        JS_SetGCParameter(rt, JSGC_DYNAMIC_MARK_SLICE, 1);
+        JS_SetGCParameter(rt, JSGC_SLICE_TIME_BUDGET, 10);
+    }
+#endif
+
     js::SetPreserveWrapperCallback(rt, DummyPreserveWrapperCallback);
 
     result = Shell(cx, &op, envp);
@@ -6140,6 +6179,8 @@ main(int argc, char **argv, char **envp)
     if (OOM_printAllocationCount)
         printf("OOM max count: %u\n", OOM_counter);
 #endif
+
+    JS::SetLargeAllocationFailureCallback(rt, nullptr, nullptr);
 
     DestroyContext(cx, true);
 

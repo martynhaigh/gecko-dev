@@ -149,6 +149,7 @@ JSRuntime::JSRuntime(JSRuntime *parentRuntime)
     localeCallbacks(nullptr),
     defaultLocale(nullptr),
     defaultVersion_(JSVERSION_DEFAULT),
+    futexAPI_(nullptr),
     ownerThread_(nullptr),
     tempLifoAlloc(TEMP_LIFO_ALLOC_PRIMARY_CHUNK_SIZE),
     freeLifoAlloc(TEMP_LIFO_ALLOC_PRIMARY_CHUNK_SIZE),
@@ -339,6 +340,9 @@ JSRuntime::~JSRuntime()
 {
     MOZ_ASSERT(!isHeapBusy());
 
+    delete futexAPI_;
+    futexAPI_ = nullptr;
+
     if (gcInitialized) {
         /* Free source hook early, as its destructor may want to delete roots. */
         sourceHook = nullptr;
@@ -450,10 +454,10 @@ NewObjectCache::clearNurseryObjects(JSRuntime *rt)
 #ifdef JSGC_GENERATIONAL
     for (unsigned i = 0; i < mozilla::ArrayLength(entries); ++i) {
         Entry &e = entries[i];
-        JSObject *obj = reinterpret_cast<JSObject *>(&e.templateObject);
+        NativeObject *obj = reinterpret_cast<NativeObject *>(&e.templateObject);
         if (IsInsideNursery(e.key) ||
-            rt->gc.nursery.isInside(obj->fakeNativeSlots()) ||
-            rt->gc.nursery.isInside(obj->fakeNativeElements()))
+            rt->gc.nursery.isInside(obj->slots_) ||
+            rt->gc.nursery.isInside(obj->elements_))
         {
             PodZero(&e);
         }

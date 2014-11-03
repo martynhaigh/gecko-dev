@@ -33,7 +33,6 @@
 #include "vm/ScopeObject-inl.h"
 
 using namespace js;
-using namespace JS;
 
 using mozilla::Move;
 using mozilla::PodArrayZero;
@@ -289,8 +288,9 @@ DefineHelpProperty(JSContext *cx, HandleObject obj, const char *prop, const char
     RootedAtom atom(cx, Atomize(cx, value, strlen(value)));
     if (!atom)
         return false;
-    return JS_DefineProperty(cx, obj, prop, atom, JSPROP_READONLY | JSPROP_PERMANENT,
-                             JS_PropertyStub, JS_StrictPropertyStub);
+    return JS_DefineProperty(cx, obj, prop, atom,
+                             JSPROP_READONLY | JSPROP_PERMANENT,
+                             JS_STUBGETTER, JS_STUBSETTER);
 }
 
 JS_FRIEND_API(bool)
@@ -435,7 +435,7 @@ js::NotifyAnimationActivity(JSObject *obj)
 JS_FRIEND_API(uint32_t)
 js::GetObjectSlotSpan(JSObject *obj)
 {
-    return obj->fakeNativeSlotSpan();
+    return obj->as<NativeObject>().slotSpan();
 }
 
 JS_FRIEND_API(bool)
@@ -555,9 +555,14 @@ js::GetOriginalEval(JSContext *cx, HandleObject scope, MutableHandleObject eval)
 }
 
 JS_FRIEND_API(void)
-js::SetReservedSlotWithBarrier(JSObject *obj, size_t slot, const js::Value &value)
+js::SetReservedOrProxyPrivateSlotWithBarrier(JSObject *obj, size_t slot, const js::Value &value)
 {
-    obj->fakeNativeSetSlot(slot, value);
+    if (IsProxy(obj)) {
+        MOZ_ASSERT(slot == 0);
+        obj->as<ProxyObject>().setSameCompartmentPrivate(value);
+    } else {
+        obj->as<NativeObject>().setSlot(slot, value);
+    }
 }
 
 JS_FRIEND_API(bool)
@@ -1089,13 +1094,13 @@ JS::WasIncrementalGC(JSRuntime *rt)
 }
 
 char16_t *
-GCDescription::formatMessage(JSRuntime *rt) const
+JS::GCDescription::formatMessage(JSRuntime *rt) const
 {
     return rt->gc.stats.formatMessage();
 }
 
 char16_t *
-GCDescription::formatJSON(JSRuntime *rt, uint64_t timestamp) const
+JS::GCDescription::formatJSON(JSRuntime *rt, uint64_t timestamp) const
 {
     return rt->gc.stats.formatJSON(timestamp);
 }
@@ -1435,8 +1440,8 @@ js::IsInRequest(JSContext *cx)
 }
 
 bool
-js::HasObjectMovedOpIfRequired(JSObject *obj) {
-    return obj->is<GlobalObject>() || !!GetObjectClass(obj)->ext.objectMovedOp;
+js::HasObjectMovedOp(JSObject *obj) {
+    return !!GetObjectClass(obj)->ext.objectMovedOp;
 }
 #endif
 

@@ -21,8 +21,7 @@ EXPORTS.mozilla.plugins += [
     'NPEventOSX.h',
     'NPEventUnix.h',
     'NPEventWindows.h',
-    'PluginIdentifierChild.h',
-    'PluginIdentifierParent.h',
+    'PluginBridge.h',
     'PluginInstanceChild.h',
     'PluginInstanceParent.h',
     'PluginMessageUtils.h',
@@ -56,7 +55,7 @@ if CONFIG['OS_ARCH'] == 'WINNT':
     ]
     DEFINES['MOZ_HANGUI_PROCESS_NAME'] = '"plugin-hang-ui%s"' % CONFIG['BIN_SUFFIX']
     LOCAL_INCLUDES += [
-        '/widget/shared',
+        '/widget',
         'hangui',
     ]
 
@@ -79,8 +78,6 @@ UNIFIED_SOURCES += [
     'ChildAsyncCall.cpp',
     'ChildTimer.cpp',
     'PluginBackgroundDestroyer.cpp',
-    'PluginIdentifierChild.cpp',
-    'PluginIdentifierParent.cpp',
     'PluginInstanceParent.cpp',
     'PluginMessageUtils.cpp',
     'PluginModuleParent.cpp',
@@ -105,8 +102,8 @@ if CONFIG['MOZ_WIDGET_TOOLKIT'] == 'cocoa':
 
 IPDL_SOURCES += [
     'PBrowserStream.ipdl',
+    'PluginTypes.ipdlh',
     'PPluginBackgroundDestroyer.ipdl',
-    'PPluginIdentifier.ipdl',
     'PPluginInstance.ipdl',
     'PPluginModule.ipdl',
     'PPluginScriptableObject.ipdl',

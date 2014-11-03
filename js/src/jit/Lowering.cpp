@@ -878,6 +878,12 @@ LIRGenerator::visitTest(MTest *test)
 }
 
 bool
+LIRGenerator::visitGotoWithFake(MGotoWithFake *gotoWithFake)
+{
+    return add(new(alloc()) LGoto(gotoWithFake->target()));
+}
+
+bool
 LIRGenerator::visitFunctionDispatch(MFunctionDispatch *ins)
 {
     LFunctionDispatch *lir = new(alloc()) LFunctionDispatch(useRegister(ins->input()));
@@ -2489,6 +2495,13 @@ LIRGenerator::visitTypedObjectProto(MTypedObjectProto *ins)
 }
 
 bool
+LIRGenerator::visitTypedObjectUnsizedLength(MTypedObjectUnsizedLength *ins)
+{
+    MOZ_ASSERT(ins->type() == MIRType_Int32);
+    return define(new(alloc()) LTypedObjectUnsizedLength(useRegisterAtStart(ins->object())), ins);
+}
+
+bool
 LIRGenerator::visitTypedObjectElements(MTypedObjectElements *ins)
 {
     MOZ_ASSERT(ins->type() == MIRType_Elements);
@@ -2581,16 +2594,6 @@ LIRGenerator::visitNot(MNot *ins)
       default:
         MOZ_CRASH("Unexpected MIRType.");
     }
-}
-
-bool
-LIRGenerator::visitNeuterCheck(MNeuterCheck *ins)
-{
-    LNeuterCheck *chk = new(alloc()) LNeuterCheck(useRegister(ins->object()),
-                                                  temp());
-    if (!assignSnapshot(chk, Bailout_Neutered))
-        return false;
-    return redefine(ins, ins->input()) && add(chk, ins);
 }
 
 bool
@@ -2852,10 +2855,22 @@ LIRGenerator::visitLoadTypedArrayElement(MLoadTypedArrayElement *ins)
     if (ins->arrayType() == Scalar::Uint32 && IsFloatingPointType(ins->type()))
         tempDef = temp();
 
+    if (ins->requiresMemoryBarrier()) {
+        LMemoryBarrier *fence = new(alloc()) LMemoryBarrier(MembarBeforeLoad);
+        if (!add(fence, ins))
+            return false;
+    }
     LLoadTypedArrayElement *lir = new(alloc()) LLoadTypedArrayElement(elements, index, tempDef);
     if (ins->fallible() && !assignSnapshot(lir, Bailout_Overflow))
         return false;
-    return define(lir, ins);
+    if (!define(lir, ins))
+        return false;
+    if (ins->requiresMemoryBarrier()) {
+        LMemoryBarrier *fence = new(alloc()) LMemoryBarrier(MembarAfterLoad);
+        if (!add(fence, ins))
+            return false;
+    }
+    return true;
 }
 
 bool
@@ -2939,7 +2954,24 @@ LIRGenerator::visitStoreTypedArrayElement(MStoreTypedArrayElement *ins)
         value = useByteOpRegisterOrNonDoubleConstant(ins->value());
     else
         value = useRegisterOrNonDoubleConstant(ins->value());
-    return add(new(alloc()) LStoreTypedArrayElement(elements, index, value), ins);
+
+    // Optimization opportunity for atomics: on some platforms there
+    // is a store instruction that incorporates the necessary
+    // barriers, and we could use that instead of separate barrier and
+    // store instructions.  See bug #1077027.
+    if (ins->requiresMemoryBarrier()) {
+        LMemoryBarrier *fence = new(alloc()) LMemoryBarrier(MembarBeforeStore);
+        if (!add(fence, ins))
+            return false;
+    }
+    if (!add(new(alloc()) LStoreTypedArrayElement(elements, index, value), ins))
+        return false;
+    if (ins->requiresMemoryBarrier()) {
+        LMemoryBarrier *fence = new(alloc()) LMemoryBarrier(MembarAfterStore);
+        if (!add(fence, ins))
+            return false;
+    }
+    return true;
 }
 
 bool
@@ -3707,6 +3739,13 @@ LIRGenerator::visitRecompileCheck(MRecompileCheck *ins)
 }
 
 bool
+LIRGenerator::visitMemoryBarrier(MMemoryBarrier *ins)
+{
+    LMemoryBarrier *lir = new(alloc()) LMemoryBarrier(ins->type());
+    return add(lir, ins);
+}
+
+bool
 LIRGenerator::visitSimdConstant(MSimdConstant *ins)
 {
     MOZ_ASSERT(IsSimdType(ins->type()));
@@ -3799,6 +3838,50 @@ LIRGenerator::visitSimdSignMask(MSimdSignMask *ins)
         MOZ_CRASH("Unexpected SIMD type extracting sign bits.");
         break;
     }
+}
+
+bool
+LIRGenerator::visitSimdSwizzle(MSimdSwizzle *ins)
+{
+    MOZ_ASSERT(IsSimdType(ins->input()->type()));
+    MOZ_ASSERT(IsSimdType(ins->type()));
+
+    if (ins->input()->type() == MIRType_Int32x4) {
+        LUse use = useRegisterAtStart(ins->input());
+        LSimdSwizzleI *lir = new (alloc()) LSimdSwizzleI(use);
+        return define(lir, ins);
+    }
+
+    if (ins->input()->type() == MIRType_Float32x4) {
+        LUse use = useRegisterAtStart(ins->input());
+        LSimdSwizzleF *lir = new (alloc()) LSimdSwizzleF(use);
+        return define(lir, ins);
+    }
+
+    MOZ_CRASH("Unknown SIMD kind when getting lane");
+    return false;
+}
+
+bool
+LIRGenerator::visitSimdShuffle(MSimdShuffle *ins)
+{
+    MOZ_ASSERT(IsSimdType(ins->lhs()->type()));
+    MOZ_ASSERT(IsSimdType(ins->rhs()->type()));
+    MOZ_ASSERT(IsSimdType(ins->type()));
+    MOZ_ASSERT(ins->type() == MIRType_Int32x4 || ins->type() == MIRType_Float32x4);
+
+    bool zFromLHS = ins->laneZ() < 4;
+    bool wFromLHS = ins->laneW() < 4;
+    uint32_t lanesFromLHS = (ins->laneX() < 4) + (ins->laneY() < 4) + zFromLHS + wFromLHS;
+
+    LUse lhs = useRegisterAtStart(ins->lhs());
+    LUse rhs = useRegister(ins->rhs());
+
+    // See codegen for requirements details.
+    LDefinition temp = (lanesFromLHS == 3) ? tempCopy(ins->rhs(), 1) : LDefinition::BogusTemp();
+
+    LSimdShuffle *lir = new (alloc()) LSimdShuffle(lhs, rhs, temp);
+    return defineReuseInput(lir, ins, 0);
 }
 
 bool

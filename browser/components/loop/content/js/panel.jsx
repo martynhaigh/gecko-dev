@@ -471,8 +471,13 @@ loop.panel = (function(_, mozL10n) {
       room:     React.PropTypes.instanceOf(loop.store.Room).isRequired
     },
 
+    getInitialState: function() {
+      return { urlCopied: false };
+    },
+
     shouldComponentUpdate: function(nextProps, nextState) {
-      return nextProps.room.ctime > this.props.room.ctime;
+      return (nextProps.room.ctime > this.props.room.ctime) ||
+        (nextState.urlCopied !== this.state.urlCopied);
     },
 
     handleClickRoom: function(event) {
@@ -480,9 +485,19 @@ loop.panel = (function(_, mozL10n) {
       this.props.openRoom(this.props.room);
     },
 
+    handleCopyButtonClick: function(event) {
+      event.preventDefault();
+      navigator.mozLoop.copyString(this.props.room.roomUrl);
+      this.setState({urlCopied: true});
+    },
+
+    handleMouseLeave: function(event) {
+      this.setState({urlCopied: false});
+    },
+
     _isActive: function() {
       // XXX bug 1074679 will implement this properly
-      return this.props.room.currSize > 0;
+      return this.props.room.participants.length > 0;
     },
 
     render: function() {
@@ -491,12 +506,18 @@ loop.panel = (function(_, mozL10n) {
         "room-entry": true,
         "room-active": this._isActive()
       });
+      var copyButtonClasses = React.addons.classSet({
+        'copy-link': true,
+        'checked': this.state.urlCopied
+      });
 
       return (
-        <div className={roomClasses}>
+        <div className={roomClasses} onMouseLeave={this.handleMouseLeave}>
           <h2>
             <span className="room-notification" />
-            {room.roomName}
+              {room.roomName}
+            <button className={copyButtonClasses}
+              onClick={this.handleCopyButtonClick}/>
           </h2>
           <p>
             <a ref="room" href="#" onClick={this.handleClickRoom}>
@@ -517,20 +538,19 @@ loop.panel = (function(_, mozL10n) {
     propTypes: {
       store: React.PropTypes.instanceOf(loop.store.RoomListStore).isRequired,
       dispatcher: React.PropTypes.instanceOf(loop.Dispatcher).isRequired,
-      rooms: React.PropTypes.array
+      userDisplayName: React.PropTypes.string.isRequired  // for room creation
     },
 
     getInitialState: function() {
-      var storeState = this.props.store.getStoreState();
-      return {
-        error: this.props.error || storeState.error,
-        rooms: this.props.rooms || storeState.rooms,
-      };
+      return this.props.store.getStoreState();
     },
 
-    componentWillMount: function() {
-      this.listenTo(this.props.store, "change", this._onRoomListChanged);
+    componentDidMount: function() {
+      this.listenTo(this.props.store, "change", this._onStoreStateChanged);
 
+      // XXX this should no longer be necessary once have a better mechanism
+      // for updating the list (possibly as part of the content side of bug
+      // 1074665.
       this.props.dispatcher.dispatch(new sharedActions.GetAllRooms());
     },
 
@@ -538,12 +558,8 @@ loop.panel = (function(_, mozL10n) {
       this.stopListening(this.props.store);
     },
 
-    _onRoomListChanged: function() {
-      var storeState = this.props.store.getStoreState();
-      this.setState({
-        error: storeState.error,
-        rooms: storeState.rooms
-      });
+    _onStoreStateChanged: function() {
+      this.setState(this.props.store.getStoreState());
     },
 
     _getListHeading: function() {
@@ -554,24 +570,44 @@ loop.panel = (function(_, mozL10n) {
       return mozL10n.get("rooms_list_current_conversations", {num: numRooms});
     },
 
+    _hasPendingOperation: function() {
+      return this.state.pendingCreation || this.state.pendingInitialRetrieval;
+    },
+
+    handleCreateButtonClick: function() {
+      this.props.dispatcher.dispatch(new sharedActions.CreateRoom({
+        nameTemplate: mozL10n.get("rooms_default_room_name_template"),
+        roomOwner: this.props.userDisplayName
+      }));
+    },
+
     openRoom: function(room) {
-      // XXX implement me; see bug 1074678
+      this.props.dispatcher.dispatch(new sharedActions.OpenRoom({
+        roomToken: room.roomToken
+      }));
     },
 
     render: function() {
       if (this.state.error) {
         // XXX Better end user reporting of errors.
-        console.error(this.state.error);
+        console.error("RoomList error", this.state.error);
       }
 
       return (
-        <div className="room-list">
+        <div className="rooms">
           <h1>{this._getListHeading()}</h1>
-          {
+          <div className="room-list">{
             this.state.rooms.map(function(room, i) {
               return <RoomEntry key={i} room={room} openRoom={this.openRoom} />;
             }, this)
-          }
+          }</div>
+          <p>
+            <button className="btn btn-info"
+                    onClick={this.handleCreateButtonClick}
+                    disabled={this._hasPendingOperation()}>
+              {mozL10n.get("rooms_new_room_button_label")}
+            </button>
+          </p>
         </div>
       );
     }
@@ -650,7 +686,8 @@ loop.panel = (function(_, mozL10n) {
       return (
         <Tab name="rooms">
           <RoomList dispatcher={this.props.dispatcher}
-                    store={this.props.roomListStore} />
+                    store={this.props.roomListStore}
+                    userDisplayName={this._getUserDisplayName()}/>
         </Tab>
       );
     },
@@ -676,10 +713,13 @@ loop.panel = (function(_, mozL10n) {
       window.removeEventListener("LoopStatusChanged", this._onStatusChanged);
     },
 
+    _getUserDisplayName: function() {
+      return this.state.userProfile && this.state.userProfile.email ||
+             __("display_name_guest");
+    },
+
     render: function() {
       var NotificationListView = sharedViews.NotificationListView;
-      var displayName = this.state.userProfile && this.state.userProfile.email ||
-                        __("display_name_guest");
       return (
         <div>
           <NotificationListView notifications={this.props.notifications}
@@ -714,11 +754,14 @@ loop.panel = (function(_, mozL10n) {
           </TabView>
           <div className="footer">
             <div className="user-details">
-              <UserIdentity displayName={displayName} />
+              <UserIdentity displayName={this._getUserDisplayName()} />
               <AvailabilityDropdown />
             </div>
-            <AuthLink />
-            <SettingsDropdown />
+            <div className="signin-details">
+              <AuthLink />
+              <div className="footer-signin-separator" />
+              <SettingsDropdown />
+            </div>
           </div>
         </div>
       );
@@ -748,7 +791,6 @@ loop.panel = (function(_, mozL10n) {
       dispatcher={dispatcher}
     />, document.querySelector("#main"));
 
-    document.body.classList.add(loop.shared.utils.getTargetPlatform());
     document.body.setAttribute("dir", mozL10n.getDirection());
 
     // Notify the window that we've finished initalization and initial layout
@@ -764,6 +806,7 @@ loop.panel = (function(_, mozL10n) {
     AvailabilityDropdown: AvailabilityDropdown,
     CallUrlResult: CallUrlResult,
     PanelView: PanelView,
+    RoomEntry: RoomEntry,
     RoomList: RoomList,
     SettingsDropdown: SettingsDropdown,
     ToSView: ToSView

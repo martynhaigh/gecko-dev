@@ -1759,7 +1759,9 @@ var AddonManagerInternal = {
       nextObject: function getInstallsByTypes_nextObject(aCaller, aProvider) {
         callProviderAsync(aProvider, "getInstallsByTypes", aTypes,
                           function getInstallsByTypes_safeCall(aProviderInstalls) {
-          installs = installs.concat(aProviderInstalls);
+          if (aProviderInstalls) {
+            installs = installs.concat(aProviderInstalls);
+          }
           aCaller.callNext();
         });
       },
@@ -2131,7 +2133,9 @@ var AddonManagerInternal = {
       nextObject: function getAddonsByTypes_nextObject(aCaller, aProvider) {
         callProviderAsync(aProvider, "getAddonsByTypes", aTypes,
                           function getAddonsByTypes_concatAddons(aProviderAddons) {
-          addons = addons.concat(aProviderAddons);
+          if (aProviderAddons) {
+            addons = addons.concat(aProviderAddons);
+          }
           aCaller.callNext();
         });
       },
@@ -2192,7 +2196,9 @@ var AddonManagerInternal = {
         callProviderAsync(aProvider, "getAddonsWithOperationsByTypes", aTypes,
                           function getAddonsWithOperationsByTypes_concatAddons
                                    (aProviderAddons) {
-          addons = addons.concat(aProviderAddons);
+          if (aProviderAddons) {
+            addons = addons.concat(aProviderAddons);
+          }
           aCaller.callNext();
         });
       },
@@ -2412,11 +2418,11 @@ this.AddonManagerPrivate = {
 
   backgroundUpdateTimerHandler() {
     // Don't call through to the real update check if no checks are enabled.
-    let checkHotfix = this.hotfixID &&
+    let checkHotfix = AddonManagerInternal.hotfixID &&
                       Services.prefs.getBoolPref(PREF_APP_UPDATE_ENABLED) &&
                       Services.prefs.getBoolPref(PREF_APP_UPDATE_AUTO);
 
-    if (!this.updateEnabled && !checkHotfix) {
+    if (!AddonManagerInternal.updateEnabled && !checkHotfix) {
       logger.info("Skipping background update check");
       return;
     }

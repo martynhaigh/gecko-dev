@@ -139,6 +139,21 @@ ObjectElements::MakeElementsCopyOnWrite(ExclusiveContext *cx, NativeObject *obj)
     return true;
 }
 
+/* static */ bool
+JSObject::setImmutablePrototype(ExclusiveContext *cx, HandleObject obj, bool *succeeded)
+{
+    if (obj->hasLazyPrototype()) {
+        if (!cx->shouldBeJSContext())
+            return false;
+        return Proxy::setImmutablePrototype(cx->asJSContext(), obj, succeeded);
+    }
+
+    if (!obj->setFlag(cx, BaseShape::IMMUTABLE_PROTOTYPE))
+        return false;
+    *succeeded = true;
+    return true;
+}
+
 #ifdef DEBUG
 void
 js::NativeObject::checkShapeConsistency()
@@ -449,20 +464,20 @@ NativeObject::growSlots(ThreadSafeContext *cx, HandleNativeObject obj, uint32_t 
     MOZ_ASSERT(newCount < NELEMENTS_LIMIT);
 
     if (!oldCount) {
-        obj->slots = AllocateSlots(cx, obj, newCount);
-        if (!obj->slots)
+        obj->slots_ = AllocateSlots(cx, obj, newCount);
+        if (!obj->slots_)
             return false;
-        Debug_SetSlotRangeToCrashOnTouch(obj->slots, newCount);
+        Debug_SetSlotRangeToCrashOnTouch(obj->slots_, newCount);
         return true;
     }
 
-    HeapSlot *newslots = ReallocateSlots(cx, obj, obj->slots, oldCount, newCount);
+    HeapSlot *newslots = ReallocateSlots(cx, obj, obj->slots_, oldCount, newCount);
     if (!newslots)
         return false;  /* Leave slots at its old size. */
 
-    obj->slots = newslots;
+    obj->slots_ = newslots;
 
-    Debug_SetSlotRangeToCrashOnTouch(obj->slots + oldCount, newCount - oldCount);
+    Debug_SetSlotRangeToCrashOnTouch(obj->slots_ + oldCount, newCount - oldCount);
 
     return true;
 }
@@ -490,18 +505,18 @@ NativeObject::shrinkSlots(ThreadSafeContext *cx, HandleNativeObject obj,
     MOZ_ASSERT(newCount < oldCount);
 
     if (newCount == 0) {
-        FreeSlots(cx, obj->slots);
-        obj->slots = nullptr;
+        FreeSlots(cx, obj->slots_);
+        obj->slots_ = nullptr;
         return;
     }
 
     MOZ_ASSERT_IF(!obj->is<ArrayObject>(), newCount >= SLOT_CAPACITY_MIN);
 
-    HeapSlot *newslots = ReallocateSlots(cx, obj, obj->slots, oldCount, newCount);
+    HeapSlot *newslots = ReallocateSlots(cx, obj, obj->slots_, oldCount, newCount);
     if (!newslots)
         return;  /* Leave slots at its old size. */
 
-    obj->slots = newslots;
+    obj->slots_ = newslots;
 }
 
 /* static */ bool
@@ -887,9 +902,9 @@ NativeObject::growElements(ThreadSafeContext *cx, uint32_t reqCapacity)
     }
 
     newheader->capacity = newCapacity;
-    elements = newheader->elements();
+    elements_ = newheader->elements();
 
-    Debug_SetSlotRangeToCrashOnTouch(elements + initlen, newCapacity - initlen);
+    Debug_SetSlotRangeToCrashOnTouch(elements_ + initlen, newCapacity - initlen);
 
     return true;
 }
@@ -925,7 +940,7 @@ NativeObject::shrinkElements(ThreadSafeContext *cx, uint32_t reqCapacity)
     }
 
     newheader->capacity = newCapacity;
-    elements = newheader->elements();
+    elements_ = newheader->elements();
 }
 
 /* static */ bool
@@ -955,9 +970,9 @@ NativeObject::CopyElementsForWrite(ThreadSafeContext *cx, NativeObject *obj)
 
     newheader->capacity = newCapacity;
     newheader->clearCopyOnWrite();
-    obj->elements = newheader->elements();
+    obj->elements_ = newheader->elements();
 
-    Debug_SetSlotRangeToCrashOnTouch(obj->elements + initlen, newCapacity - initlen);
+    Debug_SetSlotRangeToCrashOnTouch(obj->elements_ + initlen, newCapacity - initlen);
 
     return true;
 }
@@ -1377,7 +1392,7 @@ bool
 js::DefineNativeProperty(ExclusiveContext *cx, HandleNativeObject obj, HandleId id, HandleValue value,
                          PropertyOp getter, StrictPropertyOp setter, unsigned attrs)
 {
-    MOZ_ASSERT(!(attrs & JSPROP_NATIVE_ACCESSORS));
+    MOZ_ASSERT(!(attrs & JSPROP_PROPOP_ACCESSORS));
 
     AutoRooterGetterSetter gsRoot(cx, attrs, &getter, &setter);
 

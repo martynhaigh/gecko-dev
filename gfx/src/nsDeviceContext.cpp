@@ -6,10 +6,12 @@
 #include "nsDeviceContext.h"
 #include <algorithm>                    // for max
 #include "gfxASurface.h"                // for gfxASurface, etc
+#include "gfxContext.h"
 #include "gfxFont.h"                    // for gfxFontGroup
 #include "gfxImageSurface.h"            // for gfxImageSurface
 #include "gfxPoint.h"                   // for gfxSize
 #include "mozilla/Attributes.h"         // for MOZ_FINAL
+#include "mozilla/gfx/PathHelpers.h"
 #include "mozilla/Preferences.h"        // for Preferences
 #include "mozilla/Services.h"           // for GetObserverService
 #include "mozilla/mozalloc.h"           // for operator new
@@ -48,6 +50,7 @@
 #endif
 
 using namespace mozilla;
+using namespace mozilla::gfx;
 using mozilla::services::GetObserverService;
 
 class nsFontCache MOZ_FINAL : public nsIObserver
@@ -383,7 +386,7 @@ nsDeviceContext::Init(nsIWidget *aWidget)
     return NS_OK;
 }
 
-already_AddRefed<nsRenderingContext>
+already_AddRefed<gfxContext>
 nsDeviceContext::CreateRenderingContext()
 {
     nsRefPtr<gfxASurface> printingSurface = mPrintingSurface;
@@ -398,7 +401,6 @@ nsDeviceContext::CreateRenderingContext()
       printingSurface = mCachedPrintingSurface;
     }
 #endif
-    nsRefPtr<nsRenderingContext> pContext = new nsRenderingContext();
 
     RefPtr<gfx::DrawTarget> dt =
       gfxPlatform::GetPlatform()->CreateDrawTargetForSurface(printingSurface,
@@ -407,12 +409,10 @@ nsDeviceContext::CreateRenderingContext()
 #ifdef XP_MACOSX
     dt->AddUserData(&gfxContext::sDontUseAsSourceKey, dt, nullptr);
 #endif
+    dt->AddUserData(&sDisablePixelSnapping, (void*)0x1, nullptr);
 
-    pContext->Init(this, dt);
-    pContext->ThebesContext()->SetFlag(gfxContext::FLAG_DISABLE_SNAPPING);
-    pContext->ThebesContext()->SetMatrix(gfxMatrix::Scaling(mPrintingScale,
-                                                            mPrintingScale));
-
+    nsRefPtr<gfxContext> pContext = new gfxContext(dt);
+    pContext->SetMatrix(gfxMatrix::Scaling(mPrintingScale, mPrintingScale));
     return pContext.forget();
 }
 

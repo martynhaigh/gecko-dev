@@ -144,7 +144,6 @@ Tester.prototype = {
   EventUtils: {},
   SimpleTest: {},
   Task: null,
-  Promise: null,
   Assert: null,
 
   repeat: 0,
@@ -356,6 +355,10 @@ Tester.prototype = {
           this.currentTest.addResult(new testResult(false, "Cleanup function threw an exception", ex, false));
         }
       };
+
+      if (testScope.__expected == 'fail' && testScope.__num_failed <= 0) {
+        this.currentTest.addResult(new testResult(false, "We expected at least one assertion to fail because this test file was marked as fail-if in the manifest", "", false));
+      }
 
       this.Promise.Debugging.flushUncaughtErrors();
 
@@ -575,7 +578,7 @@ Tester.prototype = {
     this.SimpleTest.reset();
 
     // Load the tests into a testscope
-    let currentScope = this.currentTest.scope = new testScope(this, this.currentTest);
+    let currentScope = this.currentTest.scope = new testScope(this, this.currentTest, this.currentTest.expected);
     let currentTest = this.currentTest;
 
     // Import utils in the test scope.
@@ -583,7 +586,6 @@ Tester.prototype = {
     this.currentTest.scope.SimpleTest = this.SimpleTest;
     this.currentTest.scope.gTestPath = this.currentTest.path;
     this.currentTest.scope.Task = this.Task;
-    this.currentTest.scope.Promise = this.Promise;
     // Pass a custom report function for mochitest style reporting.
     this.currentTest.scope.Assert = new this.Assert(function(err, message, stack) {
       let res;
@@ -639,7 +641,8 @@ Tester.prototype = {
         if ("test" in this.currentTest.scope) {
           throw "Cannot run both a add_task test and a normal test at the same time.";
         }
-        this.Task.spawn(function() {
+        let Promise = this.Promise;
+        this.Task.spawn(function*() {
           let task;
           while ((task = this.__tasks.shift())) {
             this.SimpleTest.info("Entering test " + task.name);
@@ -652,7 +655,7 @@ Tester.prototype = {
               let result = new testResult(isExpected, name, ex, false, stack);
               currentTest.addResult(result);
             }
-            this.Promise.Debugging.flushUncaughtErrors();
+            Promise.Debugging.flushUncaughtErrors();
             this.SimpleTest.info("Leaving test " + task.name);
           }
           this.finish();
@@ -804,11 +807,20 @@ function testMessage(aName) {
 
 // Need to be careful adding properties to this object, since its properties
 // cannot conflict with global variables used in tests.
-function testScope(aTester, aTest) {
+function testScope(aTester, aTest, expected) {
   this.__tester = aTester;
+  this.__expected = expected;
+  this.__num_failed = 0;
 
   var self = this;
   this.ok = function test_ok(condition, name, diag, stack) {
+    if (this.__expected == 'fail') {
+        if (!condition) {
+          this.__num_failed++;
+          condition = true;
+        }
+    }
+
     aTest.addResult(new testResult(condition, name, diag, false,
                                    stack ? stack : Components.stack.caller));
   };
@@ -930,6 +942,10 @@ function testScope(aTester, aTest) {
     self.__expectedMaxAsserts = max;
   };
 
+  this.setExpected = function test_setExpected() {
+    self.__expected = 'fail';
+  };
+
   this.finish = function test_finish() {
     self.__done = true;
     if (self.__waitTimer) {
@@ -959,11 +975,11 @@ testScope.prototype = {
   __timeoutFactor: 1,
   __expectedMinAsserts: 0,
   __expectedMaxAsserts: 0,
+  __expected: 'pass',
 
   EventUtils: {},
   SimpleTest: {},
   Task: null,
-  Promise: null,
   Assert: null,
 
   /**

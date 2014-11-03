@@ -165,7 +165,8 @@ js::SetPropertyIgnoringNamedGetter(JSContext *cx, const BaseProxyHandler *handle
 }
 
 bool
-BaseProxyHandler::keys(JSContext *cx, HandleObject proxy, AutoIdVector &props) const
+BaseProxyHandler::getOwnEnumerablePropertyKeys(JSContext *cx, HandleObject proxy,
+                                               AutoIdVector &props) const
 {
     assertEnteredPolicy(cx, proxy, JSID_VOID, ENUMERATE);
     MOZ_ASSERT(props.length() == 0);
@@ -204,7 +205,7 @@ BaseProxyHandler::iterate(JSContext *cx, HandleObject proxy, unsigned flags,
 
     AutoIdVector props(cx);
     if ((flags & JSITER_OWNONLY)
-        ? !keys(cx, proxy, props)
+        ? !getOwnEnumerablePropertyKeys(cx, proxy, props)
         : !enumerate(cx, proxy, props)) {
         return false;
     }
@@ -317,6 +318,13 @@ BaseProxyHandler::setPrototypeOf(JSContext *cx, HandleObject, HandleObject, bool
     JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_SETPROTOTYPEOF_FAIL,
                          "incompatible Proxy");
     return false;
+}
+
+bool
+BaseProxyHandler::setImmutablePrototype(JSContext *cx, HandleObject proxy, bool *succeeded) const
+{
+    *succeeded = false;
+    return true;
 }
 
 bool

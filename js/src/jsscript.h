@@ -187,7 +187,9 @@ class Bindings
     uint16_t numBlockScoped_;
     uint16_t numBodyLevelLexicals_;
     uint16_t aliasedBodyLevelLexicalBegin_;
+    uint16_t numUnaliasedBodyLevelLexicals_;
     uint32_t numVars_;
+    uint32_t numUnaliasedVars_;
 
 #if JS_BITS_PER_WORD == 32
     // Bindings is allocated inline inside JSScript, which needs to be
@@ -227,6 +229,7 @@ class Bindings
     static bool initWithTemporaryStorage(ExclusiveContext *cx, InternalBindingsHandle self,
                                          uint32_t numArgs, uint32_t numVars,
                                          uint32_t numBodyLevelLexicals, uint32_t numBlockScoped,
+                                         uint32_t numUnaliasedVars, uint32_t numUnaliasedBodyLevelLexicals,
                                          Binding *bindingArray);
 
     // CompileScript parses and compiles one statement at a time, but the result
@@ -257,9 +260,15 @@ class Bindings
     uint32_t numBodyLevelLexicals() const { return numBodyLevelLexicals_; }
     uint32_t numBlockScoped() const { return numBlockScoped_; }
     uint32_t numBodyLevelLocals() const { return numVars_ + numBodyLevelLexicals_; }
+    uint32_t numUnaliasedBodyLevelLocals() const { return numUnaliasedVars_ + numUnaliasedBodyLevelLexicals_; }
+    uint32_t numAliasedBodyLevelLocals() const { return numBodyLevelLocals() - numUnaliasedBodyLevelLocals(); }
     uint32_t numLocals() const { return numVars() + numBodyLevelLexicals() + numBlockScoped(); }
+    uint32_t numUnaliasedLocals() const { return numUnaliasedVars() + numUnaliasedBodyLevelLexicals() + numBlockScoped(); }
     uint32_t lexicalBegin() const { return numArgs() + numVars(); }
     uint32_t aliasedBodyLevelLexicalBegin() const { return aliasedBodyLevelLexicalBegin_; }
+
+    uint32_t numUnaliasedVars() const { return numUnaliasedVars_; }
+    uint32_t numUnaliasedBodyLevelLexicals() const { return numUnaliasedBodyLevelLexicals_; }
 
     // Return the size of the bindingArray.
     uint32_t count() const { return numArgs() + numVars() + numBodyLevelLexicals(); }
@@ -268,7 +277,8 @@ class Bindings
     Shape *callObjShape() const { return callObjShape_; }
 
     /* Convenience method to get the var index of 'arguments'. */
-    static uint32_t argumentsVarIndex(ExclusiveContext *cx, InternalBindingsHandle);
+    static uint32_t argumentsVarIndex(ExclusiveContext *cx, InternalBindingsHandle,
+                                      uint32_t *unaliasedSlot = nullptr);
 
     /* Return whether the binding at bindingIndex is aliased. */
     bool bindingIsAliased(uint32_t bindingIndex);
@@ -784,10 +794,10 @@ class JSScript : public js::gc::TenuredCell
 
     JSCompartment   *compartment_;
 
-    /* Persistent type information retained across GCs. */
-    js::types::TypeScript *types;
-
   private:
+    /* Persistent type information retained across GCs. */
+    js::types::TypeScript *types_;
+
     // This script's ScriptSourceObject, or a CCW thereof.
     //
     // (When we clone a JSScript into a new compartment, we don't clone its
@@ -970,6 +980,13 @@ class JSScript : public js::gc::TenuredCell
     bool needsArgsAnalysis_:1;
     bool needsArgsObj_:1;
 
+    // Generation for this script's TypeScript. If out of sync with the
+    // TypeZone's generation, the TypeScript needs to be swept.
+    //
+    // This should be a uint32 but is instead a bool so that MSVC packs it
+    // correctly.
+    bool typesGeneration_:1;
+
     //
     // End of fields.  Start methods.
     //
@@ -1046,20 +1063,20 @@ class JSScript : public js::gc::TenuredCell
     // The fixed part of a stack frame is comprised of vars (in function code)
     // and block-scoped locals (in all kinds of code).
     size_t nfixed() const {
-        return function_ ? bindings.numLocals() : bindings.numBlockScoped();
+        return function_ ? bindings.numUnaliasedLocals() : bindings.numBlockScoped();
     }
 
     // Number of fixed slots reserved for vars.  Only nonzero for function
     // code.
     size_t nfixedvars() const {
-        return function_ ? bindings.numVars() : 0;
+        return function_ ? bindings.numUnaliasedVars() : 0;
     }
 
     // Number of fixed slots reserved for body-level lexicals and vars. This
     // value minus nfixedvars() is the number of body-level lexicals. Only
     // nonzero for function code.
     size_t nbodyfixed() const {
-        return function_ ? bindings.numBodyLevelLocals() : 0;
+        return function_ ? bindings.numUnaliasedBodyLevelLocals() : 0;
     }
 
     // Aliases for clarity when dealing with lexical slots.
@@ -1199,7 +1216,6 @@ class JSScript : public js::gc::TenuredCell
 
     bool hasFreezeConstraints() const { return hasFreezeConstraints_; }
     void setHasFreezeConstraints() { hasFreezeConstraints_ = true; }
-    void clearHasFreezeConstraints() { hasFreezeConstraints_ = false; }
 
     bool warnedAboutUndefinedProp() const { return warnedAboutUndefinedProp_; }
     void setWarnedAboutUndefinedProp() { warnedAboutUndefinedProp_ = true; }
@@ -1257,6 +1273,15 @@ class JSScript : public js::gc::TenuredCell
      */
     bool argsObjAliasesFormals() const {
         return needsArgsObj() && !strict();
+    }
+
+    uint32_t typesGeneration() const {
+        return (uint32_t) typesGeneration_;
+    }
+
+    void setTypesGeneration(uint32_t generation) {
+        MOZ_ASSERT(generation <= 1);
+        typesGeneration_ = (bool) generation;
     }
 
     bool hasAnyIonScript() const {
@@ -1428,6 +1453,10 @@ class JSScript : public js::gc::TenuredCell
 
     /* Ensure the script has a TypeScript. */
     inline bool ensureHasTypes(JSContext *cx);
+
+    inline js::types::TypeScript *types();
+
+    void maybeSweepTypes(js::types::AutoClearTypeInferenceStateOnOOM *oom);
 
     inline js::GlobalObject &global() const;
     js::GlobalObject &uninlinedGlobal() const;
@@ -1642,6 +1671,7 @@ class JSScript : public js::gc::TenuredCell
 #endif
 
     void finalize(js::FreeOp *fop);
+    void fixupAfterMovingGC() {}
 
     static inline js::ThingRootKind rootKind() { return js::THING_ROOT_SCRIPT; }
 
@@ -1664,21 +1694,51 @@ class BindingIter
 {
     const InternalBindingsHandle bindings_;
     uint32_t i_;
+    uint32_t unaliasedLocal_;
 
     friend class Bindings;
 
   public:
-    explicit BindingIter(const InternalBindingsHandle &bindings) : bindings_(bindings), i_(0) {}
-    explicit BindingIter(const HandleScript &script) : bindings_(script, &script->bindings), i_(0) {}
+    explicit BindingIter(const InternalBindingsHandle &bindings)
+      : bindings_(bindings), i_(0), unaliasedLocal_(0) {}
+    explicit BindingIter(const HandleScript &script)
+      : bindings_(script, &script->bindings), i_(0), unaliasedLocal_(0) {}
 
     bool done() const { return i_ == bindings_->count(); }
     operator bool() const { return !done(); }
-    void operator++(int) { MOZ_ASSERT(!done()); i_++; }
     BindingIter &operator++() { (*this)++; return *this; }
 
+    void operator++(int) {
+        MOZ_ASSERT(!done());
+        const Binding &binding = **this;
+        if (binding.kind() != Binding::ARGUMENT && !binding.aliased())
+            unaliasedLocal_++;
+        i_++;
+    }
+
+    // Stack slots are assigned to arguments and unaliased locals. frameIndex()
+    // returns the slot index. It's invalid to call this method when the
+    // iterator is stopped on an aliased local, as it has no stack slot.
     uint32_t frameIndex() const {
         MOZ_ASSERT(!done());
+        if (i_ < bindings_->numArgs())
+            return i_;
+        MOZ_ASSERT(!(*this)->aliased());
+        return unaliasedLocal_;
+    }
+    uint32_t argIndex() const {
+        MOZ_ASSERT(!done());
+        MOZ_ASSERT(i_ < bindings_->numArgs());
+        return i_;
+    }
+    uint32_t argOrLocalIndex() const {
+        MOZ_ASSERT(!done());
         return i_ < bindings_->numArgs() ? i_ : i_ - bindings_->numArgs();
+    }
+    uint32_t localIndex() const {
+        MOZ_ASSERT(!done());
+        MOZ_ASSERT(i_ >= bindings_->numArgs());
+        return i_ - bindings_->numArgs();
     }
 
     const Binding &operator*() const { MOZ_ASSERT(!done()); return bindings_->bindingArray()[i_]; }
@@ -1965,6 +2025,7 @@ class LazyScript : public gc::TenuredCell
 
     void markChildren(JSTracer *trc);
     void finalize(js::FreeOp *fop);
+    void fixupAfterMovingGC() {}
 
     static inline js::ThingRootKind rootKind() { return js::THING_ROOT_LAZY_SCRIPT; }
 

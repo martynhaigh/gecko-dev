@@ -14,6 +14,24 @@ var gPrivacyPane = {
    */
   _shouldPromptForRestart: true,
 
+#ifdef NIGHTLY_BUILD
+  /**
+   * Show the Tracking Protection UI depending on the
+   * privacy.trackingprotection.ui.enabled pref, and linkify its Learn More link
+   */
+  _initTrackingProtection: function () {
+    if (!Services.prefs.getBoolPref("privacy.trackingprotection.ui.enabled")) {
+      return;
+    }
+
+    let link = document.getElementById("trackingProtectionLearnMore");
+    let url = Services.urlFormatter.formatURLPref("app.support.baseURL") + "tracking-protection";
+    link.setAttribute("href", url);
+
+    document.getElementById("trackingprotectionbox").hidden = false;
+  },
+#endif
+
   /**
    * Sets up the UI for the number of days of history to keep, and updates the
    * label of the "Clear Now..." button.
@@ -31,6 +49,9 @@ var gPrivacyPane = {
     this.updateHistoryModePane();
     this.updatePrivacyMicroControls();
     this.initAutoStartPrivateBrowsingReverter();
+#ifdef NIGHTLY_BUILD
+    this._initTrackingProtection();
+#endif
 
     setEventListener("browser.urlbar.default.behavior", "change",
       document.getElementById('browser.urlbar.autocomplete.enabled')
@@ -160,43 +181,6 @@ var gPrivacyPane = {
       break;
     }
     document.getElementById("historyPane").selectedIndex = selectedIndex;
-  },
-
-  /**
-   * Update the Tracking preferences based on controls.
-   */
-  setTrackingPrefs: function PPP_setTrackingPrefs()
-  {
-    let dntRadioGroup = document.getElementById("doNotTrackSelection"),
-        dntValuePref = document.getElementById("privacy.donottrackheader.value"),
-        dntEnabledPref = document.getElementById("privacy.donottrackheader.enabled");
-
-    // if the selected radio button says "no preference", set on/off pref to
-    // false and don't change the value pref.
-    if (dntRadioGroup.selectedItem.value == -1) {
-      dntEnabledPref.value = false;
-      return dntValuePref.value;
-    }
-
-    dntEnabledPref.value = true;
-    return dntRadioGroup.selectedItem.value;
-  },
-
-  /**
-   * Obtain the tracking preference value and reflect it in the UI.
-   */
-  getTrackingPrefs: function PPP_getTrackingPrefs()
-  {
-    // XXX avoid using bindings that might not be attached, see bug 859982
-    let dntValue = Services.prefs.getIntPref("privacy.donottrackheader.value"),
-        dntEnabled = Services.prefs.getBoolPref("privacy.donottrackheader.enabled");
-
-    // if DNT is enbaled, select the value from the selected radio
-    // button, otherwise choose the "no preference" radio button
-    if (dntEnabled)
-      return dntValue;
-
-    return document.getElementById("dntnopref").value;
   },
 
   /**

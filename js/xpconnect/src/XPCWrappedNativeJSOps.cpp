@@ -314,7 +314,7 @@ DefinePropertyIfFound(XPCCallContext& ccx,
             if (resolved)
                 *resolved = true;
             return JS_DefinePropertyById(ccx, obj, id, UndefinedHandleValue, propFlags,
-                                         JS_DATA_TO_FUNC_PTR(JSPropertyOp, funobj.get()),
+                                         JS_DATA_TO_FUNC_PTR(JSNative, funobj.get()),
                                          nullptr);
         }
 
@@ -363,8 +363,13 @@ DefinePropertyIfFound(XPCCallContext& ccx,
             AutoResolveName arn(ccx, id);
             if (resolved)
                 *resolved = true;
-            return JS_DefinePropertyById(ccx, obj, id, desc.value(), desc.attributes(),
-                                         desc.getter(), desc.setter());
+            return JS_DefinePropertyById(ccx, obj, id, desc.value(),
+                                         // Descriptors never store JSNatives
+                                         // for accessors: they have either
+                                         // JSFunctions or JSPropertyOps.
+                                         desc.attributes(),
+                                         JS_PROPERTYOP_GETTER(desc.getter()),
+                                         JS_PROPERTYOP_SETTER(desc.setter()));
         }
     }
 
@@ -393,11 +398,11 @@ DefinePropertyIfFound(XPCCallContext& ccx,
     propFlags |= JSPROP_GETTER | JSPROP_SHARED;
     propFlags &= ~JSPROP_READONLY;
     JSObject* funobj = funval.toObjectOrNull();
-    JSPropertyOp getter = JS_DATA_TO_FUNC_PTR(JSPropertyOp, funobj);
-    JSStrictPropertyOp setter;
+    JSNative getter = JS_DATA_TO_FUNC_PTR(JSNative, funobj);
+    JSNative setter;
     if (member->IsWritableAttribute()) {
         propFlags |= JSPROP_SETTER;
-        setter = JS_DATA_TO_FUNC_PTR(JSStrictPropertyOp, funobj);
+        setter = JS_DATA_TO_FUNC_PTR(JSNative, funobj);
     } else {
         setter = nullptr;
     }
@@ -696,8 +701,7 @@ const XPCWrappedNativeJSClass XPC_WN_NoHelper_JSClass = {
         XPC_WN_JSOp_Enumerate,
         XPC_WN_JSOp_ThisObject,
     }
-  },
-  0 // interfacesBitmap
+  }
 };
 
 
@@ -1077,8 +1081,7 @@ XPCNativeScriptableInfo::Construct(const XPCNativeScriptableCreateInfo* sci)
 
     XPCJSRuntime* rt = XPCJSRuntime::Get();
     XPCNativeScriptableSharedMap* map = rt->GetNativeScriptableSharedMap();
-    success = map->GetNewOrUsed(sci->GetFlags(), name,
-                                sci->GetInterfacesBitmap(), newObj);
+    success = map->GetNewOrUsed(sci->GetFlags(), name, newObj);
 
     if (!success) {
         delete newObj;

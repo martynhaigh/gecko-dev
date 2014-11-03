@@ -157,7 +157,7 @@ struct Zone : public JS::shadow::Zone,
     }
     void reportAllocationOverflow() { js_ReportAllocationOverflow(nullptr); }
 
-    void sweepAnalysis(js::FreeOp *fop, bool releaseTypes);
+    void beginSweepTypes(js::FreeOp *fop, bool releaseTypes);
 
     bool hasMarkedCompartments();
 
@@ -282,6 +282,10 @@ struct Zone : public JS::shadow::Zone,
 
     // Thresholds used to trigger GC.
     js::gc::ZoneHeapThreshold threshold;
+
+    // Amount of data to allocate before triggering a new incremental slice for
+    // the current GC.
+    size_t gcDelayBytes;
 
     // Per-zone data for use by an embedder.
     void *data;

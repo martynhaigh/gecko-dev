@@ -17,6 +17,9 @@ namespace base {
 }
 
 namespace mozilla {
+namespace HangMonitor {
+  class HangAnnotations;
+}
 namespace Telemetry {
 
 #include "TelemetryHistogramEnums.h"
@@ -63,6 +66,11 @@ void AccumulateTimeDelta(ID id, TimeStamp start, TimeStamp end = TimeStamp::Now(
  * Return a raw Histogram for direct manipulation for users who can not use Accumulate().
  */
 base::Histogram* GetHistogramById(ID id);
+
+/**
+ * Return a raw histogram for keyed histograms.
+ */
+base::Histogram* GetKeyedHistogramById(ID id, const nsAString&);
 
 /**
  * Those wrappers are needed because the VS versions we use do not support free
@@ -195,12 +203,14 @@ class ProcessedStack;
  * @param aStack - Array of PCs from the hung call stack
  * @param aSystemUptime - System uptime at the time of the hang, in minutes
  * @param aFirefoxUptime - Firefox uptime at the time of the hang, in minutes
+ * @param aAnnotations - Any annotations to be added to the report
  */
 #if defined(MOZ_ENABLE_PROFILER_SPS)
 void RecordChromeHang(uint32_t aDuration,
                       ProcessedStack &aStack,
                       int32_t aSystemUptime,
-                      int32_t aFirefoxUptime);
+                      int32_t aFirefoxUptime,
+                      mozilla::HangMonitor::HangAnnotations* aAnnotations = nullptr);
 #endif
 
 class ThreadHangStats;

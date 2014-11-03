@@ -119,6 +119,8 @@ class ParallelSafetyVisitor : public MDefinitionVisitor
     SAFE_OP(SimdExtractElement)
     SAFE_OP(SimdInsertElement)
     SAFE_OP(SimdSignMask)
+    SAFE_OP(SimdSwizzle)
+    SAFE_OP(SimdShuffle)
     SAFE_OP(SimdUnaryArith)
     SAFE_OP(SimdBinaryComp)
     SAFE_OP(SimdBinaryArith)
@@ -132,6 +134,7 @@ class ParallelSafetyVisitor : public MDefinitionVisitor
     SAFE_OP(TableSwitch)
     SAFE_OP(Goto)
     SAFE_OP(Test)
+    SAFE_OP(GotoWithFake)
     SAFE_OP(Compare)
     SAFE_OP(Phi)
     SAFE_OP(Beta)
@@ -244,12 +247,12 @@ class ParallelSafetyVisitor : public MDefinitionVisitor
     SAFE_OP(TypedArrayLength)
     SAFE_OP(TypedArrayElements)
     SAFE_OP(TypedObjectProto)
+    SAFE_OP(TypedObjectUnsizedLength)
     SAFE_OP(TypedObjectElements)
     SAFE_OP(SetTypedObjectOffset)
     SAFE_OP(InitializedLength)
     WRITE_GUARDED_OP(SetInitializedLength, elements)
     SAFE_OP(Not)
-    SAFE_OP(NeuterCheck)
     SAFE_OP(BoundsCheck)
     SAFE_OP(BoundsCheckLower)
     SAFE_OP(LoadElement)
@@ -345,11 +348,14 @@ class ParallelSafetyVisitor : public MDefinitionVisitor
     UNSAFE_OP(AsmJSParameter)
     UNSAFE_OP(AsmJSCall)
     DROP_OP(RecompileCheck)
+    UNSAFE_OP(CompareExchangeTypedArrayElement)
+    UNSAFE_OP(AtomicTypedArrayElementBinop)
+    UNSAFE_OP(MemoryBarrier)
     UNSAFE_OP(UnknownValue)
     UNSAFE_OP(LexicalCheck)
     UNSAFE_OP(ThrowUninitializedLexical)
 
-    // It looks like this could easily be made safe:
+    // It looks like these could easily be made safe:
     UNSAFE_OP(ConvertElementsToDoubles)
     UNSAFE_OP(MaybeCopyElementsForWrite)
 };
@@ -464,6 +470,11 @@ ParallelSafetyVisitor::convertToBailout(MInstructionIterator &iter)
     for (size_t i = 0; i < block->numSuccessors(); i++)
         block->getSuccessor(i)->removePredecessor(block);
     block->discardAllInstructionsStartingAt(iter);
+
+    // No more successors are reachable, so the current block can no longer be
+    // the parent of an inlined function.
+    if (block->outerResumePoint())
+        block->clearOuterResumePoint();
 
     // End the block in a bail.
     block->add(bail);

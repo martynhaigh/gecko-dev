@@ -7,6 +7,7 @@
 #ifndef gc_Heap_h
 #define gc_Heap_h
 
+#include "mozilla/ArrayUtils.h"
 #include "mozilla/Atomics.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/PodOperations.h"
@@ -129,7 +130,9 @@ MapAllocToTraceKind(AllocKind kind)
         JSTRACE_SYMBOL,     /* FINALIZE_SYMBOL */
         JSTRACE_JITCODE,    /* FINALIZE_JITCODE */
     };
-    JS_STATIC_ASSERT(JS_ARRAY_LENGTH(map) == FINALIZE_LIMIT);
+
+    static_assert(MOZ_ARRAY_LENGTH(map) == FINALIZE_LIMIT,
+                  "AllocKind-to-TraceKind mapping must be in sync");
     return map[kind];
 }
 
@@ -628,6 +631,11 @@ struct ArenaHeader : public JS::shadow::ArenaHeader
     inline void unsetAllocDuringSweep();
 
     void unmarkAll();
+
+#ifdef JSGC_COMPACTING
+    size_t countUsedCells();
+    size_t countFreeCells();
+#endif
 };
 
 struct Arena
@@ -1137,6 +1145,17 @@ ArenaHeader::unsetAllocDuringSweep()
     MOZ_ASSERT(allocatedDuringIncremental);
     allocatedDuringIncremental = 0;
     auxNextLink = 0;
+}
+
+inline void
+ReleaseArenaList(ArenaHeader *aheader)
+{
+    ArenaHeader *next;
+    for (; aheader; aheader = next) {
+        // Copy aheader->next before releasing.
+        next = aheader->next;
+        aheader->chunk()->releaseArena(aheader);
+    }
 }
 
 static void

@@ -22,6 +22,7 @@ loop.shared.models = (function(l10n) {
       sessionToken: undefined,     // OT session token
       sessionType:  undefined,     // Hawk session type
       apiKey:       undefined,     // OT api key
+      windowId:     undefined,     // The window id
       callId:       undefined,     // The callId on the server
       progressURL:  undefined,     // The websocket url to use for progress
       websocketToken: undefined,   // The token to use for websocket auth, this is
@@ -165,6 +166,11 @@ loop.shared.models = (function(l10n) {
       if (!this.isSessionReady()) {
         throw new Error("Can't start session as it's not ready");
       }
+      this.set({
+        publishedStream: false,
+        subscribedStream: false
+      });
+
       this.session = this.sdk.initSession(this.get("sessionId"));
       this.listenTo(this.session, "streamCreated", this._streamCreated);
       this.listenTo(this.session, "connectionDestroyed",
@@ -182,8 +188,11 @@ loop.shared.models = (function(l10n) {
      */
     endSession: function() {
       this.session.disconnect();
-      this.set("ongoing", false)
-          .once("session:ended", this.stopListening, this);
+      this.set({
+        publishedStream: false,
+        subscribedStream: false,
+        ongoing: false
+      }).once("session:ended", this.stopListening, this);
     },
 
     /**

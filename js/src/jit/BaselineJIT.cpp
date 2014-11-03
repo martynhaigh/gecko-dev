@@ -55,7 +55,6 @@ BaselineScript::BaselineScript(uint32_t prologueOffset, uint32_t epilogueOffset,
     flags_(0)
 { }
 
-static const size_t BASELINE_LIFO_ALLOC_PRIMARY_CHUNK_SIZE = 4096;
 static const unsigned BASELINE_MAX_ARGS_LENGTH = 20000;
 
 static bool
@@ -212,10 +211,10 @@ jit::BaselineCompile(JSContext *cx, JSScript *script)
     MOZ_ASSERT(!script->hasBaselineScript());
     MOZ_ASSERT(script->canBaselineCompile());
     MOZ_ASSERT(IsBaselineEnabled(cx));
-    LifoAlloc alloc(BASELINE_LIFO_ALLOC_PRIMARY_CHUNK_SIZE);
 
     script->ensureNonLazyCanonicalFunction(cx);
 
+    LifoAlloc alloc(TempAllocator::PreferredLifoChunkSize);
     TempAllocator *temp = alloc.new_<TempAllocator>(&alloc);
     if (!temp)
         return Method_Error;
@@ -323,16 +322,13 @@ jit::CanEnterBaselineMethod(JSContext *cx, RunState &state)
 
         if (!state.maybeCreateThisForConstructor(cx))
             return Method_Skipped;
-    } else if (state.isExecute()) {
+    } else {
+        MOZ_ASSERT(state.isExecute());
         ExecuteType type = state.asExecute()->type();
         if (type == EXECUTE_DEBUG || type == EXECUTE_DEBUG_GLOBAL) {
             JitSpew(JitSpew_BaselineAbort, "debugger frame");
             return Method_CantCompile;
         }
-    } else {
-        MOZ_ASSERT(state.isGenerator());
-        JitSpew(JitSpew_BaselineAbort, "generator frame");
-        return Method_CantCompile;
     }
 
     RootedScript script(cx, state.script());
@@ -932,6 +928,7 @@ MarkActiveBaselineScripts(JSRuntime *rt, const JitActivationIterator &activation
           case JitFrame_BaselineJS:
             iter.script()->baselineScript()->setActive();
             break;
+          case JitFrame_Bailout:
           case JitFrame_IonJS: {
             // Keep the baseline script around, since bailouts from the ion
             // jitcode might need to re-enter into the baseline jitcode.

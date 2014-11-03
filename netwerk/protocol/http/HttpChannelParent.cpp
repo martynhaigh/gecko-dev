@@ -67,7 +67,7 @@ HttpChannelParent::HttpChannelParent(const PBrowserOrId& iframeEmbedding,
   if (iframeEmbedding.type() == PBrowserOrId::TPBrowserParent) {
     mTabParent = static_cast<dom::TabParent*>(iframeEmbedding.get_PBrowserParent());
   } else {
-    mNestedFrameId = iframeEmbedding.get_uint64_t();
+    mNestedFrameId = iframeEmbedding.get_TabId();
   }
 
   mObserver = new OfflineObserver(this);
@@ -101,8 +101,8 @@ HttpChannelParent::Init(const HttpChannelCreationArgs& aArgs)
                        a.requestMethod(), a.uploadStream(),
                        a.uploadStreamHasHeaders(), a.priority(),
                        a.redirectionLimit(), a.allowPipelining(), a.allowSTS(),
-                       a.forceAllowThirdPartyCookie(), a.resumeAt(),
-                       a.startPos(), a.entityID(), a.chooseApplicationCache(),
+                       a.thirdPartyFlags(), a.resumeAt(), a.startPos(),
+                       a.entityID(), a.chooseApplicationCache(),
                        a.appCacheClientID(), a.allowSpdy(), a.fds(),
                        a.requestingPrincipalInfo(), a.securityFlags(),
                        a.contentPolicyType());
@@ -176,12 +176,12 @@ HttpChannelParent::DoAsyncOpen(  const URIParams&           aURI,
                                  const RequestHeaderTuples& requestHeaders,
                                  const nsCString&           requestMethod,
                                  const OptionalInputStreamParams& uploadStream,
-                                 const bool&              uploadStreamHasHeaders,
+                                 const bool&                uploadStreamHasHeaders,
                                  const uint16_t&            priority,
                                  const uint8_t&             redirectionLimit,
-                                 const bool&              allowPipelining,
-                                 const bool&              allowSTS,
-                                 const bool&              forceAllowThirdPartyCookie,
+                                 const bool&                allowPipelining,
+                                 const bool&                allowSTS,
+                                 const uint32_t&            thirdPartyFlags,
                                  const bool&                doResumeAt,
                                  const uint64_t&            startPos,
                                  const nsCString&           entityID,
@@ -250,6 +250,7 @@ HttpChannelParent::DoAsyncOpen(  const URIParams&           aURI,
     return SendFailedAsyncOpen(rv);
 
   mChannel = static_cast<nsHttpChannel *>(channel.get());
+  mChannel->SetTimingEnabled(true);
   if (mPBOverride != kPBOverride_Unset) {
     mChannel->SetPrivate(mPBOverride == kPBOverride_Private ? true : false);
   }
@@ -303,7 +304,7 @@ HttpChannelParent::DoAsyncOpen(  const URIParams&           aURI,
   mChannel->SetRedirectionLimit(redirectionLimit);
   mChannel->SetAllowPipelining(allowPipelining);
   mChannel->SetAllowSTS(allowSTS);
-  mChannel->SetForceAllowThirdPartyCookie(forceAllowThirdPartyCookie);
+  mChannel->SetThirdPartyFlags(thirdPartyFlags);
   mChannel->SetAllowSpdy(allowSpdy);
 
   nsCOMPtr<nsIApplicationCacheChannel> appCacheChan =
@@ -556,7 +557,14 @@ HttpChannelParent::RecvDivertOnDataAvailable(const nsCString& data,
     return true;
   }
 
-  rv = mParentListener->OnDataAvailable(mChannel, nullptr, stringStream,
+  nsCOMPtr<nsIStreamListener> listener;
+  if (mConverterListener) {
+    listener = mConverterListener;
+  } else {
+    listener = mParentListener;
+    MOZ_ASSERT(listener);
+  }
+  rv = listener->OnDataAvailable(mChannel, nullptr, stringStream,
                                         offset, count);
   stringStream->Close();
   if (NS_FAILED(rv)) {
@@ -588,7 +596,14 @@ HttpChannelParent::RecvDivertOnStopRequest(const nsresult& statusCode)
     mChannel->ForcePending(false);
   }
 
-  mParentListener->OnStopRequest(mChannel, nullptr, status);
+  nsCOMPtr<nsIStreamListener> listener;
+  if (mConverterListener) {
+    listener = mConverterListener;
+  } else {
+    listener = mParentListener;
+    MOZ_ASSERT(listener);
+  }
+  listener->OnStopRequest(mChannel, nullptr, status);
   return true;
 }
 
@@ -596,7 +611,6 @@ bool
 HttpChannelParent::RecvDivertComplete()
 {
   MOZ_ASSERT(mParentListener);
-  mParentListener = nullptr;
   if (NS_WARN_IF(!mDivertingFromChild)) {
     MOZ_ASSERT(mDivertingFromChild,
                "Cannot RecvDivertComplete if diverting is not set!");
@@ -610,6 +624,8 @@ HttpChannelParent::RecvDivertComplete()
     return false;
   }
 
+  mConverterListener = nullptr; 
+  mParentListener = nullptr;
   return true;
 }
 
@@ -703,8 +719,19 @@ HttpChannelParent::OnStopRequest(nsIRequest *aRequest,
 
   MOZ_RELEASE_ASSERT(!mDivertingFromChild,
     "Cannot call OnStopRequest if diverting is set!");
+  ResourceTimingStruct timing;
+  mChannel->GetDomainLookupStart(&timing.domainLookupStart);
+  mChannel->GetDomainLookupEnd(&timing.domainLookupEnd);
+  mChannel->GetConnectStart(&timing.connectStart);
+  mChannel->GetConnectEnd(&timing.connectEnd);
+  mChannel->GetRequestStart(&timing.requestStart);
+  mChannel->GetResponseStart(&timing.responseStart);
+  mChannel->GetResponseEnd(&timing.responseEnd);
+  mChannel->GetAsyncOpen(&timing.fetchStart);
+  mChannel->GetRedirectStart(&timing.redirectStart);
+  mChannel->GetRedirectEnd(&timing.redirectEnd);
 
-  if (mIPCClosed || !SendOnStopRequest(aStatusCode))
+  if (mIPCClosed || !SendOnStopRequest(aStatusCode, timing))
     return NS_ERROR_UNEXPECTED;
   return NS_OK;
 }
@@ -973,8 +1000,30 @@ HttpChannelParent::StartDiversion()
   }
   mDivertedOnStartRequest = true;
 
-  // After OnStartRequest has been called, tell HttpChannelChild to divert the
-  // OnDataAvailables and OnStopRequest to this HttpChannelParent.
+  // After OnStartRequest has been called, setup content decoders if needed.
+  //
+  // We want to use the same decoders that the nsHttpChannel might use. There
+  // are two possible scenarios depending on whether OnStopRequest has been
+  // called or not.
+  //
+  // 1. nsHttpChannel has not called OnStopRequest yet.
+  // Create content conversion chain based on nsHttpChannel::mListener
+  // Get ptr to final listener and set that in mContentConverter, as well as
+  // nsHttpChannel::mListener.
+  //
+  // 2. nsHttpChannel has called OnStopRequest.
+  // Create a content conversion chain based on mParentListener.
+  // Get ptr to final listener and set that in mContentConverter.
+
+  nsCOMPtr<nsIStreamListener> converterListener;
+  mChannel->DoApplyContentConversions(mParentListener,
+                                      getter_AddRefs(converterListener));
+  if (converterListener) {
+    mConverterListener = converterListener.forget();
+  }
+
+  // The listener chain should now be setup; tell HttpChannelChild to divert
+  // the OnDataAvailables and OnStopRequest to this HttpChannelParent.
   if (NS_WARN_IF(mIPCClosed || !SendDivertMessages())) {
     FailDiversion(NS_ERROR_UNEXPECTED);
     return;
@@ -1052,6 +1101,7 @@ HttpChannelParent::NotifyDiversionFailed(nsresult aErrorCode,
     mParentListener->OnStopRequest(mChannel, nullptr, aErrorCode);
   }
   mParentListener = nullptr;
+  mConverterListener = nullptr;
   mChannel = nullptr;
 
   if (!mIPCClosed) {

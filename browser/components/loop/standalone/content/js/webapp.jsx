@@ -37,7 +37,9 @@ loop.webapp = (function($, _, OT, mozL10n) {
     render: function() {
       var useLatestFF = mozL10n.get("use_latest_firefox", {
         "firefoxBrandNameLink": React.renderComponentToStaticMarkup(
-          <a target="_blank" href={mozL10n.get("brand_website")}>{mozL10n.get("brandShortname")}</a>
+          <a target="_blank" href={loop.config.brandWebsiteUrl}>
+            {mozL10n.get("brandShortname")}
+          </a>
         )
       });
       return (
@@ -82,8 +84,10 @@ loop.webapp = (function($, _, OT, mozL10n) {
           <h3>{mozL10n.get("promote_firefox_hello_heading", {brandShortname: mozL10n.get("brandShortname")})}</h3>
           <p>
             <a className="btn btn-large btn-accept"
-               href={mozL10n.get("brand_website")}>
-              {mozL10n.get("get_firefox_button", {brandShortname: mozL10n.get("brandShortname")})}
+               href={loop.config.brandWebsiteUrl}>
+              {mozL10n.get("get_firefox_button", {
+                brandShortname: mozL10n.get("brandShortname")
+              })}
             </a>
           </p>
         </div>
@@ -258,9 +262,11 @@ loop.webapp = (function($, _, OT, mozL10n) {
   });
 
   var PendingConversationView = React.createClass({
+    mixins: [sharedMixins.AudioMixin],
+
     getInitialState: function() {
       return {
-        callState: this.props.callState || "connecting"
+        callState: "connecting"
       };
     },
 
@@ -270,11 +276,13 @@ loop.webapp = (function($, _, OT, mozL10n) {
     },
 
     componentDidMount: function() {
+      this.play("connecting", {loop: true});
       this.props.websocket.listenTo(this.props.websocket, "progress:alerting",
                                     this._handleRingingProgress);
     },
 
     _handleRingingProgress: function() {
+      this.play("ringing", {loop: true});
       this.setState({callState: "ringing"});
     },
 
@@ -462,10 +470,10 @@ loop.webapp = (function($, _, OT, mozL10n) {
       var tosHTML = mozL10n.get("legal_text_and_links", {
         "clientShortname": mozL10n.get("clientShortname2"),
         "terms_of_use_url": "<a target=_blank href='" +
-          mozL10n.get("legal_website") + "'>" +
+          loop.config.legalWebsiteUrl + "'>" +
           tosLinkName + "</a>",
         "privacy_notice_url": "<a target=_blank href='" +
-          mozL10n.get("privacy_website") + "'>" + privacyNoticeName + "</a>"
+          loop.config.privacyWebsiteUrl + "'>" + privacyNoticeName + "</a>"
       });
 
       var tosClasses = React.addons.classSet({
@@ -514,12 +522,18 @@ loop.webapp = (function($, _, OT, mozL10n) {
    * Ended conversation view.
    */
   var EndedConversationView = React.createClass({
+    mixins: [sharedMixins.AudioMixin],
+
     propTypes: {
       conversation: React.PropTypes.instanceOf(sharedModels.ConversationModel)
                          .isRequired,
       sdk: React.PropTypes.object.isRequired,
       feedbackApiClient: React.PropTypes.object.isRequired,
       onAfterFeedbackReceived: React.PropTypes.func.isRequired
+    },
+
+    componentDidMount: function() {
+      this.play("terminated");
     },
 
     render: function() {
@@ -556,6 +570,12 @@ loop.webapp = (function($, _, OT, mozL10n) {
   });
 
   var FailedConversationView = React.createClass({
+    mixins: [sharedMixins.AudioMixin],
+
+    componentDidMount: function() {
+      this.play("failure");
+    },
+
     render: function() {
       document.title = mozL10n.get("standalone_title_with_status",
                                    {clientShortname: mozL10n.get("clientShortname2"),
@@ -833,7 +853,9 @@ loop.webapp = (function($, _, OT, mozL10n) {
      * Handles ending a call by resetting the view to the start state.
      */
     _endCall: function() {
-      this.setState({callStatus: "end"});
+      if (this.state.callStatus !== "failure") {
+        this.setState({callStatus: "end"});
+      }
     },
   });
 
@@ -842,6 +864,10 @@ loop.webapp = (function($, _, OT, mozL10n) {
    * of the webapp page.
    */
   var WebappRootView = React.createClass({
+
+    mixins: [sharedMixins.UrlHashChangeMixin,
+             sharedMixins.DocumentLocationMixin],
+
     propTypes: {
       client: React.PropTypes.instanceOf(loop.StandaloneClient).isRequired,
       conversation: React.PropTypes.oneOfType([
@@ -860,6 +886,10 @@ loop.webapp = (function($, _, OT, mozL10n) {
         unsupportedDevice: this.props.helper.isIOS(navigator.platform),
         unsupportedBrowser: !this.props.sdk.checkSystemRequirements(),
       };
+    },
+
+    onUrlHashChange: function() {
+      this.locationReload();
     },
 
     render: function() {
@@ -909,10 +939,23 @@ loop.webapp = (function($, _, OT, mozL10n) {
         url: document.location.origin
       });
 
-    // Obtain the loopToken and pass it to the conversation
-    var locationHash = helper.locationHash();
-    if (locationHash) {
-      conversation.set("loopToken", locationHash.match(/\#call\/(.*)/)[1]);
+    // Obtain the loopToken
+
+    var match;
+
+    // locationHash supports the old format urls.
+    var locationData = helper.locationData();
+    if (locationData.hash) {
+      match = locationData.hash.match(/\#call\/(.*)/);
+    } else if (locationData.pathname) {
+      // Otherwise, we're expecting a url such as /c/<token> for calls.
+      match = locationData.pathname.match(/\/c\/([\w\-]+)/);
+    }
+    // XXX Supporting '/\/([\w\-]+)/' is for rooms which are to be implemented
+    // in bug 1074701.
+
+    if (match && match[1]) {
+      conversation.set({loopToken: match[1]});
     }
 
     React.renderComponent(<WebappRootView

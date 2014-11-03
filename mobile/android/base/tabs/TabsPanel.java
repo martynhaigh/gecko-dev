@@ -183,7 +183,7 @@ public class TabsPanel extends LinearLayout
         mTabWidget.addTab(R.drawable.tabs_normal, R.string.tabs_normal);
         mTabWidget.addTab(R.drawable.tabs_private, R.string.tabs_private);
 
-        if (RestrictedProfiles.isAllowed(RestrictedProfiles.Restriction.DISALLOW_MODIFY_ACCOUNTS)) {
+        if (RestrictedProfiles.isAllowed(mContext, RestrictedProfiles.Restriction.DISALLOW_MODIFY_ACCOUNTS)) {
             // The initial icon is not the animated icon, because on Android
             // 4.4.2, the animation starts immediately (and can start at other
             // unpredictable times). See Bug 1015974.
@@ -282,13 +282,18 @@ public class TabsPanel extends LinearLayout
     private static int getTabContainerHeight(TabsLayoutContainer tabsContainer) {
         Resources resources = tabsContainer.getContext().getResources();
 
+        int screenHeight = resources.getDisplayMetrics().heightPixels;
+
+        if(NewTabletUI.isEnabled(tabsContainer.getContext())){
+            return screenHeight;
+        }
+
         PanelView panelView = tabsContainer.getCurrentPanelView();
         if (panelView != null && !panelView.shouldExpand()) {
             return resources.getDimensionPixelSize(R.dimen.tabs_layout_horizontal_height);
         }
 
         int actionBarHeight = resources.getDimensionPixelSize(R.dimen.browser_toolbar_height);
-        int screenHeight = resources.getDisplayMetrics().heightPixels;
 
         Rect windowRect = new Rect();
         tabsContainer.getWindowVisibleDisplayFrame(windowRect);

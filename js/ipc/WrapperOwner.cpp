@@ -63,9 +63,6 @@ class CPOWProxyHandler : public BaseProxyHandler
         return false;
     }
 
-    virtual bool preventExtensions(JSContext *cx, HandleObject proxy) const MOZ_OVERRIDE;
-    virtual bool getPropertyDescriptor(JSContext *cx, HandleObject proxy, HandleId id,
-                                       MutableHandle<JSPropertyDescriptor> desc) const MOZ_OVERRIDE;
     virtual bool getOwnPropertyDescriptor(JSContext *cx, HandleObject proxy, HandleId id,
                                           MutableHandle<JSPropertyDescriptor> desc) const MOZ_OVERRIDE;
     virtual bool defineProperty(JSContext *cx, HandleObject proxy, HandleId id,
@@ -74,18 +71,21 @@ class CPOWProxyHandler : public BaseProxyHandler
                                  AutoIdVector &props) const MOZ_OVERRIDE;
     virtual bool delete_(JSContext *cx, HandleObject proxy, HandleId id, bool *bp) const MOZ_OVERRIDE;
     virtual bool enumerate(JSContext *cx, HandleObject proxy, AutoIdVector &props) const MOZ_OVERRIDE;
-
+    virtual bool preventExtensions(JSContext *cx, HandleObject proxy, bool *succeeded) const MOZ_OVERRIDE;
+    virtual bool isExtensible(JSContext *cx, HandleObject proxy, bool *extensible) const MOZ_OVERRIDE;
     virtual bool has(JSContext *cx, HandleObject proxy, HandleId id, bool *bp) const MOZ_OVERRIDE;
-    virtual bool hasOwn(JSContext *cx, HandleObject proxy, HandleId id, bool *bp) const MOZ_OVERRIDE;
     virtual bool get(JSContext *cx, HandleObject proxy, HandleObject receiver,
                      HandleId id, MutableHandleValue vp) const MOZ_OVERRIDE;
     virtual bool set(JSContext *cx, JS::HandleObject proxy, JS::HandleObject receiver,
                      JS::HandleId id, bool strict, JS::MutableHandleValue vp) const MOZ_OVERRIDE;
-    virtual bool keys(JSContext *cx, HandleObject proxy, AutoIdVector &props) const MOZ_OVERRIDE;
-
-    virtual bool isExtensible(JSContext *cx, HandleObject proxy, bool *extensible) const MOZ_OVERRIDE;
     virtual bool call(JSContext *cx, HandleObject proxy, const CallArgs &args) const MOZ_OVERRIDE;
     virtual bool construct(JSContext *cx, HandleObject proxy, const CallArgs &args) const MOZ_OVERRIDE;
+
+    virtual bool getPropertyDescriptor(JSContext *cx, HandleObject proxy, HandleId id,
+                                       MutableHandle<JSPropertyDescriptor> desc) const MOZ_OVERRIDE;
+    virtual bool hasOwn(JSContext *cx, HandleObject proxy, HandleId id, bool *bp) const MOZ_OVERRIDE;
+    virtual bool getOwnEnumerablePropertyKeys(JSContext *cx, HandleObject proxy,
+                                              AutoIdVector &props) const MOZ_OVERRIDE;
     virtual bool hasInstance(JSContext *cx, HandleObject proxy,
                              MutableHandleValue v, bool *bp) const MOZ_OVERRIDE;
     virtual bool objectClassIs(HandleObject obj, js::ESClassValue classValue,
@@ -111,26 +111,6 @@ const CPOWProxyHandler CPOWProxyHandler::singleton;
         return false;                                                   \
     }                                                                   \
     return owner->call args;
-
-bool
-CPOWProxyHandler::preventExtensions(JSContext *cx, HandleObject proxy) const
-{
-    FORWARD(preventExtensions, (cx, proxy));
-}
-
-bool
-WrapperOwner::preventExtensions(JSContext *cx, HandleObject proxy)
-{
-    ObjectId objId = idOf(proxy);
-
-    ReturnStatus status;
-    if (!SendPreventExtensions(objId, &status))
-        return ipcfail(cx);
-
-    LOG_STACK();
-
-    return ok(cx, status);
-}
 
 bool
 CPOWProxyHandler::getPropertyDescriptor(JSContext *cx, HandleObject proxy, HandleId id,
@@ -232,7 +212,7 @@ CPOWProxyHandler::ownPropertyKeys(JSContext *cx, HandleObject proxy,
 bool
 WrapperOwner::ownPropertyKeys(JSContext *cx, HandleObject proxy, AutoIdVector &props)
 {
-    return getPropertyKeys(cx, proxy, JSITER_OWNONLY | JSITER_HIDDEN, props);
+    return getPropertyKeys(cx, proxy, JSITER_OWNONLY | JSITER_HIDDEN | JSITER_SYMBOLS, props);
 }
 
 bool
@@ -463,15 +443,36 @@ WrapperOwner::set(JSContext *cx, JS::HandleObject proxy, JS::HandleObject receiv
 }
 
 bool
-CPOWProxyHandler::keys(JSContext *cx, HandleObject proxy, AutoIdVector &props) const
+CPOWProxyHandler::getOwnEnumerablePropertyKeys(JSContext *cx, HandleObject proxy,
+                                               AutoIdVector &props) const
 {
-    FORWARD(keys, (cx, proxy, props));
+    FORWARD(getOwnEnumerablePropertyKeys, (cx, proxy, props));
 }
 
 bool
-WrapperOwner::keys(JSContext *cx, HandleObject proxy, AutoIdVector &props)
+WrapperOwner::getOwnEnumerablePropertyKeys(JSContext *cx, HandleObject proxy, AutoIdVector &props)
 {
     return getPropertyKeys(cx, proxy, JSITER_OWNONLY, props);
+}
+
+bool
+CPOWProxyHandler::preventExtensions(JSContext *cx, HandleObject proxy, bool *succeeded) const
+{
+    FORWARD(preventExtensions, (cx, proxy, succeeded));
+}
+
+bool
+WrapperOwner::preventExtensions(JSContext *cx, HandleObject proxy, bool *succeeded)
+{
+    ObjectId objId = idOf(proxy);
+
+    ReturnStatus status;
+    if (!SendPreventExtensions(objId, &status, succeeded))
+        return ipcfail(cx);
+
+    LOG_STACK();
+
+    return ok(cx, status);
 }
 
 bool
@@ -776,8 +777,8 @@ WrapperOwner::getPropertyKeys(JSContext *cx, HandleObject proxy, uint32_t flags,
     ObjectId objId = idOf(proxy);
 
     ReturnStatus status;
-    InfallibleTArray<nsString> names;
-    if (!SendGetPropertyKeys(objId, flags, &status, &names))
+    InfallibleTArray<JSIDVariant> ids;
+    if (!SendGetPropertyKeys(objId, flags, &status, &ids))
         return ipcfail(cx);
 
     LOG_STACK();
@@ -785,11 +786,11 @@ WrapperOwner::getPropertyKeys(JSContext *cx, HandleObject proxy, uint32_t flags,
     if (!ok(cx, status))
         return false;
 
-    for (size_t i = 0; i < names.Length(); i++) {
-        RootedId name(cx);
-        if (!convertGeckoStringToId(cx, names[i], &name))
+    for (size_t i = 0; i < ids.Length(); i++) {
+        RootedId id(cx);
+        if (!fromJSIDVariant(cx, ids[i], &id))
             return false;
-        if (!props.append(name))
+        if (!props.append(id))
             return false;
     }
 
