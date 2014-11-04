@@ -14,10 +14,10 @@ import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.TouchDelegate;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.widget.Checkable;
 import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.ImageView.ScaleType;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -88,15 +88,19 @@ public class TabsLayoutItemView extends LinearLayout
         mCloseButton = (ImageButton) findViewById(R.id.close);
         mThumbnailWrapper = (TabThumbnailWrapper) findViewById(R.id.wrapper);
 
-        post(new Runnable() {
-            // Post in the parent's message queue to make sure the parent
-            // lays out its children before we call getHitRect()
-            public void run() {
+        getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                getViewTreeObserver().removeOnPreDrawListener(this);
+
                 final Rect r = new Rect();
                 mCloseButton.getHitRect(r);
                 r.left -= 20;
                 r.bottom += 20;
+
                 setTouchDelegate(new TouchDelegate(r, mCloseButton));
+
+                return true;
             }
         });
     }
