@@ -31,7 +31,8 @@
                                                 android:textColor="@color/new_tablet_tab_item_title"
                                                 android:singleLine="true"
                                                 android:duplicateParentState="true"
-                                                gecko:fadeWidth="30dp"/>
+                                                gecko:fadeWidth="15dp"
+                                                android:paddingRight="5dp"/>
 
         <ImageButton android:id="@+id/close"
                      style="@style/TabsItemClose"
