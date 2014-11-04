@@ -95,8 +95,8 @@ public class TabsLayoutItemView extends LinearLayout
 
                 final Rect r = new Rect();
                 mCloseButton.getHitRect(r);
-                r.left -= 20;
-                r.bottom += 20;
+                r.left -= 25;
+                r.bottom += 25;
 
                 setTouchDelegate(new TouchDelegate(r, mCloseButton));
 
