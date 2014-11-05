@@ -757,6 +757,8 @@ pref("devtools.debugger.force-local", true);
 pref("devtools.debugger.prompt-connection", true);
 // Block tools from seeing / interacting with certified apps
 pref("devtools.debugger.forbid-certified-apps", true);
+// List of permissions that a sideloaded app can't ask for
+pref("devtools.apps.forbidden-permissions", "embed-apps,engineering-mode,embed-widgets");
 
 // DevTools default color unit
 pref("devtools.defaultColorUnit", "hex");
@@ -2049,7 +2051,7 @@ pref("layout.css.clip-path-shapes.enabled", false);
 pref("layout.css.sticky.enabled", true);
 
 // Is support for CSS "will-change" enabled?
-pref("layout.css.will-change.enabled", false);
+pref("layout.css.will-change.enabled", true);
 
 // Is support for DOMPoint enabled?
 pref("layout.css.DOMPoint.enabled", true);
