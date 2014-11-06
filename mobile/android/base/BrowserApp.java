@@ -5,18 +5,6 @@
 
 package org.mozilla.gecko;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.lang.reflect.Method;
-import java.net.URLEncoder;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Vector;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.mozilla.gecko.AppConstants.Versions;
 import org.mozilla.gecko.DynamicToolbar.PinReason;
 import org.mozilla.gecko.DynamicToolbar.VisibilityTransition;
@@ -124,13 +112,25 @@ import android.view.ViewStub;
 import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.Interpolator;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 import android.widget.ViewFlipper;
-
 import com.readystatesoftware.systembartint.SystemBarTintManager;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.lang.reflect.Method;
+import java.net.URLEncoder;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Vector;
 
 public class BrowserApp extends GeckoApp
                         implements TabsPanel.TabsLayoutChangeListener,
@@ -146,7 +146,7 @@ public class BrowserApp extends GeckoApp
                                    LayoutInflater.Factory {
     private static final String LOGTAG = "GeckoBrowserApp";
 
-    private static final int TABS_ANIMATION_DURATION = 450;
+    private static final int TABS_ANIMATION_DURATION = 250;
 
     private static final String ADD_SHORTCUT_TOAST = "add_shortcut_toast";
     public static final String GUEST_BROWSING_ARG = "--guest";
@@ -1680,9 +1680,12 @@ public class BrowserApp extends GeckoApp
 
         if (areTabsShown()) {
             mTabsPanel.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+//            mMainLayoutAnimator = new PropertyAnimator(animationLength, sTabsInterpolator);
         }
+            mMainLayoutAnimator = new PropertyAnimator(animationLength, new AccelerateDecelerateInterpolator());
 
-        mMainLayoutAnimator = new PropertyAnimator(animationLength, sTabsInterpolator);
+
+
         mMainLayoutAnimator.addPropertyAnimationListener(this);
 
         if (hasTabsSideBar()) {
@@ -1692,7 +1695,7 @@ public class BrowserApp extends GeckoApp
         } else {
             mMainLayoutAnimator.attach(mMainLayout,
                                        PropertyAnimator.Property.SCROLL_Y,
-                                       -height);
+                                       -(float)(height*0.75));
         }
 
         mTabsPanel.prepareTabsAnimation(mMainLayoutAnimator);
@@ -1714,6 +1717,12 @@ public class BrowserApp extends GeckoApp
 
     @Override
     public void onPropertyAnimationStart() {
+        Log.d("MTEST","onPropertyAnimationStart - Tabs shown:" + areTabsShown());
+        if (!areTabsShown()) {
+            //MainLayout.setVisibility(View.VISIBLE);
+        } else {
+
+        }
     }
 
     @Override
@@ -1722,6 +1731,7 @@ public class BrowserApp extends GeckoApp
             mTabsPanel.setVisibility(View.INVISIBLE);
             mTabsPanel.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         } else {
+           // mMainLayout.setVisibility(View.INVISIBLE);
             // Cancel editing mode to return to page content when the TabsPanel closes. We cancel
             // it here because there are graphical glitches if it's canceled while it's visible.
             mBrowserToolbar.cancelEdit();

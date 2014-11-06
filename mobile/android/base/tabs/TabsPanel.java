@@ -91,6 +91,8 @@ public class TabsPanel extends LinearLayout
     private RelativeLayout mFooter;
     private TabsLayoutChangeListener mLayoutChangeListener;
     private final AppStateListener mAppStateListener;
+    private View mMainContainer;
+    private View mRootView;
 
     private IconTabWidget mTabWidget;
     private static ImageButton mMenuButton;
@@ -151,6 +153,9 @@ public class TabsPanel extends LinearLayout
     }
 
     private void initialize() {
+        mMainContainer = findViewById(R.id.tabs_panel);
+        mRootView = getRootView();
+
         mHeader = (RelativeLayout) findViewById(R.id.tabs_panel_header);
         mTabsContainer = (TabsLayoutContainer) findViewById(R.id.tabs_container);
 
@@ -425,6 +430,10 @@ public class TabsPanel extends LinearLayout
     }
 
     public void show(Panel panelToShow) {
+
+        if(mRootView != null) {
+        //    mRootView.setBackgroundColor(getResources().getColor(R.color.background_tabs));
+        }
         if (!isShown())
             setVisibility(View.VISIBLE);
 
@@ -504,6 +513,10 @@ public class TabsPanel extends LinearLayout
     }
 
     public void refresh() {
+        if(NewTabletUI.isEnabled(getContext())) {
+            return;
+        }
+        
         removeAllViews();
 
         inflateLayout(mContext);
@@ -562,15 +575,18 @@ public class TabsPanel extends LinearLayout
             if (mVisible) {
                 ViewHelper.setTranslationY(mHeader, -toolbarHeight);
                 ViewHelper.setTranslationY(mTabsContainer, -toolbarHeight);
-                ViewHelper.setAlpha(mTabsContainer, 0.0f);
+
+                ViewHelper.setAlpha(mMainContainer, 0.0f);
+
             }
-            animator.attach(mTabsContainer, PropertyAnimator.Property.ALPHA, mVisible ? 1.0f : 0.0f);
+            animator.attach(mMainContainer, PropertyAnimator.Property.ALPHA, mVisible ? 1.0f : 0.0f);
+
             animator.attach(mTabsContainer, PropertyAnimator.Property.TRANSLATION_Y, translationY);
             animator.attach(mHeader, PropertyAnimator.Property.TRANSLATION_Y, translationY);
         }
-
-        mHeader.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        mTabsContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+//        animator.setUseHardwareLayer(false);
+//        mHeader.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+//        mTabsContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     }
 
     public void finishTabsAnimation() {
@@ -578,14 +594,15 @@ public class TabsPanel extends LinearLayout
             return;
         }
 
-        mHeader.setLayerType(View.LAYER_TYPE_NONE, null);
-        mTabsContainer.setLayerType(View.LAYER_TYPE_NONE, null);
+//        mHeader.setLayerType(View.LAYER_TYPE_NONE, null);
+//        mTabsContainer.setLayerType(View.LAYER_TYPE_NONE, null);
 
         // If the tabs panel is now hidden, call hide() on current panel and unset it as the current panel
         // to avoid hide() being called again when the layout is opened next.
         if (!mVisible && mPanel != null) {
             mPanel.hide();
             mPanel = null;
+            //mRootView.setBackgroundDrawable(null);
         }
     }
 
