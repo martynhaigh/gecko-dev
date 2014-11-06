@@ -542,12 +542,7 @@ endif
 # of something else. Makefiles which use this var *must* provide a sensible
 # default rule before including rules.mk
 default all::
-	$(MAKE) export
-ifdef COMPILE_ENVIRONMENT
-	$(MAKE) compile
-endif
-	$(MAKE) libs
-	$(MAKE) tools
+	$(foreach tier,$(TIERS),$(call SUBMAKE,$(tier)))
 
 ifeq ($(findstring s,$(filter-out --%, $(MAKEFLAGS))),)
 ECHO := echo
@@ -806,7 +801,7 @@ ifdef DTRACE_PROBE_OBJ
 ifndef DTRACE_LIB_DEPENDENT
 NON_DTRACE_OBJS := $(filter-out $(DTRACE_PROBE_OBJ),$(OBJS))
 $(DTRACE_PROBE_OBJ): $(NON_DTRACE_OBJS)
-	dtrace -G -C -s $(MOZILLA_DTRACE_SRC) -o $(DTRACE_PROBE_OBJ) $(NON_DTRACE_OBJS)
+	dtrace -x nolibs -G -C -s $(MOZILLA_DTRACE_SRC) -o $(DTRACE_PROBE_OBJ) $(NON_DTRACE_OBJS)
 endif
 endif
 endif
@@ -824,7 +819,7 @@ ifndef INCREMENTAL_LINKER
 endif
 ifdef DTRACE_LIB_DEPENDENT
 ifndef XP_MACOSX
-	dtrace -G -C -s $(MOZILLA_DTRACE_SRC) -o  $(DTRACE_PROBE_OBJ) $(shell $(EXPAND_LIBS) $(MOZILLA_PROBE_LIBS))
+	dtrace -x nolibs -G -C -s $(MOZILLA_DTRACE_SRC) -o  $(DTRACE_PROBE_OBJ) $(shell $(EXPAND_LIBS) $(MOZILLA_PROBE_LIBS))
 endif
 	$(EXPAND_MKSHLIB) $(SHLIB_LDSTARTFILE) $(OBJS) $(SUB_SHLOBJS) $(DTRACE_PROBE_OBJ) $(MOZILLA_PROBE_LIBS) $(RESFILE) $(LDFLAGS) $(WRAP_LDFLAGS) $(STATIC_LIBS) $(SHARED_LIBS) $(EXTRA_DSO_LDOPTS) $(MOZ_GLUE_LDFLAGS) $(EXTRA_LIBS) $(OS_LIBS) $(SHLIB_LDENDFILE)
 	@$(RM) $(DTRACE_PROBE_OBJ)
@@ -1189,10 +1184,11 @@ endif
 endif
 
 ifdef EXTRA_COMPONENTS
-libs:: $(EXTRA_COMPONENTS)
+misc:: $(EXTRA_COMPONENTS)
 ifndef NO_DIST_INSTALL
 EXTRA_COMPONENTS_FILES := $(EXTRA_COMPONENTS)
 EXTRA_COMPONENTS_DEST := $(FINAL_TARGET)/components
+EXTRA_COMPONENTS_TARGET := misc
 INSTALL_TARGETS += EXTRA_COMPONENTS
 endif
 
@@ -1201,13 +1197,14 @@ endif
 ifdef EXTRA_PP_COMPONENTS
 ifndef NO_DIST_INSTALL
 EXTRA_PP_COMPONENTS_PATH := $(FINAL_TARGET)/components
+EXTRA_PP_COMPONENTS_TARGET := misc
 PP_TARGETS += EXTRA_PP_COMPONENTS
 endif
 endif
 
 EXTRA_MANIFESTS = $(filter %.manifest,$(EXTRA_COMPONENTS) $(EXTRA_PP_COMPONENTS))
 ifneq (,$(EXTRA_MANIFESTS))
-libs:: $(call mkdir_deps,$(FINAL_TARGET))
+misc:: $(call mkdir_deps,$(FINAL_TARGET))
 	$(call py_action,buildlist,$(FINAL_TARGET)/chrome.manifest $(patsubst %,'manifest components/%',$(notdir $(EXTRA_MANIFESTS))))
 endif
 

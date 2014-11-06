@@ -10,6 +10,7 @@ var TestUtils = React.addons.TestUtils;
 describe("loop.webapp", function() {
   "use strict";
 
+  var sharedActions = loop.shared.actions;
   var sharedModels = loop.shared.models,
       sharedViews = loop.shared.views,
       sharedUtils = loop.shared.utils,
@@ -35,13 +36,10 @@ describe("loop.webapp", function() {
   });
 
   describe("#init", function() {
-    var conversationSetStub;
-
     beforeEach(function() {
       sandbox.stub(React, "renderComponent");
       loop.config.feedbackApiUrl = "http://fake.invalid";
-      conversationSetStub =
-        sandbox.stub(sharedModels.ConversationModel.prototype, "set");
+      sandbox.stub(loop.Dispatcher.prototype, "dispatch");
     });
 
     it("should create the WebappRootView", function() {
@@ -55,33 +53,36 @@ describe("loop.webapp", function() {
       }));
     });
 
-    it("should set the loopToken on the conversation for old-style call urls",
-      function() {
-        sandbox.stub(sharedUtils.Helper.prototype,
-          "locationData").returns({
-            hash: "#call/fake-Token",
-            pathname: "/"
-          });
-
-        loop.webapp.init();
-
-        sinon.assert.called(conversationSetStub);
-        sinon.assert.calledWithExactly(conversationSetStub, {loopToken: "fake-Token"});
+    it("should dispatch a ExtractTokenInfo action with the hash", function() {
+      sandbox.stub(loop.shared.utils.Helper.prototype, "locationData").returns({
+        hash: "#call/faketoken",
+        pathname: "invalid"
       });
 
-    it("should set the loopToken on the conversation for new-style call urls",
+      loop.webapp.init();
+
+      sinon.assert.calledOnce(loop.Dispatcher.prototype.dispatch);
+      sinon.assert.calledWithExactly(loop.Dispatcher.prototype.dispatch,
+        new sharedActions.ExtractTokenInfo({
+          windowPath: "#call/faketoken"
+        }));
+    });
+
+    it("should dispatch a ExtractTokenInfo action with the path if there is no hash",
       function() {
-        sandbox.stub(sharedUtils.Helper.prototype,
-          "locationData").returns({
-            hash: "",
-            pathname: "/c/abc123-_Tes"
-          });
+        sandbox.stub(loop.shared.utils.Helper.prototype, "locationData").returns({
+          hash: "",
+          pathname: "/c/faketoken"
+        });
 
-        loop.webapp.init();
+      loop.webapp.init();
 
-        sinon.assert.called(conversationSetStub);
-        sinon.assert.calledWithExactly(conversationSetStub, {loopToken: "abc123-_Tes"});
-      });
+      sinon.assert.calledOnce(loop.Dispatcher.prototype.dispatch);
+      sinon.assert.calledWithExactly(loop.Dispatcher.prototype.dispatch,
+        new sharedActions.ExtractTokenInfo({
+          windowPath: "/c/faketoken"
+        }));
+    });
   });
 
   describe("OutgoingConversationView", function() {
@@ -229,6 +230,20 @@ describe("loop.webapp", function() {
               TestUtils.findRenderedComponentWithType(ocView,
                 loop.webapp.FailedConversationView);
             });
+
+            it("should reset multiplexGum when a call is rejected",
+              function() {
+                var multiplexGum = new standaloneMedia._MultiplexGum();
+                standaloneMedia.setSingleton(multiplexGum);
+                sandbox.stub(standaloneMedia._MultiplexGum.prototype, "reset");
+
+                ocView._websocket.trigger("progress", {
+                  state: "terminated",
+                  reason: "reject"
+                });
+
+                sinon.assert.calledOnce(multiplexGum.reset);
+              });
 
             it("should display an error message if the reason is not 'cancel'",
               function() {
@@ -544,7 +559,8 @@ describe("loop.webapp", function() {
   });
 
   describe("WebappRootView", function() {
-    var helper, sdk, conversationModel, client, props;
+    var helper, sdk, conversationModel, client, props, standaloneAppStore;
+    var dispatcher;
 
     function mountTestComponent() {
       return TestUtils.renderIntoDocument(
@@ -555,7 +571,7 @@ describe("loop.webapp", function() {
         sdk: sdk,
         conversation: conversationModel,
         feedbackApiClient: feedbackApiClient,
-        onUrlHashChange: sandbox.stub()
+        standaloneAppStore: standaloneAppStore
       }));
     }
 
@@ -570,14 +586,21 @@ describe("loop.webapp", function() {
       client = new loop.StandaloneClient({
         baseServerUrl: "fakeUrl"
       });
+      dispatcher = new loop.Dispatcher();
+      standaloneAppStore = new loop.store.StandaloneAppStore({
+        dispatcher: dispatcher,
+        sdk: sdk,
+        helper: helper,
+        conversation: conversationModel
+      });
       // Stub this to stop the StartConversationView kicking in the request and
       // follow-ups.
       sandbox.stub(client, "requestCallUrlInfo");
     });
 
-    it("should mount the unsupportedDevice view if the device is running iOS",
+    it("should display the UnsupportedDeviceView for `unsupportedDevice` window type",
       function() {
-        sandbox.stub(helper, "isIOS").returns(true);
+        standaloneAppStore.setStoreState({windowType: "unsupportedDevice"});
 
         var webappRootView = mountTestComponent();
 
@@ -585,11 +608,9 @@ describe("loop.webapp", function() {
           loop.webapp.UnsupportedDeviceView);
       });
 
-    it("should mount the unsupportedBrowser view if the sdk detects " +
-      "the browser is unsupported", function() {
-        sdk.checkSystemRequirements = function() {
-          return false;
-        };
+    it("should display the UnsupportedBrowserView for `unsupportedBrowser` window type",
+      function() {
+        standaloneAppStore.setStoreState({windowType: "unsupportedBrowser"});
 
         var webappRootView = mountTestComponent();
 
@@ -597,9 +618,9 @@ describe("loop.webapp", function() {
           loop.webapp.UnsupportedBrowserView);
       });
 
-    it("should mount the OutgoingConversationView view if there is a loopToken",
+    it("should display the OutgoingConversationView for `outgoing` window type",
       function() {
-        conversationModel.set("loopToken", "fakeToken");
+        standaloneAppStore.setStoreState({windowType: "outgoing"});
 
         var webappRootView = mountTestComponent();
 
@@ -607,7 +628,19 @@ describe("loop.webapp", function() {
           loop.webapp.OutgoingConversationView);
       });
 
-    it("should mount the Home view there is no loopToken", function() {
+    it("should display the StandaloneRoomView for `room` window type",
+      function() {
+        standaloneAppStore.setStoreState({windowType: "room"});
+
+        var webappRootView = mountTestComponent();
+
+        TestUtils.findRenderedComponentWithType(webappRootView,
+          loop.standaloneRoomViews.StandaloneRoomView);
+      });
+
+    it("should display the HomeView for `home` window type", function() {
+        standaloneAppStore.setStoreState({windowType: "home"});
+
         var webappRootView = mountTestComponent();
 
         TestUtils.findRenderedComponentWithType(webappRootView,

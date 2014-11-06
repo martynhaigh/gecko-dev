@@ -1618,7 +1618,9 @@ var gBrowserInit = {
     gSyncUI.init();
 #endif
 
+#ifdef E10S_TESTING_ONLY
     gRemoteTabsUI.init();
+#endif
   },
 
   nonBrowserWindowShutdown: function() {
@@ -3970,7 +3972,7 @@ var XULBrowserWindow = {
                            .chromeEventHandler;
 
     // Ignore loads that aren't in the main tabbrowser
-    if (browser.localName != "browser" || browser.getTabBrowser() != gBrowser)
+    if (browser.localName != "browser" || !browser.getTabBrowser || browser.getTabBrowser() != gBrowser)
       return true;
 
     if (!E10SUtils.shouldLoadURI(aDocShell, aURI, aReferrer)) {
