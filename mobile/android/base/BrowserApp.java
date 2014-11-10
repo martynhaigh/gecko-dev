@@ -38,8 +38,8 @@ import org.mozilla.gecko.home.HomePager;
 import org.mozilla.gecko.home.HomePager.OnUrlOpenInBackgroundListener;
 import org.mozilla.gecko.home.HomePager.OnUrlOpenListener;
 import org.mozilla.gecko.home.HomePanelsManager;
-import org.mozilla.gecko.home.TopSitesPanel;
 import org.mozilla.gecko.home.SearchEngine;
+import org.mozilla.gecko.home.TopSitesPanel;
 import org.mozilla.gecko.menu.GeckoMenu;
 import org.mozilla.gecko.menu.GeckoMenuItem;
 import org.mozilla.gecko.mozglue.ContextUtils;
@@ -49,10 +49,10 @@ import org.mozilla.gecko.prompts.Prompt;
 import org.mozilla.gecko.prompts.PromptListItem;
 import org.mozilla.gecko.sync.setup.SyncAccounts;
 import org.mozilla.gecko.tabs.TabHistoryController;
+import org.mozilla.gecko.tabs.TabHistoryController.OnShowTabHistory;
 import org.mozilla.gecko.tabs.TabHistoryFragment;
 import org.mozilla.gecko.tabs.TabHistoryPage;
 import org.mozilla.gecko.tabs.TabsPanel;
-import org.mozilla.gecko.tabs.TabHistoryController.OnShowTabHistory;
 import org.mozilla.gecko.tiles.TilesRecorder;
 import org.mozilla.gecko.toolbar.AutocompleteHandler;
 import org.mozilla.gecko.toolbar.BrowserToolbar;
@@ -119,7 +119,7 @@ import android.view.ViewStub;
 import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowManager;
-import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
 import android.view.animation.Interpolator;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
@@ -139,6 +139,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Vector;
 
+
 public class BrowserApp extends GeckoApp
                         implements TabsPanel.TabsLayoutChangeListener,
                                    PropertyAnimator.PropertyAnimationListener,
@@ -154,7 +155,7 @@ public class BrowserApp extends GeckoApp
                                    TopSitesPanel.BrowserTilesRecorderProvider {
     private static final String LOGTAG = "GeckoBrowserApp";
 
-    private static final int TABS_ANIMATION_DURATION = 250;
+    private static final int TABS_ANIMATION_DURATION = 300;
 
     private static final String ADD_SHORTCUT_TOAST = "add_shortcut_toast";
     public static final String GUEST_BROWSING_ARG = "--guest";
@@ -208,15 +209,6 @@ public class BrowserApp extends GeckoApp
 
     private Vector<MenuItemInfo> mAddonMenuItemsCache;
     private PropertyAnimator mMainLayoutAnimator;
-
-    private static final Interpolator sTabsInterpolator = new Interpolator() {
-        @Override
-        public float getInterpolation(float t) {
-            t -= 1.0f;
-            return t * t * t * t * t + 1.0f;
-        }
-    };
-
     private FindInPageBar mFindInPageBar;
     private MediaCastingBar mMediaCastingBar;
 
@@ -1709,11 +1701,9 @@ public class BrowserApp extends GeckoApp
 
         if (areTabsShown()) {
             mTabsPanel.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-//            mMainLayoutAnimator = new PropertyAnimator(animationLength, sTabsInterpolator);
         }
-            mMainLayoutAnimator = new PropertyAnimator(animationLength, new AccelerateDecelerateInterpolator());
 
-
+        mMainLayoutAnimator = new PropertyAnimator(animationLength, new DecelerateInterpolator());
 
         mMainLayoutAnimator.addPropertyAnimationListener(this);
 
@@ -1741,16 +1731,31 @@ public class BrowserApp extends GeckoApp
             }
         }
 
+
+        if (!areTabsShown()) {
+            mMainLayoutAnimator.attach(mBrowserChrome,
+                    PropertyAnimator.Property.ALPHA,
+                    1);
+        } else {
+            mMainLayoutAnimator.attach(mBrowserChrome,
+                    PropertyAnimator.Property.ALPHA,
+                    0);
+        }
+
+        if (NewTabletUI.isEnabled(this)) {
+            //findViewById(R.id.new_tablet_tab_strip).setVisibility(View.INVISIBLE);
+        }
         mMainLayoutAnimator.start();
     }
 
     @Override
     public void onPropertyAnimationStart() {
+        if(!NewTabletUI.isEnabled(getContext())) {
+            return;
+        }
         Log.d("MTEST","onPropertyAnimationStart - Tabs shown:" + areTabsShown());
         if (!areTabsShown()) {
-            //MainLayout.setVisibility(View.VISIBLE);
-        } else {
-
+            //mMainLayout.setVisibility(View.VISIBLE);
         }
     }
 
@@ -1760,10 +1765,14 @@ public class BrowserApp extends GeckoApp
             mTabsPanel.setVisibility(View.INVISIBLE);
             mTabsPanel.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         } else {
-           // mMainLayout.setVisibility(View.INVISIBLE);
+
             // Cancel editing mode to return to page content when the TabsPanel closes. We cancel
             // it here because there are graphical glitches if it's canceled while it's visible.
             mBrowserToolbar.cancelEdit();
+
+            if(NewTabletUI.isEnabled(getContext())) {
+               // mMainLayout.setVisibility(View.INVISIBLE);
+            }
         }
 
         mTabsPanel.finishTabsAnimation();

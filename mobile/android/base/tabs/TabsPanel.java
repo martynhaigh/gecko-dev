@@ -27,7 +27,9 @@ import org.mozilla.gecko.widget.IconTabWidget;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Rect;
+import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.TransitionDrawable;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -39,6 +41,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import com.nineoldandroids.animation.ObjectAnimator;
 
 public class TabsPanel extends LinearLayout
                        implements GeckoPopupMenu.OnMenuItemClickListener,
@@ -92,7 +95,6 @@ public class TabsPanel extends LinearLayout
     private TabsLayoutChangeListener mLayoutChangeListener;
     private final AppStateListener mAppStateListener;
     private View mMainContainer;
-    private View mRootView;
 
     private IconTabWidget mTabWidget;
     private static ImageButton mMenuButton;
@@ -111,7 +113,7 @@ public class TabsPanel extends LinearLayout
         mActivity = (GeckoApp) context;
         mTheme = ((GeckoApplication) context.getApplicationContext()).getLightweightTheme();
 
-        setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+        setLayoutParams(new FrameLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                                                       LinearLayout.LayoutParams.MATCH_PARENT));
         setOrientation(LinearLayout.VERTICAL);
 
@@ -153,8 +155,7 @@ public class TabsPanel extends LinearLayout
     }
 
     private void initialize() {
-        mMainContainer = findViewById(R.id.tabs_panel);
-        mRootView = getRootView();
+        mMainContainer = getRootView();
 
         mHeader = (RelativeLayout) findViewById(R.id.tabs_panel_header);
         mTabsContainer = (TabsLayoutContainer) findViewById(R.id.tabs_container);
@@ -431,9 +432,6 @@ public class TabsPanel extends LinearLayout
 
     public void show(Panel panelToShow) {
 
-        if(mRootView != null) {
-        //    mRootView.setBackgroundColor(getResources().getColor(R.color.background_tabs));
-        }
         if (!isShown())
             setVisibility(View.VISIBLE);
 
@@ -572,21 +570,26 @@ public class TabsPanel extends LinearLayout
             final Resources resources = getContext().getResources();
             final int toolbarHeight = resources.getDimensionPixelSize(R.dimen.browser_toolbar_height);
             final int translationY = (mVisible ? 0 : -toolbarHeight);
+            ObjectAnimator objectAnimator = new ObjectAnimator();
+            objectAnimator.setDuration(200);
+            objectAnimator.setTarget(mMainContainer);
+            objectAnimator.setPropertyName("alpha");
             if (mVisible) {
+
                 ViewHelper.setTranslationY(mHeader, -toolbarHeight);
                 ViewHelper.setTranslationY(mTabsContainer, -toolbarHeight);
+                ViewHelper.setAlpha(mMainContainer, 0);
+                objectAnimator.setFloatValues(0,1);
 
-                ViewHelper.setAlpha(mMainContainer, 0.0f);
-
+            } else {
+                objectAnimator.setFloatValues(1,0);
             }
-            animator.attach(mMainContainer, PropertyAnimator.Property.ALPHA, mVisible ? 1.0f : 0.0f);
+
+            objectAnimator.start();
 
             animator.attach(mTabsContainer, PropertyAnimator.Property.TRANSLATION_Y, translationY);
             animator.attach(mHeader, PropertyAnimator.Property.TRANSLATION_Y, translationY);
         }
-//        animator.setUseHardwareLayer(false);
-//        mHeader.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-//        mTabsContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     }
 
     public void finishTabsAnimation() {
@@ -594,15 +597,11 @@ public class TabsPanel extends LinearLayout
             return;
         }
 
-//        mHeader.setLayerType(View.LAYER_TYPE_NONE, null);
-//        mTabsContainer.setLayerType(View.LAYER_TYPE_NONE, null);
-
         // If the tabs panel is now hidden, call hide() on current panel and unset it as the current panel
         // to avoid hide() being called again when the layout is opened next.
         if (!mVisible && mPanel != null) {
             mPanel.hide();
             mPanel = null;
-            //mRootView.setBackgroundDrawable(null);
         }
     }
 
