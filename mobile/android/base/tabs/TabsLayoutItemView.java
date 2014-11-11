@@ -102,7 +102,7 @@ public class TabsLayoutItemView extends LinearLayout
                 r.right += 5;
                 r.bottom += 20;
 
-                TabsLayoutItemView.this.setTouchDelegate(new TouchDelegate(r, mCloseButton));
+                setTouchDelegate(new TouchDelegate(r, mCloseButton));
 
                 return true;
             }
