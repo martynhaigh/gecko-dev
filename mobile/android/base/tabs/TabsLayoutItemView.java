@@ -9,8 +9,6 @@ import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
 
 import android.content.Context;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
@@ -22,8 +20,6 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-
-import static android.graphics.Color.RED;
 
 public class TabsLayoutItemView extends LinearLayout
                                 implements Checkable {
