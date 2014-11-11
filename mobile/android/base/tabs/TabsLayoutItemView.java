@@ -91,6 +91,7 @@ public class TabsLayoutItemView extends LinearLayout
         mThumbnail = (ImageView) findViewById(R.id.thumbnail);
         mCloseButton = (ImageButton) findViewById(R.id.close);
         mThumbnailWrapper = (TabThumbnailWrapper) findViewById(R.id.wrapper);
+        
         mCloseButton.bringToFront();
 
         getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
@@ -101,9 +102,8 @@ public class TabsLayoutItemView extends LinearLayout
                 final Rect r = new Rect();
                 mCloseButton.getHitRect(r);
                 r.left -= 20;
-                r.top -= 10;
-                r.right += 10;
-
+                r.top -= 5;
+                r.right += 5;
                 r.bottom += 20;
 
                 TabsLayoutItemView.this.setTouchDelegate(new TouchDelegate(r, mCloseButton));
