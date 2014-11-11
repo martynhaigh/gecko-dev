@@ -5,6 +5,18 @@
 
 package org.mozilla.gecko;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.lang.reflect.Method;
+import java.net.URLEncoder;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Vector;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import org.mozilla.gecko.AppConstants.Versions;
 import org.mozilla.gecko.DynamicToolbar.PinReason;
@@ -38,8 +50,8 @@ import org.mozilla.gecko.home.HomePager;
 import org.mozilla.gecko.home.HomePager.OnUrlOpenInBackgroundListener;
 import org.mozilla.gecko.home.HomePager.OnUrlOpenListener;
 import org.mozilla.gecko.home.HomePanelsManager;
-import org.mozilla.gecko.home.SearchEngine;
 import org.mozilla.gecko.home.TopSitesPanel;
+import org.mozilla.gecko.home.SearchEngine;
 import org.mozilla.gecko.menu.GeckoMenu;
 import org.mozilla.gecko.menu.GeckoMenuItem;
 import org.mozilla.gecko.mozglue.ContextUtils;
@@ -49,10 +61,10 @@ import org.mozilla.gecko.prompts.Prompt;
 import org.mozilla.gecko.prompts.PromptListItem;
 import org.mozilla.gecko.sync.setup.SyncAccounts;
 import org.mozilla.gecko.tabs.TabHistoryController;
-import org.mozilla.gecko.tabs.TabHistoryController.OnShowTabHistory;
 import org.mozilla.gecko.tabs.TabHistoryFragment;
 import org.mozilla.gecko.tabs.TabHistoryPage;
 import org.mozilla.gecko.tabs.TabsPanel;
+import org.mozilla.gecko.tabs.TabHistoryController.OnShowTabHistory;
 import org.mozilla.gecko.tiles.TilesRecorder;
 import org.mozilla.gecko.toolbar.AutocompleteHandler;
 import org.mozilla.gecko.toolbar.BrowserToolbar;
@@ -120,25 +132,14 @@ import android.view.ViewStub;
 import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowManager;
-import android.view.animation.DecelerateInterpolator;
 import android.view.animation.Interpolator;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 import android.widget.ViewFlipper;
 import com.readystatesoftware.systembartint.SystemBarTintManager;
-import org.json.JSONException;
-import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.lang.reflect.Method;
-import java.net.URLEncoder;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Vector;
 
 
 public class BrowserApp extends GeckoApp
@@ -156,7 +157,8 @@ public class BrowserApp extends GeckoApp
                                    TopSitesPanel.BrowserTilesRecorderProvider {
     private static final String LOGTAG = "GeckoBrowserApp";
 
-    private static final int TABS_ANIMATION_DURATION = 300;
+    private static final int TABS_ANIMATION_DURATION = 450;
+    private static final int NEW_TABLET_TABS_ANIMATION_DURATION = 300;
 
     private static final String ADD_SHORTCUT_TOAST = "add_shortcut_toast";
     public static final String GUEST_BROWSING_ARG = "--guest";
@@ -210,6 +212,15 @@ public class BrowserApp extends GeckoApp
 
     private Vector<MenuItemInfo> mAddonMenuItemsCache;
     private PropertyAnimator mMainLayoutAnimator;
+
+    private static final Interpolator sTabsInterpolator = new Interpolator() {
+        @Override
+        public float getInterpolation(float t) {
+            t -= 1.0f;
+            return t * t * t * t * t + 1.0f;
+        }
+    };
+
     private FindInPageBar mFindInPageBar;
     private MediaCastingBar mMediaCastingBar;
 
@@ -1698,7 +1709,12 @@ public class BrowserApp extends GeckoApp
             return false;
         }
 
-        ViewStub tabsPanelStub = (ViewStub) findViewById(R.id.tabs_panel);
+        ViewStub tabsPanelStub = null;
+        if (NewTabletUI.isEnabled(getContext())) {
+            tabsPanelStub = (ViewStub) findViewById(R.id.new_tablet_tabs_panel);
+        } else {
+            tabsPanelStub = (ViewStub) findViewById(R.id.tabs_panel);
+        }
         mTabsPanel = (TabsPanel) tabsPanelStub.inflate();
 
         mTabsPanel.setTabsLayoutChangeListener(this);
@@ -1751,7 +1767,8 @@ public class BrowserApp extends GeckoApp
 
     @Override
     public void onTabsLayoutChange(int width, int height) {
-        int animationLength = TABS_ANIMATION_DURATION;
+        final boolean newTabletUi = NewTabletUI.isEnabled(getContext());
+        int animationLength = newTabletUi ? NEW_TABLET_TABS_ANIMATION_DURATION : TABS_ANIMATION_DURATION;
 
         if (mMainLayoutAnimator != null) {
             animationLength = Math.max(1, animationLength - (int)mMainLayoutAnimator.getRemainingTime());
@@ -1762,7 +1779,22 @@ public class BrowserApp extends GeckoApp
             mTabsPanel.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         }
 
-        mMainLayoutAnimator = new PropertyAnimator(animationLength, new DecelerateInterpolator());
+
+        if(newTabletUi) {
+            mMainLayoutAnimator = new PropertyAnimator(animationLength, new DecelerateInterpolator());
+
+            if (!areTabsShown()) {
+                mMainLayoutAnimator.attach(mBrowserChrome,
+                                           PropertyAnimator.Property.ALPHA,
+                                           1.0f);
+            } else {
+                mMainLayoutAnimator.attach(mBrowserChrome,
+                                           PropertyAnimator.Property.ALPHA,
+                                           0.0f);
+            }
+        } else {
+            mMainLayoutAnimator = new PropertyAnimator(animationLength, sTabsInterpolator);
+        }
 
         mMainLayoutAnimator.addPropertyAnimationListener(this);
 
@@ -1771,9 +1803,10 @@ public class BrowserApp extends GeckoApp
                                        PropertyAnimator.Property.SCROLL_X,
                                        -width);
         } else {
+            final float animationDistance = newTabletUi ? -(float)(height*0.75) : -height;
             mMainLayoutAnimator.attach(mMainLayout,
                                        PropertyAnimator.Property.SCROLL_Y,
-                                       -(float)(height*0.75));
+                                       animationDistance);
         }
 
         mTabsPanel.prepareTabsAnimation(mMainLayoutAnimator);
@@ -1790,20 +1823,6 @@ public class BrowserApp extends GeckoApp
             }
         }
 
-
-        if (!areTabsShown()) {
-            mMainLayoutAnimator.attach(mBrowserChrome,
-                    PropertyAnimator.Property.ALPHA,
-                    1);
-        } else {
-            mMainLayoutAnimator.attach(mBrowserChrome,
-                    PropertyAnimator.Property.ALPHA,
-                    0);
-        }
-
-        if (NewTabletUI.isEnabled(this)) {
-            //findViewById(R.id.new_tablet_tab_strip).setVisibility(View.INVISIBLE);
-        }
         mMainLayoutAnimator.start();
     }
 
@@ -1812,9 +1831,11 @@ public class BrowserApp extends GeckoApp
         if(!NewTabletUI.isEnabled(getContext())) {
             return;
         }
-        Log.d("MTEST","onPropertyAnimationStart - Tabs shown:" + areTabsShown());
+
         if (!areTabsShown()) {
-            //mMainLayout.setVisibility(View.VISIBLE);
+            mMainLayout.setVisibility(View.VISIBLE);
+        } else {
+            mMainLayout.setBackground(getResources().getDrawable(R.color.background_tabs));
         }
     }
 
@@ -1830,7 +1851,8 @@ public class BrowserApp extends GeckoApp
             mBrowserToolbar.cancelEdit();
 
             if(NewTabletUI.isEnabled(getContext())) {
-               // mMainLayout.setVisibility(View.INVISIBLE);
+                mMainLayout.setVisibility(View.INVISIBLE);
+                mMainLayout.setBackgroundDrawable(null);
             }
         }
 

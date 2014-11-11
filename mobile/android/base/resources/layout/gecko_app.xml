@@ -8,8 +8,12 @@
                 android:id="@+id/root_layout"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:fitsSystemWindows="true"
-                android:background="@color/background_tabs">
+                android:fitsSystemWindows="true">
+
+    <ViewStub android:id="@+id/tabs_panel"
+              android:layout="@layout/tabs_panel_view"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"/>
 
    <view class="org.mozilla.gecko.GeckoApp$MainLayout"
          android:id="@+id/main_layout"
@@ -126,12 +130,10 @@
                  android:layout_alignParentBottom="true"
                  android:visibility="gone" />
 
-
-    <ViewStub android:id="@+id/tabs_panel"
+    <ViewStub android:id="@+id/new_tablet_tabs_panel"
               android:layout="@layout/tabs_panel_view"
               android:layout_width="match_parent"
               android:layout_height="match_parent"/>
-
 
     <ViewStub android:id="@+id/toast_stub"
               android:layout="@layout/button_toast"
