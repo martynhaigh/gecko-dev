@@ -9,6 +9,8 @@ import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.widget.TabThumbnailWrapper;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
@@ -20,6 +22,8 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+
+import static android.graphics.Color.RED;
 
 public class TabsLayoutItemView extends LinearLayout
                                 implements Checkable {
@@ -87,6 +91,7 @@ public class TabsLayoutItemView extends LinearLayout
         mThumbnail = (ImageView) findViewById(R.id.thumbnail);
         mCloseButton = (ImageButton) findViewById(R.id.close);
         mThumbnailWrapper = (TabThumbnailWrapper) findViewById(R.id.wrapper);
+        mCloseButton.bringToFront();
 
         getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override
@@ -95,10 +100,13 @@ public class TabsLayoutItemView extends LinearLayout
 
                 final Rect r = new Rect();
                 mCloseButton.getHitRect(r);
-                r.left -= 25;
-                r.bottom += 25;
+                r.left -= 20;
+                r.top -= 10;
+                r.right += 10;
 
-                setTouchDelegate(new TouchDelegate(r, mCloseButton));
+                r.bottom += 20;
+
+                TabsLayoutItemView.this.setTouchDelegate(new TouchDelegate(r, mCloseButton));
 
                 return true;
             }
@@ -134,4 +142,5 @@ public class TabsLayoutItemView extends LinearLayout
     public void setCloseVisible(boolean visible) {
         mCloseButton.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
     }
+
 }
