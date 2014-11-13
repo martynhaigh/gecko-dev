@@ -2003,7 +2003,7 @@ class ModuleCharsForStore : ModuleChars
         if (!compressedBuffer_.resize(maxCompressedSize))
             return false;
 
-        const char16_t *chars = parser.tokenStream.rawBase() + beginOffset(parser);
+        const char16_t *chars = parser.tokenStream.rawCharPtrAt(beginOffset(parser));
         const char *source = reinterpret_cast<const char*>(chars);
         size_t compressedSize = LZ4::compress(source, uncompressedSize_, compressedBuffer_.begin());
         if (!compressedSize || compressedSize > UINT32_MAX)
@@ -2085,7 +2085,7 @@ class ModuleCharsForLookup : ModuleChars
     }
 
     bool match(AsmJSParser &parser) const {
-        const char16_t *parseBegin = parser.tokenStream.rawBase() + beginOffset(parser);
+        const char16_t *parseBegin = parser.tokenStream.rawCharPtrAt(beginOffset(parser));
         const char16_t *parseLimit = parser.tokenStream.rawLimit();
         MOZ_ASSERT(parseLimit >= parseBegin);
         if (uint32_t(parseLimit - parseBegin) < chars_.length())
@@ -2134,7 +2134,7 @@ struct ScopedCacheEntryOpenedForWrite
     }
 };
 
-bool
+JS::AsmJSCacheResult
 js::StoreAsmJSModuleInCache(AsmJSParser &parser,
                             const AsmJSModule &module,
                             ExclusiveContext *cx)
@@ -2144,15 +2144,15 @@ js::StoreAsmJSModuleInCache(AsmJSParser &parser,
     // that can't be serialized. (This is separate from normal profiling and
     // requires an addon to activate).
     if (module.numFunctionCounts())
-        return false;
+        return JS::AsmJSCache_Disabled_JitInspector;
 
     MachineId machineId;
     if (!machineId.extractCurrentState(cx))
-        return false;
+        return JS::AsmJSCache_InternalError;
 
     ModuleCharsForStore moduleChars;
     if (!moduleChars.init(parser))
-        return false;
+        return JS::AsmJSCache_InternalError;
 
     size_t serializedSize = machineId.serializedSize() +
                             moduleChars.serializedSize() +
@@ -2160,17 +2160,17 @@ js::StoreAsmJSModuleInCache(AsmJSParser &parser,
 
     JS::OpenAsmJSCacheEntryForWriteOp open = cx->asmJSCacheOps().openEntryForWrite;
     if (!open)
-        return false;
+        return JS::AsmJSCache_Disabled_Internal;
 
-    const char16_t *begin = parser.tokenStream.rawBase() + ModuleChars::beginOffset(parser);
-    const char16_t *end = parser.tokenStream.rawBase() + ModuleChars::endOffset(parser);
+    const char16_t *begin = parser.tokenStream.rawCharPtrAt(ModuleChars::beginOffset(parser));
+    const char16_t *end = parser.tokenStream.rawCharPtrAt(ModuleChars::endOffset(parser));
     bool installed = parser.options().installedFile;
 
     ScopedCacheEntryOpenedForWrite entry(cx, serializedSize);
-    if (!open(cx->global(), installed, begin, end, entry.serializedSize,
-              &entry.memory, &entry.handle)) {
-        return false;
-    }
+    JS::AsmJSCacheResult openResult =
+        open(cx->global(), installed, begin, end, serializedSize, &entry.memory, &entry.handle);
+    if (openResult != JS::AsmJSCache_Success)
+        return openResult;
 
     uint8_t *cursor = entry.memory;
     cursor = machineId.serialize(cursor);
@@ -2178,7 +2178,7 @@ js::StoreAsmJSModuleInCache(AsmJSParser &parser,
     cursor = module.serialize(cursor);
 
     MOZ_ASSERT(cursor == entry.memory + serializedSize);
-    return true;
+    return JS::AsmJSCache_Success;
 }
 
 struct ScopedCacheEntryOpenedForRead
@@ -2214,7 +2214,7 @@ js::LookupAsmJSModuleInCache(ExclusiveContext *cx,
     if (!open)
         return true;
 
-    const char16_t *begin = parser.tokenStream.rawBase() + ModuleChars::beginOffset(parser);
+    const char16_t *begin = parser.tokenStream.rawCharPtrAt(ModuleChars::beginOffset(parser));
     const char16_t *limit = parser.tokenStream.rawLimit();
 
     ScopedCacheEntryOpenedForRead entry(cx);

@@ -3082,7 +3082,7 @@ public class BrowserApp extends GeckoApp
             }
 
             Tab tab = Tabs.getInstance().getSelectedTab();
-            if (tab != null) {
+            if (tab != null  && !tab.isEditing()) {
                 return tabHistoryController.showTabHistory(tab, TabHistoryController.HistoryAction.ALL);
             }
         }
