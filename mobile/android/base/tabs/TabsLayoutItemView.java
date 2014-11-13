@@ -12,6 +12,7 @@ import android.content.Context;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
+import android.util.TypedValue;
 import android.view.TouchDelegate;
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -96,7 +97,7 @@ public class TabsLayoutItemView extends LinearLayout
                 final Rect hitRect = new Rect();
                 mCloseButton.getHitRect(hitRect);
 
-                final int TARGET_HIT_AREA = 40;
+                final int TARGET_HIT_AREA = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40, getResources().getDisplayMetrics());;
                 final View parent = ((View) mCloseButton.getParent());
 
                 hitRect.top = 0;
