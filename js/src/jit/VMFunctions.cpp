@@ -829,6 +829,90 @@ DebugEpilogue(JSContext *cx, BaselineFrame *frame, jsbytecode *pc, bool ok)
     return ok;
 }
 
+JSObject *
+CreateGenerator(JSContext *cx, BaselineFrame *frame)
+{
+    return GeneratorObject::create(cx, frame);
+}
+
+bool
+InitialSuspend(JSContext *cx, HandleObject obj, BaselineFrame *frame, jsbytecode *pc)
+{
+    MOZ_ASSERT(*pc == JSOP_INITIALYIELD);
+    return GeneratorObject::initialSuspend(cx, obj, frame, pc);
+}
+
+bool
+NormalSuspend(JSContext *cx, HandleObject obj, BaselineFrame *frame, jsbytecode *pc,
+              uint32_t stackDepth)
+{
+    MOZ_ASSERT(*pc == JSOP_YIELD);
+
+    // Return value is still on the stack.
+    MOZ_ASSERT(stackDepth >= 1);
+
+    // The expression stack slots are stored on the stack in reverse order, so
+    // we copy them to a Vector and pass a pointer to that instead. We use
+    // stackDepth - 1 because we don't want to include the return value.
+    AutoValueVector exprStack(cx);
+    if (!exprStack.reserve(stackDepth - 1))
+        return false;
+
+    size_t firstSlot = frame->numValueSlots() - stackDepth;
+    for (size_t i = 0; i < stackDepth - 1; i++)
+        exprStack.infallibleAppend(*frame->valueSlot(firstSlot + i));
+
+    MOZ_ASSERT(exprStack.length() == stackDepth - 1);
+
+    return GeneratorObject::normalSuspend(cx, obj, frame, pc, exprStack.begin(), stackDepth - 1);
+}
+
+bool
+FinalSuspend(JSContext *cx, HandleObject obj, BaselineFrame *frame, jsbytecode *pc)
+{
+    MOZ_ASSERT(*pc == JSOP_FINALYIELDRVAL);
+
+    if (!GeneratorObject::finalSuspend(cx, obj)) {
+        // Leave this frame and propagate the exception to the caller.
+        return DebugEpilogue(cx, frame, pc, /* ok = */ false);
+    }
+
+    return true;
+}
+
+bool
+InterpretResume(JSContext *cx, HandleObject obj, HandleValue val, HandlePropertyName kind,
+                MutableHandleValue rval)
+{
+    MOZ_ASSERT(obj->is<GeneratorObject>());
+
+    RootedValue selfHostedFun(cx);
+    if (!GlobalObject::getIntrinsicValue(cx, cx->global(), cx->names().InterpretGeneratorResume,
+                                         &selfHostedFun))
+    {
+        return false;
+    }
+
+    MOZ_ASSERT(selfHostedFun.toObject().is<JSFunction>());
+
+    InvokeArgs args(cx);
+    if (!args.init(3))
+        return false;
+
+    args.setCallee(selfHostedFun);
+    args.setThis(UndefinedValue());
+
+    args[0].setObject(*obj);
+    args[1].set(val);
+    args[2].setString(kind);
+
+    if (!Invoke(cx, args))
+        return false;
+
+    rval.set(args.rval());
+    return true;
+}
+
 bool
 StrictEvalPrologue(JSContext *cx, BaselineFrame *frame)
 {
