@@ -140,8 +140,6 @@ import android.widget.Toast;
 import android.widget.ViewFlipper;
 import com.readystatesoftware.systembartint.SystemBarTintManager;
 
-
-
 public class BrowserApp extends GeckoApp
                         implements TabsPanel.TabsLayoutChangeListener,
                                    PropertyAnimator.PropertyAnimationListener,
@@ -1709,7 +1707,7 @@ public class BrowserApp extends GeckoApp
             return false;
         }
 
-        ViewStub tabsPanelStub = null;
+        final ViewStub tabsPanelStub;
         if (NewTabletUI.isEnabled(getContext())) {
             tabsPanelStub = (ViewStub) findViewById(R.id.new_tablet_tabs_panel);
         } else {
@@ -1781,17 +1779,10 @@ public class BrowserApp extends GeckoApp
 
 
         if(newTabletUi) {
-            mMainLayoutAnimator = new PropertyAnimator(animationLength, new DecelerateInterpolator());
-
-            if (!areTabsShown()) {
-                mMainLayoutAnimator.attach(mBrowserChrome,
-                                           PropertyAnimator.Property.ALPHA,
-                                           1.0f);
-            } else {
-                mMainLayoutAnimator.attach(mBrowserChrome,
-                                           PropertyAnimator.Property.ALPHA,
-                                           0.0f);
-            }
+            mMainLayoutAnimator = new PropertyAnimator(animationLength, sTabsInterpolator);
+            mMainLayoutAnimator.attach(mBrowserChrome,
+                                       PropertyAnimator.Property.ALPHA,
+                                       areTabsShown() ? 0.0f : 1.0f);
         } else {
             mMainLayoutAnimator = new PropertyAnimator(animationLength, sTabsInterpolator);
         }
@@ -1803,7 +1794,7 @@ public class BrowserApp extends GeckoApp
                                        PropertyAnimator.Property.SCROLL_X,
                                        -width);
         } else {
-            final float animationDistance = newTabletUi ? -(float)(height*0.75) : -height;
+            final float animationDistance = -height * (newTabletUi ? 0.75f : 1f);
             mMainLayoutAnimator.attach(mMainLayout,
                                        PropertyAnimator.Property.SCROLL_Y,
                                        animationDistance);
@@ -1835,7 +1826,7 @@ public class BrowserApp extends GeckoApp
         if (!areTabsShown()) {
             mMainLayout.setVisibility(View.VISIBLE);
         } else {
-            mMainLayout.setBackground(getResources().getDrawable(R.color.background_tabs));
+            mMainLayout.setBackgroundDrawable(getResources().getDrawable(R.color.background_tabs));
         }
     }
 

@@ -127,7 +127,7 @@ public class TabsPanel extends LinearLayout
     }
 
     private void initialize() {
-        mMainContainer = getRootView();
+        mMainContainer = findViewById(R.id.tabs_panel);
 
         mHeader = (RelativeLayout) findViewById(R.id.tabs_panel_header);
         mTabsContainer = (TabsLayoutContainer) findViewById(R.id.tabs_container);
@@ -385,7 +385,6 @@ public class TabsPanel extends LinearLayout
     }
 
     public void show(Panel panelToShow) {
-
         if (!isShown())
             setVisibility(View.VISIBLE);
 
