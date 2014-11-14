@@ -15,6 +15,7 @@ import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
 import org.mozilla.gecko.Tabs;
 
+import android.animation.LayoutTransition;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
@@ -74,6 +75,53 @@ class TabsGridLayout extends GridView
         final int padding = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding);
         final int paddingTop = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding_top);
         setPadding(padding, paddingTop, padding, padding);
+
+    }
+
+
+    private void animateRemoveTab(Tab removedTab) {
+        final int removedPosition = adapter.getPositionForTab(removedTab);
+
+        final View removedView = getViewForTab(removedTab);
+
+        // The removed position might not have a matching child view
+        // when it's not within the visible range of positions in the strip.
+        if (removedView == null) {
+            return;
+        }
+
+        // We don't animate the removed child view (it just disappears)
+        // but we still need its size of animate all affected children
+        // within the visible viewport.
+        final int removedSize = removedView.getWidth() + getItemMargin();
+
+        getViewTreeObserver().addOnPreDrawListener(new OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                getViewTreeObserver().removeOnPreDrawListener(this);
+
+                final int firstPosition = getFirstVisiblePosition();
+                final List<Animator> childAnimators = new ArrayList<Animator>();
+
+                final int childCount = getChildCount();
+                for (int i = removedPosition - firstPosition; i < childCount; i++) {
+                    final View child = getChildAt(i);
+
+                    // TODO: optimize with Valueresolver
+                    final ObjectAnimator animator =
+                            ObjectAnimator.ofFloat(child, "translationX", removedSize, 0);
+                    childAnimators.add(animator);
+                }
+
+                final AnimatorSet animatorSet = new AnimatorSet();
+                animatorSet.playTogether(childAnimators);
+                animatorSet.setDuration(ANIM_TIME_MS);
+                animatorSet.setInterpolator(ANIM_INTERPOLATOR);
+                animatorSet.start();
+
+                return true;
+            }
+        });
     }
 
     private class TabsGridLayoutAdapter extends TabsLayoutAdapter {
@@ -89,7 +137,7 @@ class TabsGridLayout extends GridView
                 public void onClick(View v) {
                     TabsLayoutItemView itemView = (TabsLayoutItemView) v.getTag();
                     Tab tab = Tabs.getInstance().getTab(itemView.getTabId());
-                    Tabs.getInstance().closeTab(tab);
+                    removeTab(tab);
                 }
             };
 
@@ -119,6 +167,19 @@ class TabsGridLayout extends GridView
             // the close animation. Remove any of those properties.
             resetTransforms(view);
         }
+    }
+
+    void addTab(Tab tab) {
+        // Refresh the list to make sure the new tab is
+        // added in the right position.
+        refreshTabs();
+        animateNewTab(tab);
+    }
+
+    void removeTab(Tab tab) {
+        animateRemoveTab(tab);
+        Tabs.getInstance().closeTab(tab);
+        updateSelectedPosition(false);
     }
 
     @Override
