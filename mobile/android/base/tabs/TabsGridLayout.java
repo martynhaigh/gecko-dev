@@ -5,35 +5,34 @@
 
 package org.mozilla.gecko.tabs;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
-import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
 import org.mozilla.gecko.Tabs;
+import org.mozilla.gecko.animation.ViewHelper;
+import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
 
-import android.animation.LayoutTransition;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.os.Build;
 import android.util.AttributeSet;
-import android.util.TypedValue;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.animation.DecelerateInterpolator;
-import android.widget.GridView;
-import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.GridView;
 import com.nineoldandroids.animation.Animator;
 import com.nineoldandroids.animation.AnimatorSet;
 import com.nineoldandroids.animation.ObjectAnimator;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A tabs layout implementation for the tablet redesign (bug 1014156).
@@ -271,6 +270,8 @@ class TabsGridLayout extends GridView
     private void animateRemoveTab(Tab removedTab) {
         final int removedPosition = mTabsAdapter.getPositionForTab(removedTab);
 
+        Log.d("GridView", "Removing #" + removedPosition + "  - " + removedTab.getTitle());
+
         final View removedView = getViewForTab(removedTab);
 
         // The removed position might not have a matching child view
@@ -287,37 +288,41 @@ class TabsGridLayout extends GridView
 
         final int numberOfColumns = getNumColumnsCompat();
 
+        final int firstPosition = getFirstVisiblePosition();
+
         getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override
             public boolean onPreDraw() {
                 getViewTreeObserver().removeOnPreDrawListener(this);
 
-                final int firstPosition = getFirstVisiblePosition();
+                final int lastPosition = getLastVisiblePosition();
+
+                Log.d("GridView", "visible : " + firstPosition + " - " + lastPosition);
                 final List<Animator> childAnimators = new ArrayList<>();
-                final int delayMultiple = 25; //in ms
+                final int delayMultiple = 20; //in ms
 
                 final int childCount = getChildCount();
+                Log.d("GridView", "childCount : " + childCount);
                 for (int x = 0, i = removedPosition - firstPosition; i < childCount; i++, x++) {
                     final View child = getChildAt(i);
                     ObjectAnimator animator;
                     if (i % numberOfColumns == numberOfColumns - 1) {
-                        // animate height as well as width
+                        // animate X & Y
                         animator = ObjectAnimator.ofFloat(child, "translationY", removedHeight, 0);
                         animator.setStartDelay(x * delayMultiple);
                         childAnimators.add(animator);
+
                         animator = ObjectAnimator.ofFloat(child, "translationX", -(removedWidth * numberOfColumns), 0);
                         animator.setStartDelay(x * delayMultiple);
                         childAnimators.add(animator);
 
                     } else {
-                        // just animate width
+                        // just animate X
                         // TODO: optimize with Valueresolver
-                        animator =
-                                ObjectAnimator.ofFloat(child, "translationX", removedWidth, 0);
+                        animator = ObjectAnimator.ofFloat(child, "translationX", removedWidth, 0);
                         animator.setStartDelay(x * delayMultiple);
                         childAnimators.add(animator);
                     }
-
                 }
 
                 final AnimatorSet animatorSet = new AnimatorSet();
