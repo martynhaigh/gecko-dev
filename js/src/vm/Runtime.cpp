@@ -262,7 +262,7 @@ JSRuntime::init(uint32_t maxbytes, uint32_t maxNurseryBytes)
     size_t openFlags = THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_SUSPEND_RESUME;
     HANDLE self = OpenThread(openFlags, false, GetCurrentThreadId());
     if (!self)
-        MOZ_CRASH("Unable to open thread handle");
+        return false;
     static_assert(sizeof(HANDLE) <= sizeof(ownerThreadNative_), "need bigger field");
     ownerThreadNative_ = (size_t)self;
 #else
@@ -545,7 +545,7 @@ InvokeInterruptCallback(JSContext *cx)
     if (cb(cx)) {
         // Debugger treats invoking the interrupt callback as a "step", so
         // invoke the onStep handler.
-        if (cx->compartment()->debugMode()) {
+        if (cx->compartment()->isDebuggee()) {
             ScriptFrameIter iter(cx);
             if (iter.script()->stepModeEnabled()) {
                 RootedValue rval(cx);

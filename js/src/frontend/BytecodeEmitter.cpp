@@ -3017,7 +3017,10 @@ EmitYieldOp(ExclusiveContext *cx, BytecodeEmitter *bce, JSOp op)
 
     SET_UINT24(bce->code(off), yieldIndex);
 
-    return bce->yieldOffsetList.append(bce->offset());
+    if (!bce->yieldOffsetList.append(bce->offset()))
+        return false;
+
+    return Emit1(cx, bce, JSOP_DEBUGAFTERYIELD) >= 0;
 }
 
 bool
@@ -4825,6 +4828,7 @@ EmitForOf(ExclusiveContext *cx, BytecodeEmitter *bce, StmtType type, ParseNode *
     MOZ_ASSERT_IF(type == STMT_SPREAD, !pn);
 
     ParseNode *forHead = pn ? pn->pn_left : nullptr;
+    ParseNode *forHeadExpr = forHead ? forHead->pn_kid3 : nullptr;
     ParseNode *forBody = pn ? pn->pn_right : nullptr;
 
     ParseNode *pn1 = forHead ? forHead->pn_kid1 : nullptr;
@@ -4837,7 +4841,7 @@ EmitForOf(ExclusiveContext *cx, BytecodeEmitter *bce, StmtType type, ParseNode *
         // current result object.
 
         // Compile the object expression to the right of 'of'.
-        if (!EmitTree(cx, bce, forHead->pn_kid3))
+        if (!EmitTree(cx, bce, forHeadExpr))
             return false;
         if (!EmitIterator(cx, bce))
             return false;
@@ -4917,7 +4921,7 @@ EmitForOf(ExclusiveContext *cx, BytecodeEmitter *bce, StmtType type, ParseNode *
 
     // COME FROM the beginning of the loop to here.
     SetJumpOffsetAt(bce, jmp);
-    if (!EmitLoopEntry(cx, bce, nullptr))
+    if (!EmitLoopEntry(cx, bce, forHeadExpr))
         return false;
 
     if (type == STMT_FOR_OF_LOOP) {
