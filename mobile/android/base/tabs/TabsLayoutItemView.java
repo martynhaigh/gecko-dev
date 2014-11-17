@@ -99,12 +99,13 @@ public class TabsLayoutItemView extends LinearLayout
 
                 // Ideally we want the close button hit area to be 40x40dp but we are constrained by the height of the parent, so
                 // we make it as tall as the parent view and 40dp across.
-                final int TARGET_HIT_AREA = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40, getResources().getDisplayMetrics());;
+                final int targetHitArea = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40, getResources().getDisplayMetrics());;
                 final View parent = ((View) mCloseButton.getParent());
 
+
                 hitRect.top = 0;
-                hitRect.right = parent.getWidth();
-                hitRect.left = hitRect.right - TARGET_HIT_AREA;
+                hitRect.right = getWidth();
+                hitRect.left = getWidth() - targetHitArea;
                 hitRect.bottom = parent.getHeight();
 
                 setTouchDelegate(new TouchDelegate(hitRect, mCloseButton));
