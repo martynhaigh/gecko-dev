@@ -44,8 +44,7 @@ class TabsGridLayout extends GridView
                                 Tabs.OnTabsChangedListener {
     private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
     private static final int ANIM_TIME_MS = 200;
-    private static final DecelerateInterpolator ANIM_INTERPOLATOR =
-            new DecelerateInterpolator();
+    private static final DecelerateInterpolator ANIM_INTERPOLATOR = new DecelerateInterpolator();
     private final Context mContext;
     private TabsPanel mTabsPanel;
 
