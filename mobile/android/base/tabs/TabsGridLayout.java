@@ -6,6 +6,7 @@
 package org.mozilla.gecko.tabs;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.mozilla.gecko.animation.ViewHelper;
 import org.mozilla.gecko.GeckoAppShell;
@@ -15,17 +16,23 @@ import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.tabs.TabsPanel.TabsLayout;
 import org.mozilla.gecko.Tabs;
 
-import android.animation.LayoutTransition;
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewTreeObserver;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.GridView;
 import android.view.ViewGroup;
 import android.widget.Button;
+import com.nineoldandroids.animation.Animator;
+import com.nineoldandroids.animation.AnimatorSet;
+import com.nineoldandroids.animation.ObjectAnimator;
 
 /**
  * A tabs layout implementation for the tablet redesign (bug 1014156).
@@ -36,7 +43,9 @@ class TabsGridLayout extends GridView
                      implements TabsLayout,
                                 Tabs.OnTabsChangedListener {
     private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
-
+    private static final int ANIM_TIME_MS = 200;
+    private static final DecelerateInterpolator ANIM_INTERPOLATOR =
+            new DecelerateInterpolator();
     private final Context mContext;
     private TabsPanel mTabsPanel;
 
@@ -75,53 +84,6 @@ class TabsGridLayout extends GridView
         final int padding = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding);
         final int paddingTop = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding_top);
         setPadding(padding, paddingTop, padding, padding);
-
-    }
-
-
-    private void animateRemoveTab(Tab removedTab) {
-        final int removedPosition = adapter.getPositionForTab(removedTab);
-
-        final View removedView = getViewForTab(removedTab);
-
-        // The removed position might not have a matching child view
-        // when it's not within the visible range of positions in the strip.
-        if (removedView == null) {
-            return;
-        }
-
-        // We don't animate the removed child view (it just disappears)
-        // but we still need its size of animate all affected children
-        // within the visible viewport.
-        final int removedSize = removedView.getWidth() + getItemMargin();
-
-        getViewTreeObserver().addOnPreDrawListener(new OnPreDrawListener() {
-            @Override
-            public boolean onPreDraw() {
-                getViewTreeObserver().removeOnPreDrawListener(this);
-
-                final int firstPosition = getFirstVisiblePosition();
-                final List<Animator> childAnimators = new ArrayList<Animator>();
-
-                final int childCount = getChildCount();
-                for (int i = removedPosition - firstPosition; i < childCount; i++) {
-                    final View child = getChildAt(i);
-
-                    // TODO: optimize with Valueresolver
-                    final ObjectAnimator animator =
-                            ObjectAnimator.ofFloat(child, "translationX", removedSize, 0);
-                    childAnimators.add(animator);
-                }
-
-                final AnimatorSet animatorSet = new AnimatorSet();
-                animatorSet.playTogether(childAnimators);
-                animatorSet.setDuration(ANIM_TIME_MS);
-                animatorSet.setInterpolator(ANIM_INTERPOLATOR);
-                animatorSet.start();
-
-                return true;
-            }
-        });
     }
 
     private class TabsGridLayoutAdapter extends TabsLayoutAdapter {
@@ -137,7 +99,7 @@ class TabsGridLayout extends GridView
                 public void onClick(View v) {
                     TabsLayoutItemView itemView = (TabsLayoutItemView) v.getTag();
                     Tab tab = Tabs.getInstance().getTab(itemView.getTabId());
-                    removeTab(tab);
+                    closeTab(tab);
                 }
             };
 
@@ -167,19 +129,6 @@ class TabsGridLayout extends GridView
             // the close animation. Remove any of those properties.
             resetTransforms(view);
         }
-    }
-
-    void addTab(Tab tab) {
-        // Refresh the list to make sure the new tab is
-        // added in the right position.
-        refreshTabs();
-        animateNewTab(tab);
-    }
-
-    void removeTab(Tab tab) {
-        animateRemoveTab(tab);
-        Tabs.getInstance().closeTab(tab);
-        updateSelectedPosition(false);
     }
 
     @Override
@@ -304,5 +253,101 @@ class TabsGridLayout extends GridView
                 Tabs.getInstance().closeTab(tab, false);
             }
         }
+    }
+
+    void closeTab(Tab tab) {
+        animateRemoveTab(tab);
+        Tabs.getInstance().closeTab(tab);
+
+        updateSelectedPosition();
+    }
+
+    private View getViewForTab(Tab tab) {
+        final int position = mTabsAdapter.getPositionForTab(tab);
+        return getChildAt(position - getFirstVisiblePosition());
+    }
+
+    private void animateRemoveTab(Tab removedTab) {
+        final int removedPosition = mTabsAdapter.getPositionForTab(removedTab);
+
+        final View removedView = getViewForTab(removedTab);
+
+        // The removed position might not have a matching child view
+        // when it's not within the visible range of positions in the strip.
+        if (removedView == null) {
+            return;
+        }
+
+        // We don't animate the removed child view (it just disappears)
+        // but we still need its size of animate all affected children
+        // within the visible viewport.
+        final int removedWidth = removedView.getWidth();
+        final int removedHeight = removedView.getHeight();
+
+        final int numberOfColumns = getNumColumnsCompat();
+
+        getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                getViewTreeObserver().removeOnPreDrawListener(this);
+
+                final int firstPosition = getFirstVisiblePosition();
+                final List<Animator> childAnimators = new ArrayList<>();
+                final int delayMultiple = 25; //in ms
+
+                final int childCount = getChildCount();
+                for (int x = 0, i = removedPosition - firstPosition; i < childCount; i++, x++) {
+                    final View child = getChildAt(i);
+                    ObjectAnimator animator;
+                    if (i % numberOfColumns == numberOfColumns - 1) {
+                        // animate height as well as width
+                        animator = ObjectAnimator.ofFloat(child, "translationY", removedHeight, 0);
+                        animator.setStartDelay(x * delayMultiple);
+                        childAnimators.add(animator);
+                        animator = ObjectAnimator.ofFloat(child, "translationX", -(removedWidth * numberOfColumns), 0);
+                        animator.setStartDelay(x * delayMultiple);
+                        childAnimators.add(animator);
+
+                    } else {
+                        // just animate width
+                        // TODO: optimize with Valueresolver
+                        animator =
+                                ObjectAnimator.ofFloat(child, "translationX", removedWidth, 0);
+                        animator.setStartDelay(x * delayMultiple);
+                        childAnimators.add(animator);
+                    }
+
+                }
+
+                final AnimatorSet animatorSet = new AnimatorSet();
+                animatorSet.playTogether(childAnimators);
+                animatorSet.setDuration(ANIM_TIME_MS);
+                animatorSet.setInterpolator(ANIM_INTERPOLATOR);
+                animatorSet.start();
+
+                return true;
+            }
+        });
+    }
+    private int getNumColumnsCompat() {
+        if (Build.VERSION.SDK_INT >= 11) {
+            return getNumColumnsCompat11();
+
+        } else {
+            int columns = 0;
+            int children = getChildCount();
+            if (children > 0) {
+                int width = getChildAt(0).getMeasuredWidth();
+                if (width > 0) {
+                    columns = getWidth() / width;
+                }
+            }
+            return columns > 0 ? columns : AUTO_FIT;
+        }
+    }
+
+    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
+    private int getNumColumnsCompat11() {
+        return getNumColumns();
     }
 }
