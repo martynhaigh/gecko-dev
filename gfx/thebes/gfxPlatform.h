@@ -247,6 +247,8 @@ public:
       return false;
     }
 
+    virtual void FenceContentDrawing() {}
+    virtual void WaitContentDrawing() {}
     /**
      * Returns true if we should use Azure to render content with aTarget. For
      * example, it is possible that we are using Direct2D for rendering and thus
@@ -259,6 +261,14 @@ public:
     bool SupportsAzureContentForType(mozilla::gfx::BackendType aType) {
       return BackendTypeBit(aType) & mContentBackendBitmask;
     }
+
+    /// This function lets us know if the current preferences/platform
+    /// combination allows for both accelerated and not accelerated canvas
+    /// implementations.  If it does, and other relevant preferences are
+    /// asking for it, we will examine the commands in the first few seconds
+    /// of the canvas usage, and potentially change to accelerated or
+    /// non-accelerated canvas.
+    virtual bool HaveChoiceOfHWAndSWCanvas();
 
     virtual bool UseAcceleratedSkiaCanvas();
     virtual void InitializeSkiaCacheLimits();
@@ -297,6 +307,16 @@ public:
     virtual nsresult GetFontList(nsIAtom *aLangGroup,
                                  const nsACString& aGenericFamily,
                                  nsTArray<nsString>& aListOfFonts);
+
+    int GetTileWidth();
+    int GetTileHeight();
+    void SetTileSize(int aWidth, int aHeight);
+    /**
+     * Calling this function will compute and set the ideal tile size for the
+     * platform. This should only be called in the parent process; child processes
+     * should be updated via SetTileSize to match the value computed in the parent.
+     */
+    void ComputeTileSize();
 
     /**
      * Rebuilds the any cached system font lists
@@ -665,6 +685,9 @@ private:
     mozilla::gfx::BackendType mContentBackend;
     // Bitmask of backend types we can use to render content
     uint32_t mContentBackendBitmask;
+
+    int mTileWidth;
+    int mTileHeight;
 
     mozilla::widget::GfxInfoCollector<gfxPlatform> mAzureCanvasBackendCollector;
 

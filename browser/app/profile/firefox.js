@@ -255,6 +255,7 @@ pref("lightweightThemes.recommendedThemes", "[{\"id\":\"recommended-1\",\"homepa
 
 // UI tour experience.
 pref("browser.uitour.enabled", true);
+pref("browser.uitour.loglevel", "Error");
 pref("browser.uitour.requireSecure", true);
 pref("browser.uitour.themeOrigin", "https://addons.mozilla.org/%LOCALE%/firefox/themes/");
 pref("browser.uitour.pinnedTabUrl", "https://support.mozilla.org/%LOCALE%/kb/pinned-tabs-keep-favorite-websites-open");
@@ -1318,7 +1319,7 @@ pref("devtools.devedition.promo.shown", false);
 pref("devtools.devedition.promo.url", "https://mozilla.org/firefox/developer");
 
 // Only potentially show in beta release
-#ifdef MOZ_UPDATE_CHANNEL == beta
+#if MOZ_UPDATE_CHANNEL == beta
   pref("devtools.devedition.promo.enabled", true);
 #else
   pref("devtools.devedition.promo.enabled", false);

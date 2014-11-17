@@ -415,8 +415,6 @@ nsDOMWindowUtils::SetDisplayPortMarginsForElement(float aLeftMargin,
                                                   float aTopMargin,
                                                   float aRightMargin,
                                                   float aBottomMargin,
-                                                  uint32_t aAlignmentX,
-                                                  uint32_t aAlignmentY,
                                                   nsIDOMElement* aElement,
                                                   uint32_t aPriority)
 {
@@ -444,14 +442,14 @@ nsDOMWindowUtils::SetDisplayPortMarginsForElement(float aLeftMargin,
   }
 
   // Note order change of arguments between our function signature and
-  // LayerMargin constructor.
-  LayerMargin displayportMargins(aTopMargin,
-                                 aRightMargin,
-                                 aBottomMargin,
-                                 aLeftMargin);
+  // ScreenMargin constructor.
+  ScreenMargin displayportMargins(aTopMargin,
+                                  aRightMargin,
+                                  aBottomMargin,
+                                  aLeftMargin);
 
   nsLayoutUtils::SetDisplayPortMargins(content, presShell, displayportMargins,
-                                       aAlignmentX, aAlignmentY, aPriority);
+                                       aPriority);
 
   return NS_OK;
 }

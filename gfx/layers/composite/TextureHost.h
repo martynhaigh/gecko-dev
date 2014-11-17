@@ -506,6 +506,8 @@ public:
   virtual TextureHostOGL* AsHostOGL() { return nullptr; }
 
 protected:
+  void RecycleTexture(TextureFlags aFlags);
+
   PTextureParent* mActor;
   TextureFlags mFlags;
 
@@ -567,6 +569,8 @@ public:
 protected:
   bool Upload(nsIntRegion *aRegion = nullptr);
   bool MaybeUpload(nsIntRegion *aRegion = nullptr);
+
+  void InitSize();
 
   RefPtr<Compositor> mCompositor;
   RefPtr<DataTextureSource> mFirstSource;

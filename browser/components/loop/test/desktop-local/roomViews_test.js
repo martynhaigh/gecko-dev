@@ -65,6 +65,7 @@ describe("loop.roomViews", function () {
         roomState: ROOM_STATES.INIT,
         audioMuted: false,
         videoMuted: false,
+        failureReason: undefined,
         foo: "bar"
       });
     });
@@ -239,6 +240,16 @@ describe("loop.roomViews", function () {
       it("should render the GenericFailureView if the roomState is `FAILED`",
         function() {
           activeRoomStore.setStoreState({roomState: ROOM_STATES.FAILED});
+
+          view = mountTestComponent();
+
+          TestUtils.findRenderedComponentWithType(view,
+            loop.conversation.GenericFailureView);
+        });
+
+      it("should render the GenericFailureView if the roomState is `FULL`",
+        function() {
+          activeRoomStore.setStoreState({roomState: ROOM_STATES.FULL});
 
           view = mountTestComponent();
 

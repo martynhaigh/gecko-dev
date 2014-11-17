@@ -4103,8 +4103,22 @@ CodeGenerator::generateBody()
         if (current->isTrivial())
             continue;
 
-        JitSpew(JitSpew_Codegen, "# block%lu%s:", i,
+#ifdef DEBUG
+        const char *filename = nullptr;
+        unsigned lineNumber = 0, columnNumber = 0;
+        if (current->mir()->info().script()) {
+            filename = current->mir()->info().script()->filename();
+            if (current->mir()->pc())
+                lineNumber = PCToLineNumber(current->mir()->info().script(), current->mir()->pc(),
+                                            &columnNumber);
+        } else {
+            lineNumber = current->mir()->lineno();
+            columnNumber = current->mir()->columnIndex();
+        }
+        JitSpew(JitSpew_Codegen, "# block%lu %s:%u:%u%s:", i,
+                filename ? filename : "?", lineNumber, columnNumber,
                 current->mir()->isLoopHeader() ? " (loop header)" : "");
+#endif
 
         masm.bind(current->label());
 
@@ -7624,20 +7638,6 @@ CodeGenerator::link(JSContext *cx, types::CompilerConstraintList *constraints)
         return false;
     discardIonCode.ionScript = ionScript;
 
-    // Lock the runtime against interrupt callbacks during the link.
-    // We don't want an interrupt request to protect the code for the script
-    // before it has been filled in, as we could segv before the runtime's
-    // patchable backedges have been fully updated.
-    JSRuntime::AutoLockForInterrupt lock(cx->runtime());
-
-    // Make sure we don't segv while filling in the code, to avoid deadlocking
-    // inside the signal handler.
-    cx->runtime()->jitRuntime()->ensureIonCodeAccessible(cx->runtime());
-
-    // Implicit interrupts are used only for sequential code. In parallel mode
-    // use the normal executable allocator so that we cannot segv during
-    // execution off the main thread.
-    //
     // Also, note that creating the code here during an incremental GC will
     // trace the code and mark all GC things it refers to. This captures any
     // read barriers which were skipped while compiling the script off thread.

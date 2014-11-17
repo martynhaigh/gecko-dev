@@ -8675,6 +8675,10 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
 
     RootedObject obj(cx, &callee.toObject());
     if (!obj->is<JSFunction>()) {
+        // Try to attach a stub for a call/construct hook on the object.
+        // Ignore proxies, which are special cased by callHook/constructHook.
+        if (obj->is<ProxyObject>())
+            return true;
         if (JSNative hook = constructing ? obj->constructHook() : obj->callHook()) {
             if (op != JSOP_FUNAPPLY && !isSpread && !useNewType) {
                 RootedObject templateObject(cx);
@@ -8684,7 +8688,8 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
 
                 JitSpew(JitSpew_BaselineIC, "  Generating Call_ClassHook stub");
                 ICCall_ClassHook::Compiler compiler(cx, stub->fallbackMonitorStub()->firstMonitorStub(),
-                                                    obj->getClass(), hook, templateObject, constructing);
+                                                    obj->getClass(), hook, templateObject,
+                                                    script->pcToOffset(pc), constructing);
                 ICStub *newStub = compiler.getStub(compiler.getStubSpace(script));
                 if (!newStub)
                     return false;
@@ -8809,6 +8814,20 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
         if (stub->nativeStubCount() >= ICCall_Fallback::MAX_NATIVE_STUBS) {
             JitSpew(JitSpew_BaselineIC,
                     "  Too many Call_Native stubs. TODO: add Call_AnyNative!");
+            return true;
+        }
+
+        if (fun->native() == intrinsic_IsSuspendedStarGenerator) {
+            // This intrinsic only appears in self-hosted code.
+            MOZ_ASSERT(argc == 1);
+            JitSpew(JitSpew_BaselineIC, "  Generating Call_IsSuspendedStarGenerator stub");
+
+            ICCall_IsSuspendedStarGenerator::Compiler compiler(cx);
+            ICStub *newStub = compiler.getStub(compiler.getStubSpace(script));
+            if (!newStub)
+                return false;
+
+            stub->addNewStub(newStub);
             return true;
         }
 
@@ -9766,6 +9785,48 @@ ICCall_StringSplit::Compiler::generateStubCode(MacroAssembler &masm)
 }
 
 bool
+ICCall_IsSuspendedStarGenerator::Compiler::generateStubCode(MacroAssembler &masm)
+{
+    // The IsSuspendedStarGenerator intrinsic is only called in self-hosted
+    // code, so it's safe to assume we have a single argument and the callee
+    // is our intrinsic.
+
+    GeneralRegisterSet regs = availableGeneralRegs(0);
+
+    // Load the argument.
+    Address argAddr(BaselineStackReg, ICStackValueOffset);
+    ValueOperand argVal = regs.takeAnyValue();
+    masm.loadValue(argAddr, argVal);
+
+    // Check if it's an object.
+    Label returnFalse;
+    Register genObj = regs.takeAny();
+    masm.branchTestObject(Assembler::NotEqual, argVal, &returnFalse);
+    masm.unboxObject(argVal, genObj);
+
+    // Check if it's a StarGeneratorObject.
+    Register scratch = regs.takeAny();
+    masm.branchTestObjClass(Assembler::NotEqual, genObj, scratch, &StarGeneratorObject::class_,
+                            &returnFalse);
+
+    // If the yield index slot holds an int32 value < YIELD_INDEX_CLOSING,
+    // the generator is suspended.
+    masm.loadValue(Address(genObj, GeneratorObject::offsetOfYieldIndexSlot()), argVal);
+    masm.branchTestInt32(Assembler::NotEqual, argVal, &returnFalse);
+    masm.unboxInt32(argVal, scratch);
+    masm.branch32(Assembler::AboveOrEqual, scratch, Imm32(StarGeneratorObject::YIELD_INDEX_CLOSING),
+                  &returnFalse);
+
+    masm.moveValue(BooleanValue(true), R0);
+    EmitReturnFromIC(masm);
+
+    masm.bind(&returnFalse);
+    masm.moveValue(BooleanValue(false), R0);
+    EmitReturnFromIC(masm);
+    return true;
+}
+
+bool
 ICCall_Native::Compiler::generateStubCode(MacroAssembler &masm)
 {
     Label failure;
@@ -9938,7 +9999,7 @@ ICCall_ClassHook::Compiler::generateStubCode(MacroAssembler &masm)
 
     // If needed, update SPS Profiler frame entry.  At this point, BaselineTailCallReg
     // and scratch can be clobbered.
-    emitProfilingUpdate(masm, BaselineTailCallReg, scratch, ICCall_Native::offsetOfPCOffset());
+    emitProfilingUpdate(masm, BaselineTailCallReg, scratch, ICCall_ClassHook::offsetOfPCOffset());
 
     // Execute call.
     masm.setupUnalignedABICall(3, scratch);
@@ -11312,11 +11373,13 @@ ICCall_Native::Clone(JSContext *cx, ICStubSpace *space, ICStub *firstMonitorStub
 }
 
 ICCall_ClassHook::ICCall_ClassHook(JitCode *stubCode, ICStub *firstMonitorStub,
-                                   const Class *clasp, Native native, HandleObject templateObject)
+                                   const Class *clasp, Native native,
+                                   HandleObject templateObject, uint32_t pcOffset)
   : ICMonitoredStub(ICStub::Call_ClassHook, stubCode, firstMonitorStub),
     clasp_(clasp),
     native_(JS_FUNC_TO_DATA_PTR(void *, native)),
-    templateObject_(templateObject)
+    templateObject_(templateObject),
+    pcOffset_(pcOffset)
 {
 #if defined(JS_ARM_SIMULATOR) || defined(JS_MIPS_SIMULATOR)
     // The simulator requires VM calls to be redirected to a special swi
@@ -11332,7 +11395,7 @@ ICCall_ClassHook::Clone(JSContext *cx, ICStubSpace *space, ICStub *firstMonitorS
 {
     RootedObject templateObject(cx, other.templateObject_);
     ICCall_ClassHook *res = New(space, other.jitCode(), firstMonitorStub,
-                                other.clasp(), nullptr, templateObject);
+                                other.clasp(), nullptr, templateObject, other.pcOffset_);
     if (res)
         res->native_ = other.native();
     return res;
