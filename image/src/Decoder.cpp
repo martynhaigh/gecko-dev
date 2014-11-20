@@ -20,6 +20,7 @@ Decoder::Decoder(RasterImage &aImage)
   , mProgress(NoProgress)
   , mImageData(nullptr)
   , mColormap(nullptr)
+  , mChunkCount(0)
   , mDecodeFlags(0)
   , mBytesDecoded(0)
   , mDecodeDone(false)
@@ -27,6 +28,7 @@ Decoder::Decoder(RasterImage &aImage)
   , mFrameCount(0)
   , mFailCode(NS_OK)
   , mNeedsNewFrame(false)
+  , mNeedsToFlushData(false)
   , mInitialized(false)
   , mSizeDecode(false)
   , mInFrame(false)
@@ -35,6 +37,10 @@ Decoder::Decoder(RasterImage &aImage)
 
 Decoder::~Decoder()
 {
+  MOZ_ASSERT(mProgress == NoProgress,
+             "Destroying Decoder without taking all its progress changes");
+  MOZ_ASSERT(mInvalidRect.IsEmpty(),
+             "Destroying Decoder without taking all its invalidations");
   mInitialized = false;
 }
 
@@ -90,16 +96,26 @@ Decoder::Write(const char* aBuffer, uint32_t aCount, DecodeStrategy aStrategy)
   PROFILER_LABEL("ImageDecoder", "Write",
     js::ProfileEntry::Category::GRAPHICS);
 
-  MOZ_ASSERT(NS_IsMainThread() || aStrategy == DECODE_ASYNC);
+  MOZ_ASSERT(NS_IsMainThread() || aStrategy == DecodeStrategy::ASYNC);
 
   // We're strict about decoder errors
   MOZ_ASSERT(!HasDecoderError(),
              "Not allowed to make more decoder calls after error!");
 
+  // Begin recording telemetry data.
+  TimeStamp start = TimeStamp::Now();
+  mChunkCount++;
+
   // Keep track of the total number of bytes written.
   mBytesDecoded += aCount;
 
-  // If a data error occured, just ignore future data
+  // If we're flushing data, clear the flag.
+  if (aBuffer == nullptr && aCount == 0) {
+    MOZ_ASSERT(mNeedsToFlushData, "Flushing when we don't need to");
+    mNeedsToFlushData = false;
+  }
+
+  // If a data error occured, just ignore future data.
   if (HasDataError())
     return;
 
@@ -113,18 +129,23 @@ Decoder::Write(const char* aBuffer, uint32_t aCount, DecodeStrategy aStrategy)
 
   // If we're a synchronous decoder and we need a new frame to proceed, let's
   // create one and call it again.
-  while (aStrategy == DECODE_SYNC && NeedsNewFrame() && !HasDataError()) {
-    nsresult rv = AllocateFrame();
+  if (aStrategy == DecodeStrategy::SYNC) {
+    while (NeedsNewFrame() && !HasDataError()) {
+      nsresult rv = AllocateFrame();
 
-    if (NS_SUCCEEDED(rv)) {
-      // Tell the decoder to use the data it saved when it asked for a new frame.
-      WriteInternal(nullptr, 0, aStrategy);
+      if (NS_SUCCEEDED(rv)) {
+        // Use the data we saved when we asked for a new frame.
+        WriteInternal(nullptr, 0, aStrategy);
+      }
     }
   }
+
+  // Finish telemetry.
+  mDecodeTime += (TimeStamp::Now() - start);
 }
 
 void
-Decoder::Finish(RasterImage::eShutdownIntent aShutdownIntent)
+Decoder::Finish(ShutdownReason aReason)
 {
   MOZ_ASSERT(NS_IsMainThread());
 
@@ -161,7 +182,7 @@ Decoder::Finish(RasterImage::eShutdownIntent aShutdownIntent)
     }
 
     bool usable = !HasDecoderError();
-    if (aShutdownIntent != RasterImage::eShutdownIntent_NotNeeded && !HasDecoderError()) {
+    if (aReason != ShutdownReason::NOT_NEEDED && !HasDecoderError()) {
       // If we only have a data error, we're usable if we have at least one complete frame.
       if (GetCompleteFrameCount() == 0) {
         usable = false;
@@ -177,7 +198,7 @@ Decoder::Finish(RasterImage::eShutdownIntent aShutdownIntent)
       PostDecodeDone();
     } else {
       if (!IsSizeDecode()) {
-        mProgress |= FLAG_DECODE_STOPPED | FLAG_ONLOAD_UNBLOCKED;
+        mProgress |= FLAG_DECODE_COMPLETE | FLAG_ONLOAD_UNBLOCKED;
       }
       mProgress |= FLAG_HAS_ERROR;
     }
@@ -242,6 +263,12 @@ Decoder::AllocateFrame()
   // so they can tell us if they need yet another.
   mNeedsNewFrame = false;
 
+  // If we've received any data at all, we may have pending data that needs to
+  // be flushed now that we have a frame to decode into.
+  if (mBytesDecoded > 0) {
+    mNeedsToFlushData = true;
+  }
+
   return rv;
 }
 
@@ -281,7 +308,13 @@ Decoder::PostSize(int32_t aWidth,
   mImageMetadata.SetSize(aWidth, aHeight, aOrientation);
 
   // Record this notification.
-  mProgress |= FLAG_HAS_SIZE;
+  mProgress |= FLAG_SIZE_AVAILABLE;
+}
+
+void
+Decoder::PostHasTransparency()
+{
+  mProgress |= FLAG_HAS_TRANSPARENCY;
 }
 
 void
@@ -330,7 +363,7 @@ Decoder::PostFrameStop(FrameBlender::FrameAlpha aFrameAlpha /* = FrameBlender::k
   mCurrentFrame->SetBlendMethod(aBlendMethod);
   mCurrentFrame->ImageUpdated(mCurrentFrame->GetRect());
 
-  mProgress |= FLAG_FRAME_STOPPED | FLAG_ONLOAD_UNBLOCKED;
+  mProgress |= FLAG_FRAME_COMPLETE | FLAG_ONLOAD_UNBLOCKED;
 }
 
 void
@@ -356,7 +389,7 @@ Decoder::PostDecodeDone(int32_t aLoopCount /* = 0 */)
   mImageMetadata.SetLoopCount(aLoopCount);
   mImageMetadata.SetIsNonPremultiplied(GetDecodeFlags() & DECODER_NO_PREMULTIPLY_ALPHA);
 
-  mProgress |= FLAG_DECODE_STOPPED;
+  mProgress |= FLAG_DECODE_COMPLETE;
 }
 
 void

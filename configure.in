@@ -71,7 +71,7 @@ GCONF_VERSION=1.2.1
 GIO_VERSION=2.20
 STARTUP_NOTIFICATION_VERSION=0.8
 DBUS_VERSION=0.60
-SQLITE_VERSION=3.8.7.1
+SQLITE_VERSION=3.8.7.2
 
 MSMANIFEST_TOOL=
 
@@ -7161,6 +7161,7 @@ if test -n "$MOZ_REPLACE_MALLOC" -a -z "$MOZ_MEMORY"; then
     dnl deliberate choice not to enable it (bug 702250, for instance)
     AC_MSG_ERROR([--enable-replace-malloc requires --enable-jemalloc])
 elif test -n "$MOZ_REPLACE_MALLOC"; then
+    AC_DEFINE(MOZ_REPLACE_MALLOC)
     MOZ_NATIVE_JEMALLOC=
 
     dnl Replace-malloc Mac linkage quirks
@@ -7305,7 +7306,7 @@ dnl our own linker.
 if test "$OS_TARGET" = Android; then
     MOZ_GLUE_WRAP_LDFLAGS="${MOZ_GLUE_WRAP_LDFLAGS} -Wl,--wrap=PR_GetEnv,--wrap=PR_SetEnv"
     if test "$MOZ_WIDGET_TOOLKIT" = gonk -a -n "$MOZ_NUWA_PROCESS"; then
-        MOZ_GLUE_WRAP_LDFLAGS="${MOZ_GLUE_WRAP_LDFLAGS} -Wl,--wrap=pthread_create,--wrap=epoll_wait,--wrap=poll,--wrap=pthread_cond_timedwait,--wrap=__pthread_cond_timedwait,--wrap=pthread_cond_wait,--wrap=epoll_create,--wrap=epoll_ctl,--wrap=close,--wrap=pthread_key_create,--wrap=pthread_key_delete,--wrap=socketpair,--wrap=pthread_self,--wrap=pthread_mutex_lock,--wrap=pthread_join,--wrap=pipe,--wrap=pipe2,--wrap=tgkill"
+        MOZ_GLUE_WRAP_LDFLAGS="${MOZ_GLUE_WRAP_LDFLAGS} -Wl,--wrap=pthread_create,--wrap=epoll_wait,--wrap=poll,--wrap=pthread_cond_timedwait,--wrap=__pthread_cond_timedwait,--wrap=pthread_cond_wait,--wrap=epoll_create,--wrap=epoll_ctl,--wrap=close,--wrap=pthread_key_create,--wrap=pthread_key_delete,--wrap=socketpair,--wrap=pthread_self,--wrap=pthread_mutex_lock,--wrap=pthread_join,--wrap=pipe,--wrap=pipe2"
     fi
 fi
 
@@ -7383,17 +7384,7 @@ USE_ELF_HACK=1
 MOZ_ARG_DISABLE_BOOL(elf-hack,
 [  --disable-elf-hack      Disable elf hacks],
     [USE_ELF_HACK=],
-    [USE_ELF_HACK=F # Force enable elf-hack])
-
-# Disable elf hack for profiling because the built in profiler
-# doesn't read the segments properly with elf hack. This is
-# temporary and should be fixed soon in the profiler.
-if test "$MOZ_PROFILING" = 1; then
-  if test "$USE_ELF_HACK" = F; then
-    AC_ERROR([--enable-elf-hack is not compatible with --enable-profiling])
-  fi
-  USE_ELF_HACK=
-fi
+    [USE_ELF_HACK=1])
 
 # Only enable elfhack where supported
 if test "$USE_ELF_HACK" = 1; then
