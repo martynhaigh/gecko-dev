@@ -17,6 +17,7 @@
 #include "jswrapper.h"
 
 #include "gc/Barrier.h"
+#include "js/Debug.h"
 #include "js/HashTable.h"
 #include "vm/GlobalObject.h"
 #include "vm/SavedStacks.h"
@@ -176,7 +177,10 @@ class Debugger : private mozilla::LinkedListElement<Debugger>
     friend class SavedStacks;
     friend class mozilla::LinkedListElement<Debugger>;
     friend bool (::JS_DefineDebuggerObject)(JSContext *cx, JS::HandleObject obj);
+    friend bool (::JS::dbg::IsDebugger)(JS::Value val);
     friend bool SavedStacksMetadataCallback(JSContext *cx, JSObject **pmetadata);
+    friend void JS::dbg::onNewPromise(JSContext *cx, HandleObject promise);
+    friend void JS::dbg::onPromiseSettled(JSContext *cx, HandleObject promise);
 
   public:
     enum Hook {
@@ -185,6 +189,8 @@ class Debugger : private mozilla::LinkedListElement<Debugger>
         OnNewScript,
         OnEnterFrame,
         OnNewGlobalObject,
+        OnNewPromise,
+        OnPromiseSettled,
         HookCount
     };
     enum {
@@ -369,6 +375,10 @@ class Debugger : private mozilla::LinkedListElement<Debugger>
     static bool setOnEnterFrame(JSContext *cx, unsigned argc, Value *vp);
     static bool getOnNewGlobalObject(JSContext *cx, unsigned argc, Value *vp);
     static bool setOnNewGlobalObject(JSContext *cx, unsigned argc, Value *vp);
+    static bool getOnNewPromise(JSContext *cx, unsigned argc, Value *vp);
+    static bool setOnNewPromise(JSContext *cx, unsigned argc, Value *vp);
+    static bool getOnPromiseSettled(JSContext *cx, unsigned argc, Value *vp);
+    static bool setOnPromiseSettled(JSContext *cx, unsigned argc, Value *vp);
     static bool getUncaughtExceptionHook(JSContext *cx, unsigned argc, Value *vp);
     static bool setUncaughtExceptionHook(JSContext *cx, unsigned argc, Value *vp);
     static bool getMemory(JSContext *cx, unsigned argc, Value *vp);
@@ -388,6 +398,7 @@ class Debugger : private mozilla::LinkedListElement<Debugger>
     static const JSPropertySpec properties[];
     static const JSFunctionSpec methods[];
 
+    static bool getNewestAbstractFramePtr(JSContext *cx);
     static bool updateExecutionObservabilityOfFrames(JSContext *cx, const ExecutionObservableSet &obs,
                                                      IsObserving observing);
     static bool updateExecutionObservabilityOfScripts(JSContext *cx, const ExecutionObservableSet &obs,
@@ -414,18 +425,22 @@ class Debugger : private mozilla::LinkedListElement<Debugger>
 
     static JSTrapStatus slowPathOnEnterFrame(JSContext *cx, AbstractFramePtr frame);
     static bool slowPathOnLeaveFrame(JSContext *cx, AbstractFramePtr frame, bool ok);
+    static JSTrapStatus slowPathOnDebuggerStatement(JSContext *cx, AbstractFramePtr frame);
     static JSTrapStatus slowPathOnExceptionUnwind(JSContext *cx, AbstractFramePtr frame);
     static void slowPathOnNewScript(JSContext *cx, HandleScript script,
                                     GlobalObject *compileAndGoGlobal);
     static void slowPathOnNewGlobalObject(JSContext *cx, Handle<GlobalObject *> global);
     static bool slowPathOnLogAllocationSite(JSContext *cx, HandleSavedFrame frame,
                                             int64_t when, GlobalObject::DebuggerVector &dbgs);
-    static JSTrapStatus dispatchHook(JSContext *cx, MutableHandleValue vp, Hook which);
+    static void slowPathPromiseHook(JSContext *cx, Hook hook, HandleObject promise);
+    static JSTrapStatus dispatchHook(JSContext *cx, MutableHandleValue vp, Hook which,
+                                     HandleObject payload);
 
     JSTrapStatus fireDebuggerStatement(JSContext *cx, MutableHandleValue vp);
     JSTrapStatus fireExceptionUnwind(JSContext *cx, MutableHandleValue vp);
     JSTrapStatus fireEnterFrame(JSContext *cx, AbstractFramePtr frame, MutableHandleValue vp);
     JSTrapStatus fireNewGlobalObject(JSContext *cx, Handle<GlobalObject *> global, MutableHandleValue vp);
+    JSTrapStatus firePromiseHook(JSContext *cx, Hook hook, HandleObject promise, MutableHandleValue vp);
 
     /*
      * Allocate and initialize a Debugger.Script instance whose referent is
@@ -472,6 +487,8 @@ class Debugger : private mozilla::LinkedListElement<Debugger>
     bool hasMemory() const;
     DebuggerMemory &memory() const;
 
+    GlobalObjectSet::Range allDebuggees() const { return debuggees.all(); }
+
     /*********************************** Methods for interaction with the GC. */
 
     /*
@@ -497,23 +514,48 @@ class Debugger : private mozilla::LinkedListElement<Debugger>
     static void findCompartmentEdges(JS::Zone *v, gc::ComponentFinder<JS::Zone> &finder);
 
     /*
-     * Announce to the debugger that the thread has entered a new JavaScript frame,
-     * |frame|. Call whatever hooks have been registered to observe new frames, and
-     * return a JSTrapStatus code indication how execution should proceed:
+     * JSTrapStatus Overview
+     * ---------------------
+     *
+     * The |onEnterFrame|, |onDebuggerStatement|, and |onExceptionUnwind|
+     * methods below return a JSTrapStatus code that indicates how execution
+     * should proceed:
      *
      * - JSTRAP_CONTINUE: Continue execution normally.
      *
-     * - JSTRAP_THROW: Throw an exception. onEnterFrame has set |cx|'s
+     * - JSTRAP_THROW: Throw an exception. The method has set |cx|'s
      *   pending exception to the value to be thrown.
      *
      * - JSTRAP_ERROR: Terminate execution (as is done when a script is terminated
-     *   for running too long). onEnterFrame has cleared |cx|'s pending
+     *   for running too long). The method has cleared |cx|'s pending
      *   exception.
      *
-     * - JSTRAP_RETURN: Return from the new frame immediately. onEnterFrame
-     *   has set |frame|'s return value appropriately.
+     * - JSTRAP_RETURN: Return from the new frame immediately. The method has
+     *   set the youngest JS frame's return value appropriately.
+     */
+
+    /*
+     * Announce to the debugger that the context has entered a new JavaScript
+     * frame, |frame|. Call whatever hooks have been registered to observe new
+     * frames.
      */
     static inline JSTrapStatus onEnterFrame(JSContext *cx, AbstractFramePtr frame);
+
+    /*
+     * Announce to the debugger a |debugger;| statement on has been
+     * encountered on the youngest JS frame on |cx|. Call whatever hooks have
+     * been registered to observe this.
+     *
+     * Note that this method is called for all |debugger;| statements,
+     * regardless of the frame's debuggee-ness.
+     */
+    static inline JSTrapStatus onDebuggerStatement(JSContext *cx, AbstractFramePtr frame);
+
+    /*
+     * Announce to the debugger that an exception has been thrown and propagated
+     * to |frame|. Call whatever hooks have been registered to observe this.
+     */
+    static inline JSTrapStatus onExceptionUnwind(JSContext *cx, AbstractFramePtr frame);
 
     /*
      * Announce to the debugger that the thread has exited a JavaScript frame, |frame|.
@@ -531,26 +573,6 @@ class Debugger : private mozilla::LinkedListElement<Debugger>
      */
     static inline bool onLeaveFrame(JSContext *cx, AbstractFramePtr frame, bool ok);
 
-    static inline JSTrapStatus onDebuggerStatement(JSContext *cx, AbstractFramePtr frame,
-                                                   MutableHandleValue vp);
-
-    /*
-     * Announce to the debugger that an exception has been thrown and propagated
-     * to |frame|. Call whatever hooks have been registered to observe this and
-     * return a JSTrapStatus code indication how execution should proceed:
-     *
-     * - JSTRAP_CONTINUE: Continue throwing the current exception.
-     *
-     * - JSTRAP_THROW: Throw another value. onExceptionUnwind has set |cx|'s
-     *   pending exception to the new value.
-     *
-     * - JSTRAP_ERROR: Terminate execution. onExceptionUnwind has cleared |cx|'s
-     *   pending exception.
-     *
-     * - JSTRAP_RETURN: Return from |frame|. onExceptionUnwind has cleared
-     *   |cx|'s pending exception and set |frame|'s return value.
-     */
-    static inline JSTrapStatus onExceptionUnwind(JSContext *cx, AbstractFramePtr frame);
     static inline void onNewScript(JSContext *cx, HandleScript script, GlobalObject *compileAndGoGlobal);
     static inline void onNewGlobalObject(JSContext *cx, Handle<GlobalObject *> global);
     static inline bool onLogAllocationSite(JSContext *cx, HandleSavedFrame frame, int64_t when);
@@ -826,7 +848,7 @@ Debugger::observesGlobal(GlobalObject *global) const
     return debuggees.has(global);
 }
 
-void
+/* static */ void
 Debugger::onNewScript(JSContext *cx, HandleScript script, GlobalObject *compileAndGoGlobal)
 {
     MOZ_ASSERT_IF(script->compileAndGo(), compileAndGoGlobal);

@@ -288,7 +288,7 @@ TextureClientD3D11::Unlock()
     HRESULT hr = device->CreateTexture2D(&desc, nullptr, byRef(tex));
 
     if (FAILED(hr)) {
-      gfx::gfxCriticalError() << "[D3D11] CreateTexture2D failure " << mSize << " Code: " << gfx::hexa(hr);
+      gfxCriticalError() << "[D3D11] CreateTexture2D failure " << mSize << " Code: " << gfx::hexa(hr);
       return;
     }
 
@@ -357,7 +357,7 @@ TextureClientD3D11::AllocateForSurface(gfx::IntSize aSize, TextureAllocationFlag
                                   aSize.width, aSize.height, 1, 1,
                                   D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
 
-    newDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+    newDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
 
     hr = d3d11device->CreateTexture2D(&newDesc, nullptr, byRef(mTexture));
   } else
@@ -369,13 +369,13 @@ TextureClientD3D11::AllocateForSurface(gfx::IntSize aSize, TextureAllocationFlag
       aSize.width, aSize.height, 1, 1,
       D3D10_BIND_RENDER_TARGET | D3D10_BIND_SHADER_RESOURCE);
 
-    newDesc.MiscFlags = D3D10_RESOURCE_MISC_SHARED;
+    newDesc.MiscFlags = D3D10_RESOURCE_MISC_SHARED_KEYEDMUTEX;
 
     hr = device->CreateTexture2D(&newDesc, nullptr, byRef(mTexture10));
   }
 
   if (FAILED(hr)) {
-    gfx::gfxCriticalError() << "[D3D11] CreateTexture2D failure " << aSize << " Code: " << gfx::hexa(hr);
+    gfxCriticalError() << "[D3D11] CreateTexture2D failure " << aSize << " Code: " << gfx::hexa(hr);
     return false;
   }
 
@@ -653,6 +653,18 @@ CompositingRenderTargetD3D11::CompositingRenderTargetD3D11(ID3D11Texture2D* aTex
   if (FAILED(hr)) {
     LOGD3D11("Failed to create RenderTargetView.");
   }
+}
+
+void
+CompositingRenderTargetD3D11::BindRenderTarget(ID3D11DeviceContext* aContext)
+{
+  if (mClearOnBind) {
+    FLOAT clear[] = { 0, 0, 0, 0 };
+    aContext->ClearRenderTargetView(mRTView, clear);
+    mClearOnBind = false;
+  }
+  ID3D11RenderTargetView* view = mRTView;
+  aContext->OMSetRenderTargets(1, &view, nullptr);
 }
 
 IntSize
