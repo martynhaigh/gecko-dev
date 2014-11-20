@@ -252,7 +252,6 @@ public class TabsPanel extends LinearLayout
             return resources.getDimensionPixelSize(R.dimen.tabs_layout_horizontal_height);
         }
 
-
         Rect windowRect = new Rect();
         tabsContainer.getWindowVisibleDisplayFrame(windowRect);
         int windowHeight = windowRect.bottom - windowRect.top;
