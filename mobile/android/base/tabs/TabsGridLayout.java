@@ -175,6 +175,10 @@ class TabsGridLayout extends GridView
                 break;
 
             case CLOSED:
+
+                if(mTabsAdapter.getCount() > 0) {
+                    animateRemoveTab(tab);
+                }
                if (tab.isPrivate() == mIsPrivate && mTabsAdapter.getCount() > 0) {
                    if (mTabsAdapter.removeTab(tab)) {
                        int selected = mTabsAdapter.getPositionForTab(Tabs.getInstance().getSelectedTab());
@@ -270,7 +274,7 @@ class TabsGridLayout extends GridView
         //((TabsLayoutItemView) v.getTag()).setVisibility(View.INVISIBLE);
         TabsLayoutItemView itemView = (TabsLayoutItemView) v.getTag();
         Tab tab = Tabs.getInstance().getTab(itemView.getTabId());
-        animateRemoveTab(v, tab);
+
         Tabs.getInstance().closeTab(tab);
 
         //updateSelectedPosition();
@@ -278,7 +282,7 @@ class TabsGridLayout extends GridView
     }
 
 
-    private void animateRemoveTab(final View v, final Tab removedTab) {
+    private void animateRemoveTab(final Tab removedTab) {
         final int removedPosition = mTabsAdapter.getPositionForTab(removedTab);
 
         Log.d("GridView", "Removing #" + removedPosition + "  - " + removedTab.getTitle());
@@ -296,7 +300,7 @@ class TabsGridLayout extends GridView
         // within the visible viewport.
         final int removedHeight = removedView.getMeasuredHeight();
 
-        final int numberOfColumns = getNumColumnsCompat();
+        final int numberOfColumns = getNumColumns();
 
         final int firstPosition = getFirstVisiblePosition();
 
@@ -347,25 +351,5 @@ class TabsGridLayout extends GridView
             }
         });
     }
-    private int getNumColumnsCompat() {
-        if (Build.VERSION.SDK_INT >= 11) {
-            return getNumColumnsCompat11();
 
-        } else {
-            int columns = 0;
-            int children = getChildCount();
-            if (children > 0) {
-                int width = getChildAt(0).getMeasuredWidth();
-                if (width > 0) {
-                    columns = getWidth() / width;
-                }
-            }
-            return columns > 0 ? columns : AUTO_FIT;
-        }
-    }
-
-    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
-    private int getNumColumnsCompat11() {
-        return getNumColumns();
-    }
 }
