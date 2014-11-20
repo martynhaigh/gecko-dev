@@ -30,9 +30,15 @@ import android.widget.GridView;
 import com.nineoldandroids.animation.Animator;
 import com.nineoldandroids.animation.AnimatorSet;
 import com.nineoldandroids.animation.ObjectAnimator;
+import com.nineoldandroids.animation.PropertyValuesHolder;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * A tabs layout implementation for the tablet redesign (bug 1014156).
@@ -43,7 +49,7 @@ class TabsGridLayout extends GridView
                      implements TabsLayout,
                                 Tabs.OnTabsChangedListener {
     private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
-    private static final int ANIM_TIME_MS = 200;
+    private static final int ANIM_TIME_MS = 2000;
     private static final DecelerateInterpolator ANIM_INTERPOLATOR = new DecelerateInterpolator();
     private final Context mContext;
     private TabsPanel mTabsPanel;
@@ -51,6 +57,7 @@ class TabsGridLayout extends GridView
     final private boolean mIsPrivate;
 
     private final TabsLayoutAdapter mTabsAdapter;
+    private final int mColumnWidth;
 
     public TabsGridLayout(Context context, AttributeSet attrs) {
         super(context, attrs, R.attr.tabGridLayoutViewStyle);
@@ -77,8 +84,8 @@ class TabsGridLayout extends GridView
         setNumColumns(GridView.AUTO_FIT);
 
         final Resources resources = getResources();
-        final int columnWidth = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_column_width);
-        setColumnWidth(columnWidth);
+        mColumnWidth = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_column_width);
+        setColumnWidth(mColumnWidth);
 
         final int padding = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding);
         final int paddingTop = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding_top);
@@ -96,9 +103,8 @@ class TabsGridLayout extends GridView
             mCloseClickListener = new Button.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    TabsLayoutItemView itemView = (TabsLayoutItemView) v.getTag();
-                    Tab tab = Tabs.getInstance().getTab(itemView.getTabId());
-                    closeTab(tab);
+
+                    closeTab(v);
                 }
             };
 
@@ -254,19 +260,25 @@ class TabsGridLayout extends GridView
         }
     }
 
-    void closeTab(Tab tab) {
-        animateRemoveTab(tab);
-        Tabs.getInstance().closeTab(tab);
-
-        updateSelectedPosition();
-    }
 
     private View getViewForTab(Tab tab) {
         final int position = mTabsAdapter.getPositionForTab(tab);
         return getChildAt(position - getFirstVisiblePosition());
     }
 
-    private void animateRemoveTab(Tab removedTab) {
+    void closeTab(View v) {
+        //((TabsLayoutItemView) v.getTag()).setVisibility(View.INVISIBLE);
+        TabsLayoutItemView itemView = (TabsLayoutItemView) v.getTag();
+        Tab tab = Tabs.getInstance().getTab(itemView.getTabId());
+        animateRemoveTab(v, tab);
+        Tabs.getInstance().closeTab(tab);
+
+        //updateSelectedPosition();
+        //invalidate();
+    }
+
+
+    private void animateRemoveTab(final View v, final Tab removedTab) {
         final int removedPosition = mTabsAdapter.getPositionForTab(removedTab);
 
         Log.d("GridView", "Removing #" + removedPosition + "  - " + removedTab.getTitle());
@@ -282,12 +294,14 @@ class TabsGridLayout extends GridView
         // We don't animate the removed child view (it just disappears)
         // but we still need its size of animate all affected children
         // within the visible viewport.
-        final int removedWidth = removedView.getWidth();
-        final int removedHeight = removedView.getHeight();
+        final int removedHeight = removedView.getMeasuredHeight();
 
         final int numberOfColumns = getNumColumnsCompat();
 
         final int firstPosition = getFirstVisiblePosition();
+
+        Log.d("GridView", "mColumnWidth : " + mColumnWidth);
+        Log.d("GridView", "removedHeight : " + removedHeight);
 
         getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override
@@ -302,32 +316,31 @@ class TabsGridLayout extends GridView
 
                 final int childCount = getChildCount();
                 Log.d("GridView", "childCount : " + childCount);
-                for (int x = 0, i = removedPosition - firstPosition; i < childCount; i++, x++) {
+                PropertyValuesHolder translateX,
+                                     translateY = PropertyValuesHolder.ofFloat("translationY", removedHeight, 0);
+                for (int x = 0, i = removedPosition - firstPosition ; i < childCount; i++, x++) {
                     final View child = getChildAt(i);
                     ObjectAnimator animator;
                     if (i % numberOfColumns == numberOfColumns - 1) {
                         // animate X & Y
-                        animator = ObjectAnimator.ofFloat(child, "translationY", removedHeight, 0);
-                        animator.setStartDelay(x * delayMultiple);
-                        childAnimators.add(animator);
+                        translateX = PropertyValuesHolder.ofFloat("translationX", -(mColumnWidth * numberOfColumns), 0);
 
-                        animator = ObjectAnimator.ofFloat(child, "translationX", -(removedWidth * numberOfColumns), 0);
-                        animator.setStartDelay(x * delayMultiple);
-                        childAnimators.add(animator);
-
+                        animator = ObjectAnimator.ofPropertyValuesHolder(child, translateX, translateY);
                     } else {
                         // just animate X
-                        // TODO: optimize with Valueresolver
-                        animator = ObjectAnimator.ofFloat(child, "translationX", removedWidth, 0);
-                        animator.setStartDelay(x * delayMultiple);
-                        childAnimators.add(animator);
+                        translateX = PropertyValuesHolder.ofFloat("translationX", mColumnWidth, 0);
+
+                        animator = ObjectAnimator.ofPropertyValuesHolder(child, translateX);
                     }
+                    animator.setStartDelay(x * delayMultiple);
+                    childAnimators.add(animator);
                 }
 
                 final AnimatorSet animatorSet = new AnimatorSet();
                 animatorSet.playTogether(childAnimators);
                 animatorSet.setDuration(ANIM_TIME_MS);
                 animatorSet.setInterpolator(ANIM_INTERPOLATOR);
+
                 animatorSet.start();
 
                 return true;
