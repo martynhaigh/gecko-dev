@@ -108,18 +108,18 @@ NS_IMETHODIMP
 nsAlertsIconListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRect* aData)
 {
   if (aType == imgINotificationObserver::LOAD_COMPLETE) {
-    return OnStopRequest(aRequest);
+    return OnLoadComplete(aRequest);
   }
 
   if (aType == imgINotificationObserver::FRAME_COMPLETE) {
-    return OnStopFrame(aRequest);
+    return OnFrameComplete(aRequest);
   }
 
   return NS_OK;
 }
 
 nsresult
-nsAlertsIconListener::OnStopRequest(imgIRequest* aRequest)
+nsAlertsIconListener::OnLoadComplete(imgIRequest* aRequest)
 {
   NS_ASSERTION(mIconRequest == aRequest, "aRequest does not match!");
 
@@ -139,7 +139,7 @@ nsAlertsIconListener::OnStopRequest(imgIRequest* aRequest)
 }
 
 nsresult
-nsAlertsIconListener::OnStopFrame(imgIRequest* aRequest)
+nsAlertsIconListener::OnFrameComplete(imgIRequest* aRequest)
 {
   NS_ASSERTION(mIconRequest == aRequest, "aRequest does not match!");
 
@@ -217,7 +217,8 @@ nsAlertsIconListener::StartRequest(const nsAString & aImageUrl)
   if (!il)
     return ShowAlert(nullptr);
 
-  nsresult rv = il->LoadImageXPCOM(imageUri, nullptr, nullptr, nullptr, nullptr,
+  nsresult rv = il->LoadImageXPCOM(imageUri, nullptr, nullptr,
+                                   NS_LITERAL_STRING("default"), nullptr, nullptr,
                                    this, nullptr, nsIRequest::LOAD_NORMAL, nullptr,
                                    0 /* use default */, getter_AddRefs(mIconRequest));
   if (NS_FAILED(rv))

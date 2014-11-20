@@ -494,9 +494,8 @@ CompositorD3D11::SetRenderTarget(CompositingRenderTarget* aRenderTarget)
   MOZ_ASSERT(aRenderTarget);
   CompositingRenderTargetD3D11* newRT =
     static_cast<CompositingRenderTargetD3D11*>(aRenderTarget);
-  ID3D11RenderTargetView* view = newRT->mRTView;
   mCurrentRT = newRT;
-  mContext->OMSetRenderTargets(1, &view, nullptr);
+  mCurrentRT->BindRenderTarget(mContext);
   PrepareViewport(newRT->GetSize());
 }
 
@@ -829,8 +828,6 @@ CompositorD3D11::BeginFrame(const nsIntRegion& aInvalidRegion,
 
   UpdateRenderTarget();
 
-  gfxPlatform::GetPlatform()->WaitContentDrawing();
-
   // Failed to create a render target or the view.
   if (!mDefaultRT || !mDefaultRT->mRTView ||
       mSize.width == 0 || mSize.height == 0) {
@@ -1073,12 +1070,12 @@ CompositorD3D11::SetSamplerForFilter(Filter aFilter)
 {
   ID3D11SamplerState *sampler;
   switch (aFilter) {
-  default:
-  case Filter::LINEAR:
-    sampler = mAttachments->mLinearSamplerState;
-    break;
-  case Filter::POINT:
+    case Filter::POINT:
     sampler = mAttachments->mPointSamplerState;
+    break;
+  case Filter::LINEAR:
+  default:
+    sampler = mAttachments->mLinearSamplerState;
     break;
   }
 

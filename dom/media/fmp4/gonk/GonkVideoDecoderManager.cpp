@@ -53,7 +53,6 @@ GonkVideoDecoderManager::GonkVideoDecoderManager(
                            mozilla::layers::ImageContainer* aImageContainer,
 		           const mp4_demuxer::VideoDecoderConfig& aConfig)
   : mImageContainer(aImageContainer)
-  , mConfig(aConfig)
   , mReaderCallback(nullptr)
   , mColorConverterBufferSize(0)
   , mNativeWindow(nullptr)
@@ -126,6 +125,7 @@ nsresult
 GonkVideoDecoderManager::CreateVideoData(int64_t aStreamOffset, VideoData **v)
 {
   *v = nullptr;
+  nsRefPtr<VideoData> data;
   int64_t timeUs;
   int32_t keyFrame;
 
@@ -174,16 +174,15 @@ GonkVideoDecoderManager::CreateVideoData(int64_t aStreamOffset, VideoData **v)
     grallocClient->SetMediaBuffer(mVideoBuffer);
     textureClient->SetRecycleCallback(GonkVideoDecoderManager::RecycleCallback, this);
 
-    *v = VideoData::Create(mInfo.mVideo,
-                          mImageContainer,
-                          aStreamOffset,
-                          timeUs,
-                          1, // We don't know the duration.
-                          textureClient,
-                          keyFrame,
-                          -1,
-                          picture);
-
+    data = VideoData::Create(mInfo.mVideo,
+                             mImageContainer,
+                             aStreamOffset,
+                             timeUs,
+                             1, // We don't know the duration.
+                             textureClient,
+                             keyFrame,
+                             -1,
+                             picture);
   } else {
     if (!mVideoBuffer->data()) {
       ALOG("No data in Video Buffer!");
@@ -242,7 +241,7 @@ GonkVideoDecoderManager::CreateVideoData(int64_t aStreamOffset, VideoData **v)
     b.mPlanes[2].mOffset = 0;
     b.mPlanes[2].mSkip = 0;
 
-    *v = VideoData::Create(
+    data = VideoData::Create(
         mInfo.mVideo,
         mImageContainer,
         pos,
@@ -254,6 +253,8 @@ GonkVideoDecoderManager::CreateVideoData(int64_t aStreamOffset, VideoData **v)
         picture);
     ReleaseVideoBuffer();
   }
+
+  data.forget(v);
   return NS_OK;
 }
 
@@ -303,7 +304,7 @@ GonkVideoDecoderManager::SetVideoFormat()
 // Blocks until decoded sample is produced by the deoder.
 nsresult
 GonkVideoDecoderManager::Output(int64_t aStreamOffset,
-                                nsAutoPtr<MediaData>& aOutData)
+                                nsRefPtr<MediaData>& aOutData)
 {
   aOutData = nullptr;
   status_t err;
@@ -316,8 +317,8 @@ GonkVideoDecoderManager::Output(int64_t aStreamOffset,
   switch (err) {
     case OK:
     {
-      VideoData* data = nullptr;
-      nsresult rv = CreateVideoData(aStreamOffset, &data);
+      nsRefPtr<VideoData> data;
+      nsresult rv = CreateVideoData(aStreamOffset, getter_AddRefs(data));
       if (rv == NS_ERROR_NOT_AVAILABLE) {
 	// Decoder outputs a empty video buffer, try again
         return NS_ERROR_NOT_AVAILABLE;
@@ -351,8 +352,8 @@ GonkVideoDecoderManager::Output(int64_t aStreamOffset,
     case android::ERROR_END_OF_STREAM:
     {
       ALOG("Got the EOS frame!");
-      VideoData* data = nullptr;
-      nsresult rv = CreateVideoData(aStreamOffset, &data);
+      nsRefPtr<VideoData> data;
+      nsresult rv = CreateVideoData(aStreamOffset, getter_AddRefs(data));
       if (rv == NS_ERROR_NOT_AVAILABLE) {
 	// For EOS, no need to do any thing.
         return NS_ERROR_ABORT;
@@ -396,7 +397,7 @@ GonkVideoDecoderManager::Input(mp4_demuxer::MP4Sample* aSample)
   status_t rv;
   if (aSample != nullptr) {
     // We must prepare samples in AVC Annex B.
-    mp4_demuxer::AnnexB::ConvertSample(aSample, mConfig.annex_b);
+    mp4_demuxer::AnnexB::ConvertSample(aSample);
     // Forward sample data to the decoder.
 
     const uint8_t* data = reinterpret_cast<const uint8_t*>(aSample->data);
