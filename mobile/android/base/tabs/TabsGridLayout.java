@@ -87,14 +87,6 @@ class TabsGridLayout extends GridView
         final int padding = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding);
         final int paddingTop = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding_top);
         setPadding(padding, paddingTop, padding, padding);
-
-        addOnLayoutChangeListener(new OnLayoutChangeListener() {
-            @Override
-            public void onLayoutChange(View v, int left, int top, int right, int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom) {
-                Log.d("MTEST", String.format("onLayoutChange %s, %s, %s, %s <= %s, %s, %s, %s", left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom));
-
-            }
-        });
     }
 
     private class TabsGridLayoutAdapter extends TabsLayoutAdapter {
