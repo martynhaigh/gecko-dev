@@ -779,7 +779,7 @@ let MozLoopServiceInternal = {
     // XXX We can clean this up once rooms and direct contact calling are the only
     //     two modes left.
     let windowId = ("contact" in conversationWindowData) ?
-                   conversationWindowData.contact._guid :
+                   conversationWindowData.contact._guid || gLastWindowId++ :
                    conversationWindowData.roomToken || conversationWindowData.callId ||
                    gLastWindowId++;
     // Store the id as a string, as that's what we use elsewhere.
@@ -1428,9 +1428,12 @@ this.MozLoopService = {
    */
   openGettingStartedTour: Task.async(function(aSrc = null) {
     try {
-      let url = new URL(Services.prefs.getCharPref("loop.gettingStarted.url"));
+      let urlStr = Services.prefs.getCharPref("loop.gettingStarted.url");
+      let url = new URL(Services.urlFormatter.formatURL(urlStr));
       if (aSrc) {
-        url.searchParams.set("source", aSrc);
+        url.searchParams.set("utm_source", "firefox-browser");
+        url.searchParams.set("utm_medium", "firefox-browser");
+        url.searchParams.set("utm_campaign", aSrc);
       }
       let win = Services.wm.getMostRecentWindow("navigator:browser");
       win.switchToTabHavingURI(url, true, {replaceQueryString: true});

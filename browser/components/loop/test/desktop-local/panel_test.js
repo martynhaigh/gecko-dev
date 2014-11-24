@@ -175,7 +175,8 @@ describe("loop.panel", function() {
       describe("loop.rooms.enabled on", function() {
         beforeEach(function() {
           navigator.mozLoop.getLoopPref = function(pref) {
-            if (pref === "rooms.enabled") {
+            if (pref === "rooms.enabled" ||
+                pref === "gettingStarted.seen") {
               return true;
             }
           };
@@ -208,6 +209,8 @@ describe("loop.panel", function() {
           navigator.mozLoop.getLoopPref = function(pref) {
             if (pref === "rooms.enabled") {
               return false;
+            } else if (pref === "gettingStarted.seen") {
+              return true;
             }
           };
 
@@ -353,6 +356,31 @@ describe("loop.panel", function() {
       });
     });
 
+    describe("Help", function() {
+      var supportUrl = "https://example.com";
+
+      beforeEach(function() {
+        navigator.mozLoop.getLoopPref = function(pref) {
+          if (pref === "support_url")
+            return supportUrl;
+          return "unseen";
+        };
+
+        sandbox.stub(window, "open");
+        sandbox.stub(window, "close");
+      });
+
+      it("should open a tab to the support page", function() {
+        var view = TestUtils.renderIntoDocument(loop.panel.SettingsDropdown());
+
+        TestUtils.Simulate
+          .click(view.getDOMNode().querySelector(".icon-help"));
+
+        sinon.assert.calledOnce(window.open);
+        sinon.assert.calledWithExactly(window.open, supportUrl);
+      });
+    });
+
     describe("#render", function() {
       it("should render a ToSView", function() {
         var view = createTestPanelView();
@@ -373,6 +401,9 @@ describe("loop.panel", function() {
       });
 
       it("should render a GettingStarted view", function() {
+        navigator.mozLoop.getLoopPref = function(pref) {
+          return false;
+        };
         var view = createTestPanelView();
 
         TestUtils.findRenderedComponentWithType(view, loop.panel.GettingStartedView);
