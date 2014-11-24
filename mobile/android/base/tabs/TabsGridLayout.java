@@ -34,6 +34,7 @@ import com.nineoldandroids.animation.Animator;
 import com.nineoldandroids.animation.AnimatorSet;
 import com.nineoldandroids.animation.ObjectAnimator;
 import com.nineoldandroids.animation.PropertyValuesHolder;
+import com.nineoldandroids.animation.ValueAnimator;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
@@ -175,9 +176,19 @@ class TabsGridLayout extends GridView
             Log.d("MTEST", "Need to add empty item to prevent layout issues");
 
             final int removedHeight = getChildAt(0).getMeasuredHeight();
-            final int viewHeight = getMeasuredHeight();
+            final int verticalSpacing = getVerticalSpacing();
 
-            Log.d("MTEST", "viewHeight = " +  viewHeight + " - " +  getHeight());
+            ValueAnimator varl = ValueAnimator.ofInt(getPaddingBottom() + removedHeight + verticalSpacing, getPaddingBottom());
+            varl.setDuration(ANIM_TIME_MS);
+
+            varl.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+
+                @Override
+                public void onAnimationUpdate(ValueAnimator animation) {
+                    setPadding(getPaddingLeft(), getPaddingTop(), getPaddingRight(), (Integer) animation.getAnimatedValue());
+                }
+            });
+            varl.start();
 
         }
 
