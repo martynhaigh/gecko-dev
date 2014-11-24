@@ -17,9 +17,11 @@ import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
+import android.graphics.Point;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -49,10 +51,11 @@ class TabsGridLayout extends GridView
                      implements TabsLayout,
                                 Tabs.OnTabsChangedListener {
     private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
-    private static final int ANIM_TIME_MS = 2000;
+    private static final int ANIM_TIME_MS = 200;
     private static final DecelerateInterpolator ANIM_INTERPOLATOR = new DecelerateInterpolator();
     private final Context mContext;
     private TabsPanel mTabsPanel;
+    private final SparseArray<Point> mTabLocations = new SparseArray<>();
 
     final private boolean mIsPrivate;
 
@@ -103,7 +106,7 @@ class TabsGridLayout extends GridView
             mCloseClickListener = new Button.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-
+                    populateTabLocations(v);
                     closeTab(v);
                 }
             };
@@ -134,6 +137,22 @@ class TabsGridLayout extends GridView
             // the close animation. Remove any of those properties.
             resetTransforms(view);
         }
+    }
+
+    private void populateTabLocations(View v) {
+        mTabLocations.clear();
+
+        final int firstPosition = getFirstVisiblePosition();
+        final int childCount = getChildCount();
+        final Tab removedTab = Tabs.getInstance().getTab(((TabsLayoutItemView) v.getTag()).getTabId());
+        final int removedPosition = mTabsAdapter.getPositionForTab(removedTab);
+
+        for(int i = 0, x = removedPosition - firstPosition; x < childCount; x++, i++) {
+            final View child = getChildAt(x);
+            Log.d("MTEST", String.format("Putting %s {%s, %s}", i, child.getX(), child.getY()));
+            mTabLocations.append(i, new Point((int)child.getX(), (int)child.getY()));
+        }
+
     }
 
     @Override
@@ -277,8 +296,8 @@ class TabsGridLayout extends GridView
 
         Tabs.getInstance().closeTab(tab);
 
-        //updateSelectedPosition();
-        //invalidate();
+        updateSelectedPosition();
+
     }
 
 
@@ -295,40 +314,34 @@ class TabsGridLayout extends GridView
             return;
         }
 
-        // We don't animate the removed child view (it just disappears)
-        // but we still need its size of animate all affected children
-        // within the visible viewport.
-        final int removedHeight = removedView.getMeasuredHeight();
-
-        final int numberOfColumns = getNumColumns();
-
-        final int firstPosition = getFirstVisiblePosition();
-
-        Log.d("GridView", "mColumnWidth : " + mColumnWidth);
-        Log.d("GridView", "removedHeight : " + removedHeight);
 
         getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override
             public boolean onPreDraw() {
                 getViewTreeObserver().removeOnPreDrawListener(this);
-
+                // We don't animate the removed child view (it just disappears)
+                // but we still need its size to animate all affected children
+                // within the visible viewport.
+                final int removedHeight = removedView.getMeasuredHeight();
+                final int delayMultiple = 20; //in ms
                 final int lastPosition = getLastVisiblePosition();
+                final int childCount = getChildCount();
+                final int firstPosition = getFirstVisiblePosition();
+                final int numberOfColumns = getNumColumns();
 
                 Log.d("GridView", "visible : " + firstPosition + " - " + lastPosition);
                 final List<Animator> childAnimators = new ArrayList<>();
-                final int delayMultiple = 20; //in ms
 
-                final int childCount = getChildCount();
                 Log.d("GridView", "childCount : " + childCount);
-                PropertyValuesHolder translateX,
-                                     translateY = PropertyValuesHolder.ofFloat("translationY", removedHeight, 0);
+                PropertyValuesHolder translateX, translateY;
                 for (int x = 0, i = removedPosition - firstPosition ; i < childCount; i++, x++) {
                     final View child = getChildAt(i);
                     ObjectAnimator animator;
+
                     if (i % numberOfColumns == numberOfColumns - 1) {
                         // animate X & Y
                         translateX = PropertyValuesHolder.ofFloat("translationX", -(mColumnWidth * numberOfColumns), 0);
-
+                        translateY = PropertyValuesHolder.ofFloat("translationY", removedHeight, 0);
                         animator = ObjectAnimator.ofPropertyValuesHolder(child, translateX, translateY);
                     } else {
                         // just animate X
@@ -341,11 +354,29 @@ class TabsGridLayout extends GridView
                 }
 
                 final AnimatorSet animatorSet = new AnimatorSet();
+                final AnimatorSet ∂animatorSet = new AnimatorSet();
                 animatorSet.playTogether(childAnimators);
                 animatorSet.setDuration(ANIM_TIME_MS);
                 animatorSet.setInterpolator(ANIM_INTERPOLATOR);
 
                 animatorSet.start();
+
+                Log.d("GridView", "mColumnWidth : " + mColumnWidth);
+                Log.d("GridView", "removedHeight : " + removedHeight);
+
+                for (int x = 0, i = removedPosition - firstPosition ; i < childCount; i++, x++) {
+                    final View child = getChildAt(i);
+                    if (x > 0) {
+                        final Point targetLocation = mTabLocations.get(x+1);
+                        if (targetLocation == null) {
+                            Log.d("MTEST", "Nothing there for location " + x+1);
+                            continue;
+                        }
+                        Log.d("MTEST", String.format("Getting %s {%s, %s}", x+1, targetLocation.x, targetLocation.y));
+                        child.setX(targetLocation.x);
+                        child.setY(targetLocation.y);
+                    }
+                }
 
                 return true;
             }
