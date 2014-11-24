@@ -149,6 +149,7 @@ class TabsGridLayout extends GridView
                 mTabLocations.append(x, new Point((int) child.getX(), (int) child.getY()));
             }
         }
+        
         final boolean firstChildOffscreen = ((firstPosition > 0) || getChildAt(0).getY() < 0);
         final boolean lastChildVisible = (lastPosition - childCount == firstPosition - 1);
         final boolean oneItemOnLastRow = (lastPosition % numberOfColumns == 0);
