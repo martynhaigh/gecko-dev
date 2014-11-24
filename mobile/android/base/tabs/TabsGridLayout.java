@@ -153,7 +153,8 @@ class TabsGridLayout extends GridView
         final boolean lastChildVisible = (lastPosition - childCount == firstPosition - 1);
         final boolean oneItemOnLastRow = (lastPosition % numberOfColumns == 0);
         if (firstChildOffscreen && lastChildVisible && oneItemOnLastRow) {
-            // We need to animate the last item in the row being removed
+            // We need to increase and animate down the view padding to prevent
+            // a sudden jump as the last item in the row is being removed
 
             final int removedHeight = getChildAt(0).getMeasuredHeight();
             final int verticalSpacing = getVerticalSpacing();
