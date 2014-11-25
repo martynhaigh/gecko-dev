@@ -39,8 +39,9 @@
   var ConversationView = loop.shared.views.ConversationView;
   var FeedbackView = loop.shared.views.FeedbackView;
 
-  // Room constants
+  // Store constants
   var ROOM_STATES = loop.store.ROOM_STATES;
+  var FEEDBACK_STATES = loop.store.FEEDBACK_STATES;
 
   // Local helpers
   function returnTrue() {
@@ -62,14 +63,15 @@
   );
 
   var dispatcher = new loop.Dispatcher();
-  var activeRoomStore = new loop.store.ActiveRoomStore({
-    dispatcher: dispatcher,
+  var activeRoomStore = new loop.store.ActiveRoomStore(dispatcher, {
     mozLoop: navigator.mozLoop,
     sdkDriver: {}
   });
-  var roomStore = new loop.store.RoomStore({
-    dispatcher: dispatcher,
+  var roomStore = new loop.store.RoomStore(dispatcher, {
     mozLoop: navigator.mozLoop
+  });
+  var feedbackStore = new loop.store.FeedbackStore(dispatcher, {
+    feedbackClient: stageFeedbackApiClient
   });
 
   // Local mocks
@@ -126,7 +128,7 @@
       "audio", "audio-hover", "audio-active", "block",
       "block-red", "block-hover", "block-active", "contacts", "contacts-hover",
       "contacts-active", "copy", "checkmark", "google", "google-hover",
-      "google-active", "history", "history-hover", "history-active",
+      "google-active", "history", "history-hover", "history-active", "leave",
       "precall", "precall-hover", "precall-active", "settings", "settings-hover",
       "settings-active", "tag", "tag-hover", "tag-active", "trash", "unblock",
       "unblock-hover", "unblock-active", "video", "video-hover", "video-active"
@@ -462,13 +464,13 @@
               <a href="https://input.allizom.org/">input.allizom.org</a>.
             </p>
             <Example summary="Default (useable demo)" dashed="true" style={{width: "260px"}}>
-              <FeedbackView feedbackApiClient={stageFeedbackApiClient} />
+              <FeedbackView feedbackStore={feedbackStore} />
             </Example>
             <Example summary="Detailed form" dashed="true" style={{width: "260px"}}>
-              <FeedbackView feedbackApiClient={stageFeedbackApiClient} step="form" />
+              <FeedbackView feedbackStore={feedbackStore} feedbackState={FEEDBACK_STATES.DETAILS} />
             </Example>
             <Example summary="Thank you!" dashed="true" style={{width: "260px"}}>
-              <FeedbackView feedbackApiClient={stageFeedbackApiClient} step="finished" />
+              <FeedbackView feedbackStore={feedbackStore} feedbackState={FEEDBACK_STATES.SENT} />
             </Example>
           </Section>
 
@@ -488,7 +490,7 @@
                                        video={{enabled: true}}
                                        audio={{enabled: true}}
                                        conversation={mockConversationModel}
-                                       feedbackApiClient={stageFeedbackApiClient}
+                                       feedbackStore={feedbackStore}
                                        onAfterFeedbackReceived={noop} />
               </div>
             </Example>
@@ -565,7 +567,8 @@
                 <StandaloneRoomView
                   dispatcher={dispatcher}
                   activeRoomStore={activeRoomStore}
-                  roomState={ROOM_STATES.READY} />
+                  roomState={ROOM_STATES.READY}
+                  helper={{isFirefox: returnTrue}} />
               </div>
             </Example>
 
@@ -574,7 +577,8 @@
                 <StandaloneRoomView
                   dispatcher={dispatcher}
                   activeRoomStore={activeRoomStore}
-                  roomState={ROOM_STATES.JOINED} />
+                  roomState={ROOM_STATES.JOINED}
+                  helper={{isFirefox: returnTrue}} />
               </div>
             </Example>
 
@@ -583,7 +587,38 @@
                 <StandaloneRoomView
                   dispatcher={dispatcher}
                   activeRoomStore={activeRoomStore}
-                  roomState={ROOM_STATES.HAS_PARTICIPANTS} />
+                  roomState={ROOM_STATES.HAS_PARTICIPANTS}
+                  helper={{isFirefox: returnTrue}} />
+              </div>
+            </Example>
+
+            <Example summary="Standalone room conversation (full - FFx user)">
+              <div className="standalone">
+                <StandaloneRoomView
+                  dispatcher={dispatcher}
+                  activeRoomStore={activeRoomStore}
+                  roomState={ROOM_STATES.FULL}
+                  helper={{isFirefox: returnTrue}} />
+              </div>
+            </Example>
+
+            <Example summary="Standalone room conversation (full - non FFx user)">
+              <div className="standalone">
+                <StandaloneRoomView
+                  dispatcher={dispatcher}
+                  activeRoomStore={activeRoomStore}
+                  roomState={ROOM_STATES.FULL}
+                  helper={{isFirefox: returnFalse}} />
+              </div>
+            </Example>
+
+            <Example summary="Standalone room conversation (failed)">
+              <div className="standalone">
+                <StandaloneRoomView
+                  dispatcher={dispatcher}
+                  activeRoomStore={activeRoomStore}
+                  roomState={ROOM_STATES.FAILED}
+                  helper={{isFirefox: returnFalse}} />
               </div>
             </Example>
           </Section>

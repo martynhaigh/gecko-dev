@@ -87,16 +87,18 @@ DCFromDrawTarget::DCFromDrawTarget(DrawTarget& aDrawTarget)
   if (aDrawTarget.GetBackendType() == BackendType::CAIRO) {
     cairo_surface_t *surf = (cairo_surface_t*)
         aDrawTarget.GetNativeSurface(NativeSurfaceType::CAIRO_SURFACE);
-    cairo_surface_type_t surfaceType = cairo_surface_get_type(surf);
-    if (surfaceType == CAIRO_SURFACE_TYPE_WIN32 ||
-        surfaceType == CAIRO_SURFACE_TYPE_WIN32_PRINTING) {
-      mDC = cairo_win32_surface_get_dc(surf);
-      mNeedsRelease = false;
-      SaveDC(mDC);
-      cairo_t* ctx = (cairo_t*)
-          aDrawTarget.GetNativeSurface(NativeSurfaceType::CAIRO_CONTEXT);
-      cairo_scaled_font_t* scaled = cairo_get_scaled_font(ctx);
-      cairo_win32_scaled_font_select_font(scaled, mDC);
+    if (surf) {
+      cairo_surface_type_t surfaceType = cairo_surface_get_type(surf);
+      if (surfaceType == CAIRO_SURFACE_TYPE_WIN32 ||
+          surfaceType == CAIRO_SURFACE_TYPE_WIN32_PRINTING) {
+        mDC = cairo_win32_surface_get_dc(surf);
+        mNeedsRelease = false;
+        SaveDC(mDC);
+        cairo_t* ctx = (cairo_t*)
+            aDrawTarget.GetNativeSurface(NativeSurfaceType::CAIRO_CONTEXT);
+        cairo_scaled_font_t* scaled = cairo_get_scaled_font(ctx);
+        cairo_win32_scaled_font_select_font(scaled, mDC);
+      }
     }
     if (!mDC) {
       mDC = GetDC(nullptr);
@@ -1689,7 +1691,10 @@ gfxWindowsPlatform::InitD3D11Devices()
   HRESULT hr;
 
   hr = d3d11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-                         D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                         // Use
+                         // D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS
+                         // to prevent bug 1092260. IE 11 also uses this flag.
+                         D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS,
                          featureLevels.Elements(), featureLevels.Length(),
                          D3D11_SDK_VERSION, byRef(mD3D11Device), nullptr, nullptr);
 

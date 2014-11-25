@@ -121,6 +121,7 @@
 #include "nsComponentManagerUtils.h"
 #include "nsServiceManagerUtils.h"
 #include "PSMRunnable.h"
+#include "RootCertificateTelemetryUtils.h"
 #include "SharedSSLState.h"
 #include "nsContentUtils.h"
 #include "nsURLHelper.h"
@@ -306,6 +307,7 @@ MapCertErrorToProbeValue(PRErrorCode errorCode)
     case SEC_ERROR_EXPIRED_CERTIFICATE:                return 10;
     case mozilla::pkix::MOZILLA_PKIX_ERROR_CA_CERT_USED_AS_END_ENTITY: return 11;
     case mozilla::pkix::MOZILLA_PKIX_ERROR_V1_CERT_USED_AS_CA: return 12;
+    case mozilla::pkix::MOZILLA_PKIX_ERROR_INADEQUATE_KEY_SIZE: return 13;
   }
   NS_WARNING("Unknown certificate error code. Does MapCertErrorToProbeValue "
              "handle everything in DetermineCertOverrideErrors?");
@@ -335,6 +337,7 @@ DetermineCertOverrideErrors(CERTCertificate* cert, const char* hostName,
     case SEC_ERROR_EXPIRED_ISSUER_CERTIFICATE:
     case SEC_ERROR_UNKNOWN_ISSUER:
     case mozilla::pkix::MOZILLA_PKIX_ERROR_CA_CERT_USED_AS_END_ENTITY:
+    case mozilla::pkix::MOZILLA_PKIX_ERROR_INADEQUATE_KEY_SIZE:
     case mozilla::pkix::MOZILLA_PKIX_ERROR_V1_CERT_USED_AS_CA:
     {
       collectedErrors = nsICertOverrideService::ERROR_UNTRUSTED;
@@ -957,6 +960,34 @@ GatherBaselineRequirementsTelemetry(const ScopedCERTCertList& certList)
                                        commonNameInSubjectAltNames);
 }
 
+// Gathers telemetry on which CA is the root of a given cert chain.
+// If the root is a built-in root, then the telemetry makes a count
+// by root.  Roots that are not built-in are counted in one bin.
+void
+GatherRootCATelemetry(const ScopedCERTCertList& certList)
+{
+  CERTCertListNode* rootNode = CERT_LIST_TAIL(certList);
+  PR_ASSERT(rootNode);
+  if (!rootNode) {
+    return;
+  }
+
+  // Only log telemetry if the certificate list is non-empty
+  if (!CERT_LIST_END(rootNode, certList)) {
+    AccumulateTelemetryForRootCA(Telemetry::CERT_VALIDATION_SUCCESS_BY_CA,
+                                 rootNode->cert);
+  }
+}
+
+// There are various things that we want to measure about certificate
+// chains that we accept.  This is a single entry point for all of them.
+void
+GatherSuccessfulValidationTelemetry(const ScopedCERTCertList& certList)
+{
+  GatherBaselineRequirementsTelemetry(certList);
+  GatherRootCATelemetry(certList);
+}
+
 SECStatus
 AuthCertificate(CertVerifier& certVerifier,
                 TransportSecurityInfo* infoObject,
@@ -1001,7 +1032,8 @@ AuthCertificate(CertVerifier& certVerifier,
   }
 
   if (rv == SECSuccess) {
-    GatherBaselineRequirementsTelemetry(certList);
+    GatherSuccessfulValidationTelemetry(certList);
+
     // The connection may get terminated, for example, if the server requires
     // a client cert. Let's provide a minimal SSLStatus
     // to the caller that contains at least the cert and its status.

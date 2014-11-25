@@ -19,13 +19,19 @@ describe("loop.webapp", function() {
       notifications,
       feedbackApiClient,
       stubGetPermsAndCacheMedia,
-      fakeAudioXHR;
+      fakeAudioXHR,
+      dispatcher,
+      feedbackStore;
 
   beforeEach(function() {
     sandbox = sinon.sandbox.create();
+    dispatcher = new loop.Dispatcher();
     notifications = new sharedModels.NotificationCollection();
     feedbackApiClient = new loop.FeedbackAPIClient("http://invalid", {
       product: "Loop"
+    });
+    feedbackStore = new loop.store.FeedbackStore(dispatcher, {
+      feedbackClient: {}
     });
 
     stubGetPermsAndCacheMedia = sandbox.stub(
@@ -123,7 +129,7 @@ describe("loop.webapp", function() {
         conversation: conversation,
         notifications: notifications,
         sdk: {},
-        feedbackApiClient: feedbackApiClient
+        feedbackStore: feedbackStore
       });
     });
 
@@ -582,7 +588,7 @@ describe("loop.webapp", function() {
 
   describe("WebappRootView", function() {
     var helper, sdk, conversationModel, client, props, standaloneAppStore;
-    var dispatcher, activeRoomStore;
+    var activeRoomStore;
 
     function mountTestComponent() {
       return TestUtils.renderIntoDocument(
@@ -609,9 +615,7 @@ describe("loop.webapp", function() {
       client = new loop.StandaloneClient({
         baseServerUrl: "fakeUrl"
       });
-      dispatcher = new loop.Dispatcher();
-      activeRoomStore = new loop.store.ActiveRoomStore({
-        dispatcher: dispatcher,
+      activeRoomStore = new loop.store.ActiveRoomStore(dispatcher, {
         mozLoop: {},
         sdkDriver: {}
       });
@@ -1040,7 +1044,7 @@ describe("loop.webapp", function() {
         loop.webapp.EndedConversationView({
           conversation: conversation,
           sdk: {},
-          feedbackApiClient: feedbackApiClient,
+          feedbackStore: feedbackStore,
           onAfterFeedbackReceived: function(){}
         })
       );
@@ -1053,22 +1057,6 @@ describe("loop.webapp", function() {
     it("should render a FeedbackView", function() {
       TestUtils.findRenderedComponentWithType(view, sharedViews.FeedbackView);
     });
-
-    describe("#componentDidMount", function() {
-
-      it("should play a terminating sound, once", function() {
-        fakeAudioXHR.onload();
-
-        sinon.assert.called(fakeAudioXHR.open);
-        sinon.assert.calledWithExactly(
-          fakeAudioXHR.open, "GET", "shared/sounds/terminated.ogg", true);
-
-        sinon.assert.calledOnce(fakeAudio.play);
-        expect(fakeAudio.loop).to.not.equal(true);
-      });
-
-    });
-
   });
 
   describe("PromoteFirefoxView", function() {
