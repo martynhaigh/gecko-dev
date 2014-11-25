@@ -45,7 +45,7 @@ class TabsGridLayout extends GridView
                      implements TabsLayout,
                                 Tabs.OnTabsChangedListener {
     private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
-    private static final int ANIM_TIME_MS = 200;
+    private static final int ANIM_TIME_MS = 2000;
     private static final DecelerateInterpolator ANIM_INTERPOLATOR = new DecelerateInterpolator();
     private final Context mContext;
     private TabsPanel mTabsPanel;
@@ -157,11 +157,10 @@ class TabsGridLayout extends GridView
         final boolean firstChildOffscreen = ((firstPosition > 0) || getChildAt(0).getY() < 0);
         final boolean lastChildVisible = (lastPosition - childCount == firstPosition - 1);
         final boolean oneItemOnLastRow = (lastPosition % numberOfColumns == 0);
-        if (firstChildOffscreen && lastChildVisible && oneItemOnLastRow) {
+        if (false && firstChildOffscreen && lastChildVisible && oneItemOnLastRow) {
             // We need to increase and animate down the view padding to prevent
             // a sudden jump as the last item in the row is being removed
 
-            // TODO : animate the height of the gridview or animate the children to give the same effect
             final int removedHeight = getChildAt(0).getMeasuredHeight();
             final int verticalSpacing = getVerticalSpacing();
 
