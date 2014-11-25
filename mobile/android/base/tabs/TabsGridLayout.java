@@ -45,7 +45,7 @@ class TabsGridLayout extends GridView
                      implements TabsLayout,
                                 Tabs.OnTabsChangedListener {
     private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
-    private static final int ANIM_TIME_MS = 2000;
+    private static final int ANIM_TIME_MS = 200;
     private static final DecelerateInterpolator ANIM_INTERPOLATOR = new DecelerateInterpolator();
     private final Context mContext;
     private TabsPanel mTabsPanel;
@@ -157,12 +157,20 @@ class TabsGridLayout extends GridView
         final boolean firstChildOffscreen = ((firstPosition > 0) || getChildAt(0).getY() < 0);
         final boolean lastChildVisible = (lastPosition - childCount == firstPosition - 1);
         final boolean oneItemOnLastRow = (lastPosition % numberOfColumns == 0);
-        if (false && firstChildOffscreen && lastChildVisible && oneItemOnLastRow) {
+        if (firstChildOffscreen && lastChildVisible && oneItemOnLastRow) {
             // We need to increase and animate down the view padding to prevent
             // a sudden jump as the last item in the row is being removed
 
+
+            // work out how much of the last child is visible
+
+            final float lastChildYPosition = getChildAt(getChildCount() - 1).getY();
             final int removedHeight = getChildAt(0).getMeasuredHeight();
             final int verticalSpacing = getVerticalSpacing();
+
+            if(lastChildYPosition + removedHeight > getHeight()) {
+                Log.d("MTEST", "PARTIAL VIEW");
+            }
 
             ValueAnimator paddingAnimator = ValueAnimator.ofInt(getPaddingBottom() + removedHeight + verticalSpacing, getPaddingBottom());
             paddingAnimator.setDuration(ANIM_TIME_MS * 2);
