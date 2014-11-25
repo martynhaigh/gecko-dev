@@ -80,6 +80,8 @@ class TabsGridLayout extends GridView
         setGravity(Gravity.CENTER);
         setNumColumns(GridView.AUTO_FIT);
 
+        // the clipToPadding setting in the styles.xml doesn't seem to be working (bug 1101784)
+        // so lets set it manually in code for the moment as it's needed for the padding animation
         setClipToPadding(false);
 
         final Resources resources = getResources();
