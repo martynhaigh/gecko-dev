@@ -80,6 +80,8 @@ class TabsGridLayout extends GridView
         setGravity(Gravity.CENTER);
         setNumColumns(GridView.AUTO_FIT);
 
+        setClipToPadding(false);
+
         final Resources resources = getResources();
         mColumnWidth = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_column_width);
         setColumnWidth(mColumnWidth);
@@ -149,7 +151,7 @@ class TabsGridLayout extends GridView
                 mTabLocations.append(x, new Point((int) child.getX(), (int) child.getY()));
             }
         }
-        
+
         final boolean firstChildOffscreen = ((firstPosition > 0) || getChildAt(0).getY() < 0);
         final boolean lastChildVisible = (lastPosition - childCount == firstPosition - 1);
         final boolean oneItemOnLastRow = (lastPosition % numberOfColumns == 0);
@@ -161,20 +163,18 @@ class TabsGridLayout extends GridView
             final int removedHeight = getChildAt(0).getMeasuredHeight();
             final int verticalSpacing = getVerticalSpacing();
 
-            ValueAnimator varl = ValueAnimator.ofInt(getPaddingBottom() + removedHeight + verticalSpacing, getPaddingBottom());
-            varl.setDuration(ANIM_TIME_MS);
+            ValueAnimator paddingAnimator = ValueAnimator.ofInt(getPaddingBottom() + removedHeight + verticalSpacing, getPaddingBottom());
+            paddingAnimator.setDuration(ANIM_TIME_MS * 2);
 
-            varl.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            paddingAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
 
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
                     setPadding(getPaddingLeft(), getPaddingTop(), getPaddingRight(), (Integer) animation.getAnimatedValue());
                 }
             });
-            varl.start();
-
+            paddingAnimator.start();
         }
-
     }
 
     @Override
@@ -342,7 +342,6 @@ class TabsGridLayout extends GridView
                 // within the visible viewport.
                 final int removedHeight = removedView.getMeasuredHeight();
                 final int delayMultiple = 20; //in ms
-                final int lastPosition = getLastVisiblePosition();
                 final int childCount = getChildCount();
                 final int firstPosition = getFirstVisiblePosition();
                 final int numberOfColumns = getNumColumns();
@@ -362,7 +361,6 @@ class TabsGridLayout extends GridView
                     } else {
                         // just animate X
                         translateX = PropertyValuesHolder.ofFloat("translationX", mColumnWidth, 0);
-
                         animator = ObjectAnimator.ofPropertyValuesHolder(child, translateX);
                     }
                     animator.setStartDelay(x * delayMultiple);
@@ -373,7 +371,6 @@ class TabsGridLayout extends GridView
                 animatorSet.playTogether(childAnimators);
                 animatorSet.setDuration(ANIM_TIME_MS);
                 animatorSet.setInterpolator(ANIM_INTERPOLATOR);
-
                 animatorSet.start();
 
                 // set the starting position of the child views
@@ -385,7 +382,6 @@ class TabsGridLayout extends GridView
                     }
                     child.setX(targetLocation.x);
                     child.setY(targetLocation.y);
-
                 }
 
                 return true;
