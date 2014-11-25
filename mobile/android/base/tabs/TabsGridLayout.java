@@ -161,16 +161,8 @@ class TabsGridLayout extends GridView
             // We need to increase and animate down the view padding to prevent
             // a sudden jump as the last item in the row is being removed
 
-
-            // work out how much of the last child is visible
-
-            final float lastChildYPosition = getChildAt(getChildCount() - 1).getY();
             final int removedHeight = getChildAt(0).getMeasuredHeight();
             final int verticalSpacing = getVerticalSpacing();
-
-            if(lastChildYPosition + removedHeight > getHeight()) {
-                Log.d("MTEST", "PARTIAL VIEW");
-            }
 
             ValueAnimator paddingAnimator = ValueAnimator.ofInt(getPaddingBottom() + removedHeight + verticalSpacing, getPaddingBottom());
             paddingAnimator.setDuration(ANIM_TIME_MS * 2);
