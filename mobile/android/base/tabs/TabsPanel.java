@@ -88,6 +88,7 @@ public class TabsPanel extends LinearLayout
     private IconTabWidget mTabWidget;
     private static ImageButton mMenuButton;
     private static ImageButton mAddTab;
+    private ImageButton mNavBackButton;
 
     private Panel mCurrentPanel;
     private boolean mIsSideBar;
@@ -163,6 +164,16 @@ public class TabsPanel extends LinearLayout
                 showMenu();
             }
         });
+
+        if(NewTabletUI.isEnabled(getContext())) {
+            mNavBackButton = (ImageButton) findViewById(R.id.nav_back);
+            mNavBackButton.setOnClickListener(new Button.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    mActivity.onBackPressed();
+                }
+            });
+        }
     }
 
     public void showMenu() {
