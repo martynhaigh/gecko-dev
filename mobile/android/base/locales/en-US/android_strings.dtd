@@ -295,6 +295,7 @@ size. -->
 <!ENTITY page "Page">
 <!ENTITY tools "Tools">
 <!ENTITY new_tab "New Tab">
+<!ENTITY nav_back "Back">
 <!ENTITY new_private_tab "New Private Tab">
 <!ENTITY close_all_tabs "Close All Tabs">
 <!ENTITY close_private_tabs "Close Private Tabs">

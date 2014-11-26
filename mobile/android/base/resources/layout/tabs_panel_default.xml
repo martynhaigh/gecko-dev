@@ -19,7 +19,7 @@
                          style="@style/UrlBar.ImageButton"
                          android:padding="@dimen/browser_toolbar_button_padding"
                          android:src="@drawable/new_tablet_nav_back"
-                         android:contentDescription="@string/new_tab"
+                         android:contentDescription="@string/nav_back"
                          android:background="@drawable/action_bar_button_inverse"/>
 
             <org.mozilla.gecko.widget.IconTabWidget android:id="@+id/tab_widget"
