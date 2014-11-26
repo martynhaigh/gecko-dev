@@ -28,6 +28,8 @@ loop.store.ActiveRoomStore = (function() {
     GATHER: "room-gather",
     // The store has got the room data
     READY: "room-ready",
+    // Obtaining media from the user
+    MEDIA_WAIT: "room-media-wait",
     // The room is known to be joined on the loop-server
     JOINED: "room-joined",
     // The room is connected to the sdk server.
@@ -127,6 +129,7 @@ loop.store.ActiveRoomStore = (function() {
         "roomFailure",
         "setupRoomInfo",
         "updateRoomInfo",
+        "gotMediaPermission",
         "joinRoom",
         "joinedRoom",
         "connectedToSdkServers",
@@ -260,6 +263,14 @@ loop.store.ActiveRoomStore = (function() {
         this.setStoreState({failureReason: undefined});
       }
 
+      this.setStoreState({roomState: ROOM_STATES.MEDIA_WAIT});
+    },
+
+    /**
+     * Handles the action that signifies when media permission has been
+     * granted and starts joining the room.
+     */
+    gotMediaPermission: function() {
       this._mozLoop.rooms.join(this._storeState.roomToken,
         function(error, responseData) {
           if (error) {
@@ -293,6 +304,21 @@ loop.store.ActiveRoomStore = (function() {
 
       this._setRefreshTimeout(actionData.expires);
       this._sdkDriver.connectSession(actionData);
+
+      // If we haven't got a room name yet, go and get one. We typically
+      // need to do this in the case of the standalone window.
+      // XXX When bug 1103331 lands this can be moved to earlier.
+      if (!this._storeState.roomName) {
+        this._mozLoop.rooms.get(this._storeState.roomToken,
+          function(err, result) {
+            if (err) {
+              console.error("Failed to get room data:", err);
+              return;
+            }
+
+            this.dispatcher.dispatch(new sharedActions.UpdateRoomInfo(result));
+        }.bind(this));
+      }
     },
 
     /**
