@@ -44,11 +44,13 @@ class TabsGridLayout extends GridView
                      implements TabsLayout,
                                 Tabs.OnTabsChangedListener {
     private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
+
     private static final int ANIM_TIME_MS = 200;
     private static final DecelerateInterpolator ANIM_INTERPOLATOR = new DecelerateInterpolator();
+
     private final Context mContext;
     private TabsPanel mTabsPanel;
-    private final SparseArray<Point> mTabLocations = new SparseArray<>();
+    private final SparseArray<Point> mTabLocations = new SparseArray<Point>();
 
     final private boolean mIsPrivate;
 
@@ -103,7 +105,6 @@ class TabsGridLayout extends GridView
             mCloseClickListener = new Button.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    populateTabLocations(v);
                     closeTab(v);
                 }
             };
@@ -136,14 +137,13 @@ class TabsGridLayout extends GridView
         }
     }
 
-    private void populateTabLocations(View v) {
+    private void populateTabLocations(final Tab removedTab) {
         mTabLocations.clear();
 
         final int firstPosition = getFirstVisiblePosition();
         final int lastPosition = getLastVisiblePosition();
         final int numberOfColumns = getNumColumns();
         final int childCount = getChildCount();
-        final Tab removedTab = Tabs.getInstance().getTab(((TabsLayoutItemView) v.getTag()).getTabId());
         final int removedPosition = mTabsAdapter.getPositionForTab(removedTab);
 
         for(int x = 1, i = (removedPosition - firstPosition) + 1; i < childCount; i++, x++) {
@@ -153,10 +153,10 @@ class TabsGridLayout extends GridView
             }
         }
 
-        final boolean firstChildOffscreen = ((firstPosition > 0) || getChildAt(0).getY() < 0);
+        final boolean firstChildOffScreen = ((firstPosition > 0) || getChildAt(0).getY() < 0);
         final boolean lastChildVisible = (lastPosition - childCount == firstPosition - 1);
         final boolean oneItemOnLastRow = (lastPosition % numberOfColumns == 0);
-        if (firstChildOffscreen && lastChildVisible && oneItemOnLastRow) {
+        if (firstChildOffScreen && lastChildVisible && oneItemOnLastRow) {
             // We need to increase and animate down the view padding to prevent
             // a sudden jump as the last item in the row is being removed
 
@@ -333,6 +333,8 @@ class TabsGridLayout extends GridView
             return;
         }
 
+        populateTabLocations(removedTab);
+
         getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override
             public boolean onPreDraw() {
@@ -373,7 +375,9 @@ class TabsGridLayout extends GridView
                 animatorSet.setInterpolator(ANIM_INTERPOLATOR);
                 animatorSet.start();
 
-                // set the starting position of the child views
+                // set the starting position of the child views - because we are delaying the start
+                // of the animation, we need to prevent the items being drawn in their final position
+                // prior to the animation starting
                 for (int x = 1, i = (removedPosition - firstPosition) + 1; i < childCount; i++, x++) {
                     final View child = getChildAt(i);
                     final Point targetLocation = mTabLocations.get(x+1);
