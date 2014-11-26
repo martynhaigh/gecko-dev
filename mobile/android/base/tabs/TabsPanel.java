@@ -521,7 +521,6 @@ public class TabsPanel extends LinearLayout
                 ViewHelper.setTranslationY(mTabsContainer, -toolbarHeight);
 
                 if(isNewTabletUi) {
-                    ViewHelper.setAlpha(mMainContainer, 0.0f);
                     alphaAnimator.attach(mMainContainer, PropertyAnimator.Property.ALPHA, 1);
                 } else {
                     ViewHelper.setAlpha(mTabsContainer, 0.0f);

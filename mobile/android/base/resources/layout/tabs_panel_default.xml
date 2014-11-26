@@ -10,6 +10,7 @@
              android:layout_height="match_parent"
              android:background="@color/background_tabs"
              android:orientation="vertical"
+             android:alpha="0"
              >
 
     <RelativeLayout android:id="@+id/tabs_panel_header"
