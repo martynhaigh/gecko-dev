@@ -135,7 +135,6 @@ import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.animation.Interpolator;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
@@ -1789,14 +1788,12 @@ public class BrowserApp extends GeckoApp
             }
         }
 
+        mMainLayoutAnimator = new PropertyAnimator(animationLength, sTabsInterpolator);
 
         if(newTabletUi) {
-            mMainLayoutAnimator = new PropertyAnimator(animationLength, sTabsInterpolator);
             mMainLayoutAnimator.attach(mBrowserChrome,
                                        PropertyAnimator.Property.ALPHA,
                                        areTabsShown() ? 0.0f : 1.0f);
-        } else {
-            mMainLayoutAnimator = new PropertyAnimator(animationLength, sTabsInterpolator);
         }
 
         mMainLayoutAnimator.addPropertyAnimationListener(this);
@@ -1834,6 +1831,8 @@ public class BrowserApp extends GeckoApp
         if(!NewTabletUI.isEnabled(getContext())) {
             return;
         }
+
+        // set the background colour for the tabs panel reveal animation
         mMainLayout.setBackgroundDrawable(getResources().getDrawable(R.color.background_tabs));
 
         if (!areTabsShown()) {
@@ -1843,6 +1842,9 @@ public class BrowserApp extends GeckoApp
 
     @Override
     public void onPropertyAnimationEnd() {
+
+        // background is only needed on the main layout during the tabs panel reveal animation
+        // so that the tabs panel has a background during it's alpha fade in/out
         if(NewTabletUI.isEnabled(getContext())) {
             mMainLayout.setBackgroundDrawable(null);
         }
@@ -1856,6 +1858,7 @@ public class BrowserApp extends GeckoApp
             mBrowserToolbar.cancelEdit();
 
             if(NewTabletUI.isEnabled(getContext())) {
+                // Don't draw the main layout if the full screen tabs panel is visible
                 mMainLayout.setVisibility(View.INVISIBLE);
             }
         }

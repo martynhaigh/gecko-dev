@@ -42,8 +42,6 @@ public class TabsPanel extends LinearLayout
                                   LightweightTheme.OnChangeListener,
                                   IconTabWidget.OnTabChangedListener {
     private static final String LOGTAG = "Gecko" + TabsPanel.class.getSimpleName();
-    public static final int ALPHA_ANIMATION_DURATION = 200;
-    private View mMainContainer;
 
     public static enum Panel {
         NORMAL_TABS,
@@ -87,6 +85,8 @@ public class TabsPanel extends LinearLayout
     private PanelView mPanelPrivate;
     private RelativeLayout mFooter;
     private TabsLayoutChangeListener mLayoutChangeListener;
+    private View mMainContainer;
+
 
     private IconTabWidget mTabWidget;
     private static ImageButton mMenuButton;
@@ -531,6 +531,8 @@ public class TabsPanel extends LinearLayout
             }
 
             if (isNewTabletUi) {
+                // we don't want to us HW layers here as we're also translating the header and tabs container which
+                // are contained within the main container - this would cause massive perf issues if HW Layers were used
                 alphaAnimator.setUseHardwareLayer(false);
                 alphaAnimator.start();
             } else {
@@ -540,12 +542,21 @@ public class TabsPanel extends LinearLayout
             animator.attach(mTabsContainer, PropertyAnimator.Property.TRANSLATION_Y, translationY);
             animator.attach(mHeader, PropertyAnimator.Property.TRANSLATION_Y, translationY);
         }
+
+        // TODO: Work out if we can remove these as PropertyAnimator defaults to using HW layers
+        mHeader.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        mTabsContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     }
 
     public void finishTabsAnimation() {
         if (Versions.preHC) {
             return;
         }
+
+        // TODO: Work out if we can remove these as PropertyAnimator defaults to using HW layers and turning them off
+        //       after the animation has finished.
+        mHeader.setLayerType(View.LAYER_TYPE_NONE, null);
+        mTabsContainer.setLayerType(View.LAYER_TYPE_NONE, null);
 
         // If the tabs panel is now hidden, call hide() on current panel and unset it as the current panel
         // to avoid hide() being called again when the layout is opened next.
