@@ -158,7 +158,7 @@ public class BrowserApp extends GeckoApp
     private static final String LOGTAG = "GeckoBrowserApp";
 
     private static final int TABS_ANIMATION_DURATION = 450;
-    private static final int NEW_TABLET_TABS_ANIMATION_DURATION = 300;
+    public static final int NEW_TABLET_TABS_ANIMATION_DURATION = 300;
 
     private static final String ADD_SHORTCUT_TOAST = "add_shortcut_toast";
     public static final String GUEST_BROWSING_ARG = "--guest";
@@ -1834,16 +1834,18 @@ public class BrowserApp extends GeckoApp
         if(!NewTabletUI.isEnabled(getContext())) {
             return;
         }
+        mMainLayout.setBackgroundDrawable(getResources().getDrawable(R.color.background_tabs));
 
         if (!areTabsShown()) {
             mMainLayout.setVisibility(View.VISIBLE);
-        } else {
-            mMainLayout.setBackgroundDrawable(getResources().getDrawable(R.color.background_tabs));
         }
     }
 
     @Override
     public void onPropertyAnimationEnd() {
+        if(NewTabletUI.isEnabled(getContext())) {
+            mMainLayout.setBackgroundDrawable(null);
+        }
         if (!areTabsShown()) {
             mTabsPanel.setVisibility(View.INVISIBLE);
             mTabsPanel.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
@@ -1855,7 +1857,6 @@ public class BrowserApp extends GeckoApp
 
             if(NewTabletUI.isEnabled(getContext())) {
                 mMainLayout.setVisibility(View.INVISIBLE);
-                mMainLayout.setBackgroundDrawable(null);
             }
         }
 

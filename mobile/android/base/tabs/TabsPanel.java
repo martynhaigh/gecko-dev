@@ -6,6 +6,7 @@
 package org.mozilla.gecko.tabs;
 
 import org.mozilla.gecko.AppConstants.Versions;
+import org.mozilla.gecko.BrowserApp;
 import org.mozilla.gecko.GeckoApp;
 import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoApplication;
@@ -35,13 +36,14 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
-import com.nineoldandroids.animation.ObjectAnimator;
 
 public class TabsPanel extends LinearLayout
                        implements GeckoPopupMenu.OnMenuItemClickListener,
                                   LightweightTheme.OnChangeListener,
                                   IconTabWidget.OnTabChangedListener {
     private static final String LOGTAG = "Gecko" + TabsPanel.class.getSimpleName();
+    public static final int ALPHA_ANIMATION_DURATION = 200;
+    private View mMainContainer;
 
     public static enum Panel {
         NORMAL_TABS,
@@ -85,7 +87,6 @@ public class TabsPanel extends LinearLayout
     private PanelView mPanelPrivate;
     private RelativeLayout mFooter;
     private TabsLayoutChangeListener mLayoutChangeListener;
-    private View mMainContainer;
 
     private IconTabWidget mTabWidget;
     private static ImageButton mMenuButton;
@@ -127,8 +128,7 @@ public class TabsPanel extends LinearLayout
     }
 
     private void initialize() {
-        mMainContainer = findViewById(R.id.tabs_panel);
-
+        mMainContainer = findViewById(R.id.tabs_panel_container);;
         mHeader = (RelativeLayout) findViewById(R.id.tabs_panel_header);
         mTabsContainer = (TabsLayoutContainer) findViewById(R.id.tabs_container);
 
@@ -510,28 +510,29 @@ public class TabsPanel extends LinearLayout
             final Resources resources = getContext().getResources();
             final int toolbarHeight = resources.getDimensionPixelSize(R.dimen.browser_toolbar_height);
             final int translationY = (mVisible ? 0 : -toolbarHeight);
-            ObjectAnimator objectAnimator = null;
+
+            PropertyAnimator alphaAnimator = null;
             if (isNewTabletUi) {
-                objectAnimator = new ObjectAnimator();
-                objectAnimator.setDuration(200);
-                objectAnimator.setTarget(mMainContainer);
-                objectAnimator.setPropertyName("alpha");
+                alphaAnimator = new PropertyAnimator(BrowserApp.NEW_TABLET_TABS_ANIMATION_DURATION);
             }
+
             if (mVisible) {
                 ViewHelper.setTranslationY(mHeader, -toolbarHeight);
                 ViewHelper.setTranslationY(mTabsContainer, -toolbarHeight);
+
                 if(isNewTabletUi) {
                     ViewHelper.setAlpha(mMainContainer, 0.0f);
-                    objectAnimator.setFloatValues(0.0f, 1.0f);
+                    alphaAnimator.attach(mMainContainer, PropertyAnimator.Property.ALPHA, 1);
                 } else {
                     ViewHelper.setAlpha(mTabsContainer, 0.0f);
                 }
             } else if (isNewTabletUi) {
-                objectAnimator.setFloatValues(1.0f, 0.0f);
+                alphaAnimator.attach(mMainContainer, PropertyAnimator.Property.ALPHA, 0);
             }
 
             if (isNewTabletUi) {
-                objectAnimator.start();
+                alphaAnimator.setUseHardwareLayer(false);
+                alphaAnimator.start();
             } else {
                 animator.attach(mTabsContainer, PropertyAnimator.Property.ALPHA, mVisible ? 1.0f : 0.0f);
             }
