@@ -83,7 +83,7 @@ class TabsGridLayout extends GridView
         setGravity(Gravity.CENTER);
         setNumColumns(GridView.AUTO_FIT);
 
-        // the clipToPadding setting in the styles.xml doesn't seem to be working (bug 1101784)
+        // The clipToPadding setting in the styles.xml doesn't seem to be working (bug 1101784)
         // so lets set it manually in code for the moment as it's needed for the padding animation
         setClipToPadding(false);
 
@@ -159,8 +159,9 @@ class TabsGridLayout extends GridView
         final boolean lastChildVisible = (lastPosition - childCount == firstPosition - 1);
         final boolean oneItemOnLastRow = (lastPosition % numberOfColumns == 0);
         if (firstChildOffScreen && lastChildVisible && oneItemOnLastRow) {
-            // We need to increase and animate down the view padding to prevent
-            // a sudden jump as the last item in the row is being removed
+            // We need to set the view's bottom padding to prevent a sudden jump as the
+            // last item in the row is being removed. We then need to remove the padding
+            // via a sweet animation
 
             final int removedHeight = getChildAt(0).getMeasuredHeight();
             final int verticalSpacing = getVerticalSpacing();
@@ -218,7 +219,6 @@ class TabsGridLayout extends GridView
                 break;
 
             case CLOSED:
-
                 if(mTabsAdapter.getCount() > 0) {
                     animateRemoveTab(tab);
                 }
@@ -306,7 +306,6 @@ class TabsGridLayout extends GridView
             }
         }
     }
-
 
     private View getViewForTab(Tab tab) {
         final int position = mTabsAdapter.getPositionForTab(tab);
