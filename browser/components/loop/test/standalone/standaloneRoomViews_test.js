@@ -10,9 +10,10 @@ describe("loop.standaloneRoomViews", function() {
   "use strict";
 
   var ROOM_STATES = loop.store.ROOM_STATES;
+  var FEEDBACK_STATES = loop.store.FEEDBACK_STATES;
   var sharedActions = loop.shared.actions;
 
-  var sandbox, dispatcher, activeRoomStore, dispatch;
+  var sandbox, dispatcher, activeRoomStore, feedbackStore, dispatch;
 
   beforeEach(function() {
     sandbox = sinon.sandbox.create();
@@ -22,18 +23,27 @@ describe("loop.standaloneRoomViews", function() {
       mozLoop: {},
       sdkDriver: {}
     });
+    feedbackStore = new loop.store.FeedbackStore(dispatcher, {
+      feedbackClient: {}
+    });
+
+    sandbox.useFakeTimers();
+
+    // Prevents audio request errors in the test console.
+    sandbox.useFakeXMLHttpRequest();
   });
 
   afterEach(function() {
     sandbox.restore();
   });
 
-  describe("standaloneRoomView", function() {
+  describe("StandaloneRoomView", function() {
     function mountTestComponent() {
       return TestUtils.renderIntoDocument(
         loop.standaloneRoomViews.StandaloneRoomView({
           dispatcher: dispatcher,
           activeRoomStore: activeRoomStore,
+          feedbackStore: feedbackStore,
           helper: new loop.shared.utils.Helper()
         }));
     }
@@ -278,6 +288,41 @@ describe("loop.standaloneRoomViews", function() {
           sinon.assert.calledOnce(dispatch);
           sinon.assert.calledWithExactly(dispatch, new sharedActions.LeaveRoom());
         });
+      });
+
+      describe("Feedback", function() {
+        beforeEach(function() {
+          activeRoomStore.setStoreState({roomState: ROOM_STATES.ENDED});
+        });
+
+        it("should display a feedback form when the user leaves the room",
+          function() {
+            expect(view.getDOMNode().querySelector(".faces")).not.eql(null);
+          });
+
+        it("should dispatch a `FeedbackComplete` action after feedback is sent",
+          function() {
+            feedbackStore.setStoreState({feedbackState: FEEDBACK_STATES.SENT});
+
+            sandbox.clock.tick(
+              loop.shared.views.WINDOW_AUTOCLOSE_TIMEOUT_IN_SECONDS * 1000 + 1000);
+
+            sinon.assert.calledOnce(dispatch);
+            sinon.assert.calledWithExactly(dispatch, new sharedActions.FeedbackComplete());
+          });
+      });
+
+      describe("Mute", function() {
+        it("should render local media as audio-only if video is muted",
+          function() {
+            activeRoomStore.setStoreState({
+              roomState: ROOM_STATES.SESSION_CONNECTED,
+              videoMuted: true
+            });
+
+            expect(view.getDOMNode().querySelector(".local-stream-audio"))
+              .not.eql(null);
+          });
       });
     });
   });

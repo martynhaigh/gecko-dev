@@ -114,10 +114,11 @@ loop.store.ActiveRoomStore = (function() {
 
       this.setStoreState({
         error: actionData.error,
-        failureReason: getReason(actionData.error.errno),
-        roomState: actionData.error.errno === SERVER_CODES.ROOM_FULL ?
-          ROOM_STATES.FULL : ROOM_STATES.FAILED
+        failureReason: getReason(actionData.error.errno)
       });
+
+      this._leaveRoom(actionData.error.errno === SERVER_CODES.ROOM_FULL ?
+          ROOM_STATES.FULL : ROOM_STATES.FAILED);
     },
 
     /**
@@ -138,7 +139,8 @@ loop.store.ActiveRoomStore = (function() {
         "remotePeerDisconnected",
         "remotePeerConnected",
         "windowUnload",
-        "leaveRoom"
+        "leaveRoom",
+        "feedbackComplete"
       ]);
     },
 
@@ -361,23 +363,19 @@ loop.store.ActiveRoomStore = (function() {
      * Handles recording when a remote peer has connected to the servers.
      */
     remotePeerConnected: function() {
-      this.setStoreState({
-        roomState: ROOM_STATES.HAS_PARTICIPANTS
-      });
+      this.setStoreState({roomState: ROOM_STATES.HAS_PARTICIPANTS});
 
       // We've connected with a third-party, therefore stop displaying the ToS etc.
       this._mozLoop.setLoopPref("seenToS", "seen");
     },
 
     /**
-     * Handles a remote peer disconnecting from the session.
+     * Handles a remote peer disconnecting from the session. As we currently only
+     * support 2 participants, we declare the room as SESSION_CONNECTED as soon as
+     * one participantleaves.
      */
     remotePeerDisconnected: function() {
-      // As we only support two users at the moment, we just set this
-      // back to joined.
-      this.setStoreState({
-        roomState: ROOM_STATES.SESSION_CONNECTED
-      });
+      this.setStoreState({roomState: ROOM_STATES.SESSION_CONNECTED});
     },
 
     /**
@@ -451,9 +449,16 @@ loop.store.ActiveRoomStore = (function() {
           this._storeState.sessionToken);
       }
 
-      this.setStoreState({
-        roomState: nextState ? nextState : ROOM_STATES.ENDED
-      });
+      this.setStoreState({roomState: nextState || ROOM_STATES.ENDED});
+    },
+
+    /**
+     * When feedback is complete, we reset the room to the initial state.
+     */
+    feedbackComplete: function() {
+      // Note, that we want some values, such as the windowId, so we don't
+      // do a full reset here.
+      this.setStoreState(this.getInitialStoreState());
     }
   });
 

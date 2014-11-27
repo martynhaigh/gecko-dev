@@ -331,6 +331,13 @@ loop.shared.actions = (function() {
     }),
 
     /**
+     * Used to indicate that the feedback cycle is completed and the countdown
+     * finished.
+     */
+    FeedbackComplete: Action.define("feedbackComplete", {
+    }),
+
+    /**
      * Used to indicate the user wishes to leave the room.
      */
     LeaveRoom: Action.define("leaveRoom", {
