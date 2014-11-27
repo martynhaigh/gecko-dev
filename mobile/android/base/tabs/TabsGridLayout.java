@@ -17,6 +17,7 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Point;
+import android.graphics.PointF;
 import android.util.AttributeSet;
 import android.util.SparseArray;
 import android.view.Gravity;
@@ -46,11 +47,12 @@ class TabsGridLayout extends GridView
     private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
 
     private static final int ANIM_TIME_MS = 200;
+    public static final int ANIM_DELAY_MULTIPLE_MS = 20;
     private static final DecelerateInterpolator ANIM_INTERPOLATOR = new DecelerateInterpolator();
 
     private final Context mContext;
     private TabsPanel mTabsPanel;
-    private final SparseArray<Point> mTabLocations = new SparseArray<Point>();
+    private final SparseArray<PointF> mTabLocations = new SparseArray<PointF>();
 
     final private boolean mIsPrivate;
 
@@ -146,10 +148,10 @@ class TabsGridLayout extends GridView
         final int childCount = getChildCount();
         final int removedPosition = mTabsAdapter.getPositionForTab(removedTab);
 
-        for(int x = 1, i = (removedPosition - firstPosition) + 1; i < childCount; i++, x++) {
+        for (int x = 1, i = (removedPosition - firstPosition) + 1; i < childCount; i++, x++) {
             final View child = getChildAt(i);
             if (child != null) {
-                mTabLocations.append(x, new Point((int) child.getX(), (int) child.getY()));
+                mTabLocations.append(x, new PointF(child.getX(), child.getY()));
             }
         }
 
@@ -312,14 +314,11 @@ class TabsGridLayout extends GridView
     }
 
     void closeTab(View v) {
-        //((TabsLayoutItemView) v.getTag()).setVisibility(View.INVISIBLE);
         TabsLayoutItemView itemView = (TabsLayoutItemView) v.getTag();
         Tab tab = Tabs.getInstance().getTab(itemView.getTabId());
 
         Tabs.getInstance().closeTab(tab);
-
         updateSelectedPosition();
-
     }
 
     private void animateRemoveTab(final Tab removedTab) {
@@ -332,6 +331,7 @@ class TabsGridLayout extends GridView
         if (removedView == null) {
             return;
         }
+        final int removedHeight = removedView.getMeasuredHeight();
 
         populateTabLocations(removedTab);
 
@@ -342,8 +342,6 @@ class TabsGridLayout extends GridView
                 // We don't animate the removed child view (it just disappears)
                 // but we still need its size to animate all affected children
                 // within the visible viewport.
-                final int removedHeight = removedView.getMeasuredHeight();
-                final int delayMultiple = 20; //in ms
                 final int childCount = getChildCount();
                 final int firstPosition = getFirstVisiblePosition();
                 final int numberOfColumns = getNumColumns();
@@ -356,16 +354,16 @@ class TabsGridLayout extends GridView
                     ObjectAnimator animator;
 
                     if (i % numberOfColumns == numberOfColumns - 1) {
-                        // animate X & Y
+                        // Animate X & Y
                         translateX = PropertyValuesHolder.ofFloat("translationX", -(mColumnWidth * numberOfColumns), 0);
                         translateY = PropertyValuesHolder.ofFloat("translationY", removedHeight, 0);
                         animator = ObjectAnimator.ofPropertyValuesHolder(child, translateX, translateY);
                     } else {
-                        // just animate X
+                        // Just animate X
                         translateX = PropertyValuesHolder.ofFloat("translationX", mColumnWidth, 0);
                         animator = ObjectAnimator.ofPropertyValuesHolder(child, translateX);
                     }
-                    animator.setStartDelay(x * delayMultiple);
+                    animator.setStartDelay(x * ANIM_DELAY_MULTIPLE_MS);
                     childAnimators.add(animator);
                 }
 
@@ -375,15 +373,17 @@ class TabsGridLayout extends GridView
                 animatorSet.setInterpolator(ANIM_INTERPOLATOR);
                 animatorSet.start();
 
-                // set the starting position of the child views - because we are delaying the start
+                // Set the starting position of the child views - because we are delaying the start
                 // of the animation, we need to prevent the items being drawn in their final position
                 // prior to the animation starting
                 for (int x = 1, i = (removedPosition - firstPosition) + 1; i < childCount; i++, x++) {
                     final View child = getChildAt(i);
-                    final Point targetLocation = mTabLocations.get(x+1);
+
+                    final PointF targetLocation = mTabLocations.get(x+1);
                     if (targetLocation == null) {
                         continue;
                     }
+
                     child.setX(targetLocation.x);
                     child.setY(targetLocation.y);
                 }
