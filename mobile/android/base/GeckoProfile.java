@@ -5,9 +5,11 @@
 
 package org.mozilla.gecko;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
@@ -83,6 +85,8 @@ public final class GeckoProfile {
     // but this is not a complete solution for concurrency.
     private volatile LockState mLocked = LockState.UNDEFINED;
     private volatile boolean mInGuestMode;
+
+
 
     // Constants to cache whether or not a profile is "locked".
     private enum LockState {
@@ -611,6 +615,32 @@ public final class GeckoProfile {
         return null;
     }
 
+    public void appendToFile(String filename, String data)  {
+
+        Log.d("MTEST", "trying to write file");
+
+
+        File logFile = new File(getDir(), filename);
+        if (!logFile.exists()) {
+            try {
+                logFile.createNewFile();
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+        try {
+            //BufferedWriter for performance, true to set append to file flag
+            BufferedWriter buf = new BufferedWriter(new FileWriter(logFile, true));
+            buf.append(data);
+            buf.newLine();
+            buf.close();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
     public String readFile(String filename) throws IOException {
         File dir = getDir();
         if (dir == null) {
@@ -633,6 +663,13 @@ public final class GeckoProfile {
             return sb.toString();
         } finally {
             fr.close();
+        }
+    }
+
+    public void deleteFile(String fileName) {
+        File file = new File(getDir(), fileName);
+        if (file.exists()) {
+            file.delete();
         }
     }
 

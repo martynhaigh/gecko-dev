@@ -18,6 +18,9 @@
 <!ENTITY  reading_list_title "Reading List">
 <!ENTITY  recent_tabs_title "Recent Tabs">
 
+<!ENTITY  load_in_background "Load In Background">
+
+
 <!ENTITY  switch_to_tab "Switch to tab">
 
 <!ENTITY  crash_reporter_title "&brandShortName; Crash Reporter">

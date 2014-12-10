@@ -167,7 +167,7 @@ public abstract class GeckoApp
     // after a version upgrade.
     private static final int CLEANUP_DEFERRAL_SECONDS = 15;
 
-    protected RelativeLayout mRootLayout;
+    protected FrameLayout mRootLayout;
     protected RelativeLayout mMainLayout;
     protected RelativeLayout mGeckoLayout;
     private View mCameraView;
@@ -1274,7 +1274,7 @@ public abstract class GeckoApp
         setContentView(getLayout());
 
         // Set up Gecko layout.
-        mRootLayout = (RelativeLayout) findViewById(R.id.root_layout);
+        mRootLayout = (FrameLayout) findViewById(R.id.root_layout);
         mGeckoLayout = (RelativeLayout) findViewById(R.id.gecko_layout);
         mMainLayout = (RelativeLayout) findViewById(R.id.main_layout);
 
@@ -1504,6 +1504,8 @@ public abstract class GeckoApp
             GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Session:Restore", restoreMessage));
         }
 
+        processReadingList();
+
         // External URLs should always be loaded regardless of whether Gecko is
         // already running.
         if (isExternalURL) {
@@ -1630,6 +1632,23 @@ public abstract class GeckoApp
             processAlertCallback(intent);
         } else if (NotificationHelper.HELPER_BROADCAST_ACTION.equals(action)) {
             NotificationHelper.getInstance(getApplicationContext()).handleNotificationIntent(intent);
+        }
+    }
+
+    private void processReadingList() {
+        // Check background load tabs
+        Log.d("MTEST", "Checking reading list");
+        String readingList = null;
+        try {
+            readingList = mProfile.readFile("temp_reading_list.json");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if(!TextUtils.isEmpty(readingList)) {
+            String[] sites = TextUtils.split(readingList, "\n");
+            Log.d("MTEST", "reading list - found " + sites.length);
+            Toast.makeText(getContext(), "Found" + sites.length + " sites", Toast.LENGTH_SHORT).show();
+            mProfile.deleteFile("temp_reading_list.json");
         }
     }
 
@@ -1937,6 +1956,8 @@ public abstract class GeckoApp
                 }
             }
         });
+
+        processReadingList();
     }
 
     @Override
