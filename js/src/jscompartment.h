@@ -9,6 +9,7 @@
 
 #include "mozilla/MemoryReporting.h"
 
+#include "prmjtime.h"
 #include "builtin/RegExp.h"
 #include "gc/Zone.h"
 #include "vm/GlobalObject.h"
@@ -166,10 +167,22 @@ struct JSCompartment
     js::ReadBarrieredGlobalObject global_;
 
     unsigned                     enterCompartmentDepth;
+    int64_t                      startInterval;
 
   public:
-    void enter() { enterCompartmentDepth++; }
-    void leave() { enterCompartmentDepth--; }
+    int64_t                      totalTime;
+    void enter() {
+        if (addonId && !enterCompartmentDepth) {
+            startInterval = PRMJ_Now();
+        }
+        enterCompartmentDepth++;
+    }
+    void leave() {
+        enterCompartmentDepth--;
+        if (addonId && !enterCompartmentDepth) {
+            totalTime += (PRMJ_Now() - startInterval);
+        }
+    }
     bool hasBeenEntered() { return !!enterCompartmentDepth; }
 
     JS::Zone *zone() { return zone_; }
@@ -430,8 +443,8 @@ struct JSCompartment
     // InterpreterFrame::isDebuggee, and Baseline::isDebuggee are enumerated
     // below.
     //
-    // 1. When a compartment's isDebuggee() == true, relazification and lazy
-    //    parsing are disabled.
+    // 1. When a compartment's isDebuggee() == true, relazification, lazy
+    //    parsing, and asm.js are disabled.
     //
     // 2. When a compartment's debugObservesAllExecution() == true, all of the
     //    compartment's scripts are considered debuggee scripts.

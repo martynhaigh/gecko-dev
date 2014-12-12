@@ -535,7 +535,7 @@
           Section({name: "UnsupportedBrowserView"}, 
             Example({summary: "Standalone Unsupported Browser"}, 
               React.DOM.div({className: "standalone"}, 
-                UnsupportedBrowserView(null)
+                UnsupportedBrowserView({helper: {isFirefox: returnFalse}})
               )
             )
           ), 
@@ -617,6 +617,17 @@
                   dispatcher: dispatcher, 
                   activeRoomStore: activeRoomStore, 
                   roomState: ROOM_STATES.FULL, 
+                  helper: {isFirefox: returnFalse}})
+              )
+            ), 
+
+            Example({summary: "Standalone room conversation (feedback)"}, 
+              React.DOM.div({className: "standalone"}, 
+                StandaloneRoomView({
+                  dispatcher: dispatcher, 
+                  activeRoomStore: activeRoomStore, 
+                  feedbackStore: feedbackStore, 
+                  roomState: ROOM_STATES.ENDED, 
                   helper: {isFirefox: returnFalse}})
               )
             ), 

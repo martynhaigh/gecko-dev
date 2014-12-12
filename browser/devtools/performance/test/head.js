@@ -158,7 +158,7 @@ function initBackend(aUrl) {
   });
 }
 
-function initPerformance(aUrl) {
+function initPerformance(aUrl, selectedTool="performance") {
   info("Initializing a performance pane.");
 
   return Task.spawn(function*() {
@@ -168,7 +168,7 @@ function initPerformance(aUrl) {
     yield target.makeRemote();
 
     Services.prefs.setBoolPref("devtools.performance_dev.enabled", true);
-    let toolbox = yield gDevTools.showToolbox(target, "performance");
+    let toolbox = yield gDevTools.showToolbox(target, selectedTool);
     let panel = toolbox.getCurrentPanel();
     return { target, panel, toolbox };
   });
@@ -211,8 +211,14 @@ function busyWait(time) {
   while (Date.now() - start < time) { stack = Components.stack; }
 }
 
-function idleWait(time) {
-  return DevToolsUtils.waitForTime(time);
+function command (button) {
+  let ev = button.ownerDocument.createEvent("XULCommandEvent");
+  ev.initCommandEvent("command", true, true, button.ownerDocument.defaultView, 0, false, false, false, false, null);
+  button.dispatchEvent(ev);
+}
+
+function click (win, button) {
+  EventUtils.sendMouseEvent({ type: "click" }, button, win);
 }
 
 function* startRecording(panel) {
@@ -227,7 +233,7 @@ function* startRecording(panel) {
   ok(!button.hasAttribute("locked"),
     "The record button should not be locked yet.");
 
-  EventUtils.sendMouseEvent({ type: "click" }, button, win);
+  click(win, button);
 
   yield clicked;
 
@@ -255,7 +261,7 @@ function* stopRecording(panel) {
   ok(!button.hasAttribute("locked"),
     "The record button should not be locked yet.");
 
-  EventUtils.sendMouseEvent({ type: "click" }, button, win);
+  click(win, button);
 
   yield clicked;
 
@@ -310,4 +316,9 @@ function dragStop(graph, x, y = 1) {
 function dropSelection(graph) {
   graph.dropSelection();
   graph.emit("mouseup");
+}
+
+function getSourceActor(aSources, aURL) {
+  let item = aSources.getItemForAttachment(a => a.source.url === aURL);
+  return item && item.value;
 }

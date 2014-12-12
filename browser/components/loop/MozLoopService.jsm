@@ -71,6 +71,9 @@ XPCOMUtils.defineLazyModuleGetter(this, "roomsPushNotification",
 XPCOMUtils.defineLazyModuleGetter(this, "MozLoopPushHandler",
                                   "resource:///modules/loop/MozLoopPushHandler.jsm");
 
+XPCOMUtils.defineLazyModuleGetter(this, "UITour",
+                                  "resource:///modules/UITour.jsm");
+
 XPCOMUtils.defineLazyServiceGetter(this, "uuidgen",
                                    "@mozilla.org/uuid-generator;1",
                                    "nsIUUIDGenerator");
@@ -453,6 +456,20 @@ let MozLoopServiceInternal = {
                                           2 * 32, true);
     }
 
+    if (payloadObj) {
+      // Note: we must copy the object rather than mutate it, to avoid
+      // mutating the values of the object passed in.
+      let newPayloadObj = {};
+      for (let property of Object.getOwnPropertyNames(payloadObj)) {
+        if (typeof payloadObj[property] == "string") {
+          newPayloadObj[property] = CommonUtils.encodeUTF8(payloadObj[property]);
+        } else {
+          newPayloadObj[property] = payloadObj[property];
+        }
+      };
+      payloadObj = newPayloadObj;
+    }
+
     return gHawkClient.request(path, method, credentials, payloadObj).then((result) => {
       this.clearError("network");
       return result;
@@ -810,6 +827,17 @@ let MozLoopServiceInternal = {
         chatbox.removeEventListener("DOMContentLoaded", loaded, true);
 
         let window = chatbox.contentWindow;
+
+        function socialFrameChanged(eventName) {
+          UITour.availableTargetsCache.clear();
+          UITour.notify(eventName);
+        }
+
+        window.addEventListener("socialFrameHide", socialFrameChanged.bind(null, "Loop:ChatWindowHidden"));
+        window.addEventListener("socialFrameShow", socialFrameChanged.bind(null, "Loop:ChatWindowShown"));
+        window.addEventListener("socialFrameDetached", socialFrameChanged.bind(null, "Loop:ChatWindowDetached"));
+        window.addEventListener("unload", socialFrameChanged.bind(null, "Loop:ChatWindowClosed"));
+
         injectLoopAPI(window);
 
         let ourID = window.QueryInterface(Ci.nsIInterfaceRequestor)
@@ -850,6 +878,8 @@ let MozLoopServiceInternal = {
 
         let pc_static = new window.mozRTCPeerConnectionStatic();
         pc_static.registerPeerConnectionLifecycleCallback(onPCLifecycleChange);
+
+        UITour.notify("Loop:ChatWindowOpened");
       }.bind(this), true);
     };
 

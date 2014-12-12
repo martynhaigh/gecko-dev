@@ -345,8 +345,9 @@ let LoopRoomsInternal = {
     MozLoopService.hawkRequest(this.sessionType, url, "DELETE")
       .then(response => {
         this.rooms.delete(roomToken);
+        eventEmitter.emit("delete", room);
+        eventEmitter.emit("delete:" + room.roomToken, room);
         callback(null, room);
-        // We'll emit an update when the push notification is received.
       }, error => callback(error)).catch(error => callback(error));
   },
 
@@ -468,6 +469,13 @@ let LoopRoomsInternal = {
    * @param {String} channelID Notification channel identifier.
    */
   onNotification: function(version, channelID) {
+    // See if we received a notification for the channel that's currently active:
+    let channelIDs = MozLoopService.channelIDs;
+    if ((this.sessionType == LOOP_SESSION_TYPE.GUEST && channelID != channelIDs.roomsGuest) ||
+        (this.sessionType == LOOP_SESSION_TYPE.FXA   && channelID != channelIDs.roomsFxA)) {
+      return;
+    }
+
     gDirty = true;
     this.getAll(version, () => {});
   },

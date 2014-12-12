@@ -60,7 +60,7 @@ MacroAssemblerX86::addConstantDouble(double d, FloatRegister dest)
     Double *dbl = getDouble(d);
     if (!dbl)
         return;
-    masm.addsd_mr(reinterpret_cast<const void *>(dbl->uses.prev()), dest.code());
+    masm.vaddsd_mr(reinterpret_cast<const void *>(dbl->uses.prev()), dest.code(), dest.code());
     dbl->uses.setPrev(masm.size());
 }
 
@@ -106,7 +106,7 @@ MacroAssemblerX86::addConstantFloat32(float f, FloatRegister dest)
     Float *flt = getFloat(f);
     if (!flt)
         return;
-    masm.addss_mr(reinterpret_cast<const void *>(flt->uses.prev()), dest.code());
+    masm.vaddss_mr(reinterpret_cast<const void *>(flt->uses.prev()), dest.code(), dest.code());
     flt->uses.setPrev(masm.size());
 }
 
@@ -170,7 +170,7 @@ MacroAssemblerX86::finish()
     for (size_t i = 0; i < doubles_.length(); i++) {
         CodeLabel cl(doubles_[i].uses);
         writeDoubleConstant(doubles_[i].value, cl.src());
-        enoughMemory_ &= addCodeLabel(cl);
+        addCodeLabel(cl);
         if (!enoughMemory_)
             return;
     }
@@ -180,7 +180,7 @@ MacroAssemblerX86::finish()
     for (size_t i = 0; i < floats_.length(); i++) {
         CodeLabel cl(floats_[i].uses);
         writeFloatConstant(floats_[i].value, cl.src());
-        enoughMemory_ &= addCodeLabel(cl);
+        addCodeLabel(cl);
         if (!enoughMemory_)
             return;
     }
@@ -196,7 +196,7 @@ MacroAssemblerX86::finish()
           case SimdConstant::Float32x4: writeFloat32x4Constant(v.value, cl.src()); break;
           default: MOZ_CRASH("unexpected SimdConstant type");
         }
-        enoughMemory_ &= addCodeLabel(cl);
+        addCodeLabel(cl);
         if (!enoughMemory_)
             return;
     }
@@ -493,8 +493,6 @@ template void
 MacroAssemblerX86::storeUnboxedValue(ConstantOrRegister value, MIRType valueType, const BaseIndex &dest,
                                      MIRType slotType);
 
-#ifdef JSGC_GENERATIONAL
-
 void
 MacroAssemblerX86::branchPtrInNurseryRange(Condition cond, Register ptr, Register temp,
                                            Label *label)
@@ -523,5 +521,3 @@ MacroAssemblerX86::branchValueIsNurseryObject(Condition cond, ValueOperand value
 
     bind(&done);
 }
-
-#endif

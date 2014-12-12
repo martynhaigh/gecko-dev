@@ -281,62 +281,57 @@ Snapshot(JSContext *cx, HandleObject pobj_, unsigned flags, AutoIdVector *props)
     RootedObject pobj(cx, pobj_);
 
     do {
-        const Class *clasp = pobj->getClass();
-        if (pobj->isNative() &&
-            !pobj->getOps()->enumerate &&
-            !(clasp->flags & JSCLASS_NEW_ENUMERATE))
-        {
-            if (!clasp->enumerate(cx, pobj.as<NativeObject>()))
-                return false;
-            if (!EnumerateNativeProperties(cx, pobj.as<NativeObject>(), flags, ht, props))
-                return false;
-        } else {
-            if (pobj->is<ProxyObject>()) {
-                AutoIdVector proxyProps(cx);
-                if (flags & JSITER_OWNONLY) {
-                    if (flags & JSITER_HIDDEN) {
-                        // This gets all property keys, both strings and
-                        // symbols.  The call to Enumerate in the loop below
-                        // will filter out unwanted keys, per the flags.
-                        if (!Proxy::ownPropertyKeys(cx, pobj, proxyProps))
-                            return false;
-                    } else {
-                        if (!Proxy::getOwnEnumerablePropertyKeys(cx, pobj, proxyProps))
-                            return false;
-                    }
-                } else {
-                    if (!Proxy::getEnumerablePropertyKeys(cx, pobj, proxyProps))
-                        return false;
-                }
+        if (JSNewEnumerateOp enumerate = pobj->getOps()->enumerate) {
+            // This hook has the full control over what gets enumerated.
+            AutoIdVector properties(cx);
+            if (!enumerate(cx, pobj, properties))
+                 return false;
 
-                for (size_t n = 0, len = proxyProps.length(); n < len; n++) {
-                    if (!Enumerate(cx, pobj, proxyProps[n], true, flags, ht, props))
-                        return false;
-                }
-
-                // Proxy objects enumerate the prototype on their own, so we're
-                // done here.
-                break;
+            for (size_t n = 0; n < properties.length(); n++) {
+                if (!Enumerate(cx, pobj, properties[n], true, flags, ht, props))
+                    return false;
             }
-            RootedValue state(cx);
-            RootedId id(cx);
-            JSIterateOp op = (flags & JSITER_HIDDEN) ? JSENUMERATE_INIT_ALL : JSENUMERATE_INIT;
-            if (!JSObject::enumerate(cx, pobj, op, &state, &id))
-                return false;
-            if (state.isMagic(JS_NATIVE_ENUMERATE)) {
+
+            if (pobj->isNative()) {
                 if (!EnumerateNativeProperties(cx, pobj.as<NativeObject>(), flags, ht, props))
                     return false;
-            } else {
-                while (true) {
-                    RootedId id(cx);
-                    if (!JSObject::enumerate(cx, pobj, JSENUMERATE_NEXT, &state, &id))
-                        return false;
-                    if (state.isNull())
-                        break;
-                    if (!Enumerate(cx, pobj, id, true, flags, ht, props))
-                        return false;
-                }
             }
+        } else if (pobj->isNative()) {
+            // Give the object a chance to resolve all lazy properties
+            if (JSEnumerateOp enumerate = pobj->getClass()->enumerate) {
+                if (!enumerate(cx, pobj.as<NativeObject>()))
+                    return false;
+            }
+            if (!EnumerateNativeProperties(cx, pobj.as<NativeObject>(), flags, ht, props))
+                return false;
+        } else if (pobj->is<ProxyObject>()) {
+            AutoIdVector proxyProps(cx);
+            if (flags & JSITER_OWNONLY) {
+                if (flags & JSITER_HIDDEN) {
+                    // This gets all property keys, both strings and
+                    // symbols.  The call to Enumerate in the loop below
+                    // will filter out unwanted keys, per the flags.
+                    if (!Proxy::ownPropertyKeys(cx, pobj, proxyProps))
+                        return false;
+                 } else {
+                    if (!Proxy::getOwnEnumerablePropertyKeys(cx, pobj, proxyProps))
+                         return false;
+                }
+            } else {
+                if (!Proxy::getEnumerablePropertyKeys(cx, pobj, proxyProps))
+                    return false;
+            }
+
+            for (size_t n = 0, len = proxyProps.length(); n < len; n++) {
+                if (!Enumerate(cx, pobj, proxyProps[n], true, flags, ht, props))
+                    return false;
+            }
+
+            // Proxy objects enumerate the prototype on their own, so we're
+            // done here.
+            break;
+        } else {
+            MOZ_CRASH("non-native objects must have an enumerate op");
         }
 
         if (flags & JSITER_OWNONLY)
@@ -484,21 +479,17 @@ NewPropertyIteratorObject(JSContext *cx, unsigned flags)
         if (!shape)
             return nullptr;
 
-        NativeObject *obj =
-            MaybeNativeObject(JSObject::create(cx, ITERATOR_FINALIZE_KIND,
-                                               GetInitialHeap(GenericObject, clasp), shape, type));
+        JSObject *obj = JSObject::create(cx, ITERATOR_FINALIZE_KIND,
+                                         GetInitialHeap(GenericObject, clasp), shape, type);
         if (!obj)
             return nullptr;
+        PropertyIteratorObject *res = &obj->as<PropertyIteratorObject>();
 
-        MOZ_ASSERT(obj->numFixedSlots() == JSObject::ITER_CLASS_NFIXED_SLOTS);
-        return &obj->as<PropertyIteratorObject>();
+        MOZ_ASSERT(res->numFixedSlots() == JSObject::ITER_CLASS_NFIXED_SLOTS);
+        return res;
     }
 
-    JSObject *obj = NewBuiltinClassInstance(cx, &PropertyIteratorObject::class_);
-    if (!obj)
-        return nullptr;
-
-    return &obj->as<PropertyIteratorObject>();
+    return NewBuiltinClassInstance<PropertyIteratorObject>(cx);
 }
 
 NativeIterator *
@@ -723,7 +714,7 @@ js::GetIterator(JSContext *cx, HandleObject obj, unsigned flags, MutableHandleOb
                     IsAnyTypedArray(pobj) ||
                     pobj->hasUncacheableProto() ||
                     pobj->getOps()->enumerate ||
-                    pobj->getClass()->enumerate != JS_EnumerateStub ||
+                    pobj->getClass()->enumerate ||
                     pobj->as<NativeObject>().containsPure(cx->names().iteratorIntrinsic))
                 {
                     shapes.clear();
@@ -809,7 +800,7 @@ js::CreateItrResultObject(JSContext *cx, HandleValue value, bool done)
     if (!proto)
         return nullptr;
 
-    RootedObject obj(cx, NewObjectWithGivenProto(cx, &JSObject::class_, proto, cx->global()));
+    RootedPlainObject obj(cx, NewObjectWithGivenProto<PlainObject>(cx, proto, cx->global()));
     if (!obj)
         return nullptr;
 
@@ -921,18 +912,18 @@ const Class PropertyIteratorObject::class_ = {
     JSCLASS_HAS_CACHED_PROTO(JSProto_Iterator) |
     JSCLASS_HAS_PRIVATE |
     JSCLASS_BACKGROUND_FINALIZE,
-    JS_PropertyStub,         /* addProperty */
-    JS_DeletePropertyStub,   /* delProperty */
-    JS_PropertyStub,         /* getProperty */
-    JS_StrictPropertyStub,   /* setProperty */
-    JS_EnumerateStub,
-    JS_ResolveStub,
-    JS_ConvertStub,
+    nullptr, /* addProperty */
+    nullptr, /* delProperty */
+    nullptr, /* getProperty */
+    nullptr, /* setProperty */
+    nullptr, /* enumerate */
+    nullptr, /* resolve */
+    nullptr, /* convert */
     finalize,
-    nullptr,                 /* call        */
-    nullptr,                 /* hasInstance */
-    nullptr,                 /* construct   */
-    trace,
+    nullptr, /* call        */
+    nullptr, /* hasInstance */
+    nullptr, /* construct   */
+    trace
 };
 
 enum {
@@ -945,15 +936,7 @@ enum {
 const Class ArrayIteratorObject::class_ = {
     "Array Iterator",
     JSCLASS_IMPLEMENTS_BARRIERS |
-    JSCLASS_HAS_RESERVED_SLOTS(ArrayIteratorSlotCount),
-    JS_PropertyStub,         /* addProperty */
-    JS_DeletePropertyStub,   /* delProperty */
-    JS_PropertyStub,         /* getProperty */
-    JS_StrictPropertyStub,   /* setProperty */
-    JS_EnumerateStub,
-    JS_ResolveStub,
-    JS_ConvertStub,
-    nullptr                  /* finalize    */
+    JSCLASS_HAS_RESERVED_SLOTS(ArrayIteratorSlotCount)
 };
 
 static const JSFunctionSpec array_iterator_methods[] = {
@@ -964,15 +947,7 @@ static const JSFunctionSpec array_iterator_methods[] = {
 
 static const Class StringIteratorPrototypeClass = {
     "String Iterator",
-    JSCLASS_IMPLEMENTS_BARRIERS,
-    JS_PropertyStub,         /* addProperty */
-    JS_DeletePropertyStub,   /* delProperty */
-    JS_PropertyStub,         /* getProperty */
-    JS_StrictPropertyStub,   /* setProperty */
-    JS_EnumerateStub,
-    JS_ResolveStub,
-    JS_ConvertStub,
-    nullptr                  /* finalize    */
+    JSCLASS_IMPLEMENTS_BARRIERS
 };
 
 enum {
@@ -984,15 +959,7 @@ enum {
 const Class StringIteratorObject::class_ = {
     "String Iterator",
     JSCLASS_IMPLEMENTS_BARRIERS |
-    JSCLASS_HAS_RESERVED_SLOTS(StringIteratorSlotCount),
-    JS_PropertyStub,         /* addProperty */
-    JS_DeletePropertyStub,   /* delProperty */
-    JS_PropertyStub,         /* getProperty */
-    JS_StrictPropertyStub,   /* setProperty */
-    JS_EnumerateStub,
-    JS_ResolveStub,
-    JS_ConvertStub,
-    nullptr                  /* finalize    */
+    JSCLASS_HAS_RESERVED_SLOTS(StringIteratorSlotCount)
 };
 
 static const JSFunctionSpec string_iterator_methods[] = {
@@ -1319,17 +1286,16 @@ stopiter_hasInstance(JSContext *cx, HandleObject obj, MutableHandleValue v, bool
 const Class StopIterationObject::class_ = {
     "StopIteration",
     JSCLASS_HAS_CACHED_PROTO(JSProto_StopIteration),
-    JS_PropertyStub,         /* addProperty */
-    JS_DeletePropertyStub,   /* delProperty */
-    JS_PropertyStub,         /* getProperty */
-    JS_StrictPropertyStub,   /* setProperty */
-    JS_EnumerateStub,
-    JS_ResolveStub,
-    JS_ConvertStub,
-    nullptr,                 /* finalize    */
-    nullptr,                 /* call        */
-    stopiter_hasInstance,
-    nullptr                  /* construct   */
+    nullptr, /* addProperty */
+    nullptr, /* delProperty */
+    nullptr, /* getProperty */
+    nullptr, /* setProperty */
+    nullptr, /* enumerate */
+    nullptr, /* resolve */
+    nullptr, /* convert */
+    nullptr, /* finalize */
+    nullptr, /* call */
+    stopiter_hasInstance
 };
 
 /* static */ bool

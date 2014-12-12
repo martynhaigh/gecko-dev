@@ -144,18 +144,12 @@ XPCWrappedNativeXrayTraits::getWN(JSObject *wrapper)
 }
 
 const JSClass XPCWrappedNativeXrayTraits::HolderClass = {
-    "NativePropertyHolder", JSCLASS_HAS_RESERVED_SLOTS(2),
-    JS_PropertyStub, JS_DeletePropertyStub, JS_PropertyStub,
-    JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub,
-    JS_ConvertStub
+    "NativePropertyHolder", JSCLASS_HAS_RESERVED_SLOTS(2)
 };
 
 
 const JSClass JSXrayTraits::HolderClass = {
-    "JSXrayHolder", JSCLASS_HAS_RESERVED_SLOTS(SLOT_COUNT),
-    JS_PropertyStub, JS_DeletePropertyStub,
-    JS_PropertyStub, JS_StrictPropertyStub,
-    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub
+    "JSXrayHolder", JSCLASS_HAS_RESERVED_SLOTS(SLOT_COUNT)
 };
 
 bool
@@ -851,8 +845,8 @@ ExpandoObjectFinalize(JSFreeOp *fop, JSObject *obj)
 const JSClass ExpandoObjectClass = {
     "XrayExpandoObject",
     JSCLASS_HAS_RESERVED_SLOTS(JSSLOT_EXPANDO_COUNT),
-    JS_PropertyStub, JS_DeletePropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
-    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, ExpandoObjectFinalize
+    nullptr, nullptr, nullptr, nullptr,
+    nullptr, nullptr, nullptr, ExpandoObjectFinalize
 };
 
 bool
@@ -1234,10 +1228,10 @@ XPCWrappedNativeXrayTraits::resolveNativeProperty(JSContext *cx, HandleObject wr
 
         // Without a wrapper the function would live on the prototype. Since we
         // don't have one, we have to avoid calling the scriptable helper's
-        // GetProperty method for this property, so stub out the getter and
+        // GetProperty method for this property, so null out the getter and
         // setter here explicitly.
-        desc.setGetter(JS_PropertyStub);
-        desc.setSetter(JS_StrictPropertyStub);
+        desc.setGetter(nullptr);
+        desc.setSetter(nullptr);
     }
 
     if (!JS_WrapValue(cx, desc.value()) || !JS_WrapValue(cx, &fval))

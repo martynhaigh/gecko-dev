@@ -1131,7 +1131,7 @@ public:
 
     // Builds an exit frame on the stack, with a return address to an internal
     // non-function. Returns offset to be passed to markSafepointAt().
-    bool buildFakeExitFrame(Register scratch, uint32_t *offset);
+    void buildFakeExitFrame(Register scratch, uint32_t *offset);
 
     void callWithExitFrame(Label *target);
     void callWithExitFrame(JitCode *target);
@@ -1453,11 +1453,9 @@ public:
         as_movs(dest, src);
     }
 
-#ifdef JSGC_GENERATIONAL
     void branchPtrInNurseryRange(Condition cond, Register ptr, Register temp, Label *label);
     void branchValueIsNurseryObject(Condition cond, ValueOperand value, Register temp,
                                     Label *label);
-#endif
 
     void loadAsmJSActivation(Register dest) {
         loadPtr(Address(GlobalReg, AsmJSActivationGlobalDataOffset - AsmJSGlobalRegBias), dest);

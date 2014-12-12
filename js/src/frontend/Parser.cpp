@@ -1169,7 +1169,7 @@ Parser<FullParseHandler>::makeDefIntoUse(Definition *dn, ParseNode *pn, JSAtom *
     MOZ_ASSERT(dn->isKind(PNK_NAME));
     MOZ_ASSERT(dn->isArity(PN_NAME));
     MOZ_ASSERT(dn->pn_atom == atom);
-    dn->setOp((js_CodeSpec[dn->getOp()].format & JOF_SET) ? JSOP_SETNAME : JSOP_NAME);
+    dn->setOp((js_CodeSpec[dn->getOp()].format & JOF_SET) ? JSOP_SETNAME : JSOP_GETNAME);
     dn->setDefn(false);
     dn->setUsed(true);
     dn->pn_lexdef = (Definition *) pn;
@@ -3156,8 +3156,8 @@ Parser<ParseHandler>::bindVarOrGlobalConst(BindData<ParseHandler> *data,
     Node pn = data->pn;
     bool isConstDecl = data->op == JSOP_DEFCONST;
 
-    /* Default best op for pn is JSOP_NAME; we'll try to improve below. */
-    parser->handler.setOp(pn, JSOP_NAME);
+    /* Default best op for pn is JSOP_GETNAME; we'll try to improve below. */
+    parser->handler.setOp(pn, JSOP_GETNAME);
 
     if (!parser->checkStrictBinding(name, pn))
         return false;
@@ -6779,7 +6779,7 @@ Parser<FullParseHandler>::legacyComprehensionTail(ParseNode *bodyExpr, unsigned 
             name = tokenStream.currentName();
 
             /*
-             * Create a name node with pn_op JSOP_NAME.  We can't set pn_op to
+             * Create a name node with pn_op JSOP_GETNAME.  We can't set pn_op to
              * JSOP_GETLOCAL here, because we don't yet know the block's depth
              * in the operand stack frame.  The code generator computes that,
              * and it tries to bind all names to slots, so we must let it do
@@ -8333,9 +8333,6 @@ Parser<ParseHandler>::accumulateTelemetry()
     JSContext* cx = context->maybeJSContext();
     if (!cx)
         return;
-    JSAccumulateTelemetryDataCallback cb = cx->runtime()->telemetryCallback;
-    if (!cb)
-        return;
     const char* filename = getFilename();
     if (!filename)
         return;
@@ -8361,17 +8358,17 @@ Parser<ParseHandler>::accumulateTelemetry()
 
     // Call back into Firefox's Telemetry reporter.
     if (sawDeprecatedForEach)
-        (*cb)(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedForEach);
+         cx->runtime()->addTelemetry(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedForEach);
     if (sawDeprecatedDestructuringForIn)
-        (*cb)(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedDestructuringForIn);
+         cx->runtime()->addTelemetry(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedDestructuringForIn);
     if (sawDeprecatedLegacyGenerator)
-        (*cb)(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedLegacyGenerator);
+        cx->runtime()->addTelemetry(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedLegacyGenerator);
     if (sawDeprecatedExpressionClosure)
-        (*cb)(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedExpressionClosure);
+         cx->runtime()->addTelemetry(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedExpressionClosure);
     if (sawDeprecatedLetBlock)
-        (*cb)(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedLetBlock);
+         cx->runtime()->addTelemetry(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedLetBlock);
     if (sawDeprecatedLetExpression)
-        (*cb)(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedLetExpression);
+         cx->runtime()->addTelemetry(JS_TELEMETRY_DEPRECATED_LANGUAGE_EXTENSIONS_IN_CONTENT, DeprecatedLetExpression);
 }
 
 template class Parser<FullParseHandler>;

@@ -1688,7 +1688,7 @@ IonBuilder::inspectOpcode(JSOp op)
         return setStaticName(obj, name);
       }
 
-      case JSOP_NAME:
+      case JSOP_GETNAME:
       {
         PropertyName *name = info().getAtom(pc)->asPropertyName();
         return jsop_getname(name);
@@ -5301,7 +5301,7 @@ IonBuilder::createThisScriptedSingleton(JSFunction *target, MDefinition *callee)
         return nullptr;
 
     JSObject *templateObject = inspector->getTemplateObject(pc);
-    if (!templateObject || !templateObject->is<JSObject>())
+    if (!templateObject || !templateObject->is<PlainObject>())
         return nullptr;
     if (!templateObject->hasTenuredProto() || templateObject->getProto() != proto)
         return nullptr;
@@ -6037,7 +6037,7 @@ IonBuilder::jsop_newobject()
         return abort("No template object for NEWOBJECT");
     }
 
-    MOZ_ASSERT(templateObject->is<JSObject>());
+    MOZ_ASSERT(templateObject->is<PlainObject>());
     MConstant *templateConst = MConstant::NewConstraintlessObject(alloc(), templateObject);
     current->add(templateConst);
     MNewObject *ins = MNewObject::New(alloc(), constraints(), templateConst,
@@ -6605,7 +6605,7 @@ ClassHasResolveHook(CompileCompartment *comp, const Class *clasp, PropertyName *
     if (clasp == &ArrayObject::class_)
         return name == comp->runtime()->names().length;
 
-    if (clasp->resolve == JS_ResolveStub)
+    if (!clasp->resolve)
         return false;
 
     if (clasp->resolve == str_resolve) {
@@ -7065,10 +7065,8 @@ jit::TypeSetIncludes(types::TypeSet *types, MIRType input, types::TypeSet *input
 bool
 jit::NeedsPostBarrier(CompileInfo &info, MDefinition *value)
 {
-#ifdef JSGC_GENERATIONAL
     if (!GetJitContext()->runtime->gcNursery().exists())
         return false;
-#endif
     return info.executionMode() != ParallelExecution && value->mightBeType(MIRType_Object);
 }
 
@@ -8038,17 +8036,18 @@ IonBuilder::addTypedArrayLengthAndData(MDefinition *obj,
                                        MInstruction **length, MInstruction **elements)
 {
     MOZ_ASSERT((index != nullptr) == (elements != nullptr));
+    JSObject *tarr = nullptr;
 
-    if (obj->isConstant() && obj->toConstant()->value().isObject()) {
-        JSObject *tarr = &obj->toConstant()->value().toObject();
+    if (obj->isConstant() && obj->toConstant()->value().isObject())
+        tarr = &obj->toConstant()->value().toObject();
+    else if (obj->resultTypeSet())
+        tarr = obj->resultTypeSet()->getSingleton();
+
+    if (tarr) {
         void *data = AnyTypedArrayViewData(tarr);
         // Bug 979449 - Optimistically embed the elements and use TI to
         //              invalidate if we move them.
-#ifdef JSGC_GENERATIONAL
         bool isTenured = !tarr->runtimeFromMainThread()->gc.nursery.isInside(data);
-#else
-        bool isTenured = true;
-#endif
         if (isTenured && tarr->hasSingletonType()) {
             // The 'data' pointer of TypedArrayObject can change in rare circumstances
             // (ArrayBufferObject::changeContents).
@@ -8264,7 +8263,7 @@ IonBuilder::jsop_setelem()
         return emitted;
 
     // Emit call.
-    MInstruction *ins = MCallSetElement::New(alloc(), object, index, value);
+    MInstruction *ins = MCallSetElement::New(alloc(), object, index, value, IsStrictSetPC(pc));
     current->add(ins);
     current->push(value);
 
@@ -8392,10 +8391,8 @@ IonBuilder::setElemTryTypedStatic(bool *emitted, MDefinition *object,
     if (!tarrObj)
         return true;
 
-#ifdef JSGC_GENERATIONAL
     if (tarrObj->runtimeFromMainThread()->gc.nursery.isInside(AnyTypedArrayViewData(tarrObj)))
         return true;
-#endif
 
     types::TypeObjectKey *tarrType = types::TypeObjectKey::get(tarrObj);
     if (tarrType->unknownProperties())
@@ -9119,6 +9116,12 @@ IonBuilder::testCommonGetterSetter(types::TemporaryTypeSet *types, PropertyName 
         *globalGuard = addShapeGuard(globalObj, globalShape, Bailout_ShapeGuard);
     }
 
+    if (foundProto->isNative()) {
+        Shape *propShape = foundProto->as<NativeObject>().lookupPure(name);
+        if (propShape && !propShape->configurable())
+            return true;
+    }
+
     MInstruction *wrapper = constant(ObjectValue(*foundProto));
     *guard = addShapeGuard(wrapper, lastProperty, Bailout_ShapeGuard);
     return true;
@@ -9308,13 +9311,18 @@ IonBuilder::jsop_getprop(PropertyName *name)
     MDefinition *obj = current->pop();
     types::TemporaryTypeSet *types = bytecodeTypes(pc);
 
-    // Try to optimize arguments.length.
-    if (!getPropTryArgumentsLength(&emitted, obj) || emitted)
-        return emitted;
+    if (!info().executionModeIsAnalysis()) {
+        // The calls below can abort compilation, so we only try this if we're
+        // not analyzing.
 
-    // Try to optimize arguments.callee.
-    if (!getPropTryArgumentsCallee(&emitted, obj, name) || emitted)
-        return emitted;
+        // Try to optimize arguments.length.
+        if (!getPropTryArgumentsLength(&emitted, obj) || emitted)
+            return emitted;
+
+        // Try to optimize arguments.callee.
+        if (!getPropTryArgumentsCallee(&emitted, obj, name) || emitted)
+            return emitted;
+    }
 
     BarrierKind barrier = PropertyReadNeedsTypeBarrier(analysisContext, constraints(),
                                                        obj, name, types);
@@ -9694,6 +9702,16 @@ IonBuilder::getPropTryCommonGetter(bool *emitted, MDefinition *obj, PropertyName
         const JSJitInfo *jitinfo = commonGetter->jitInfo();
         MInstruction *get;
         if (jitinfo->isAlwaysInSlot) {
+            // If our object is a singleton and we know the property is
+            // constant (which is true if and only if the get doesn't alias
+            // anything), we can just read the slot here and use that constant.
+            JSObject *singleton = objTypes->getSingleton();
+            if (singleton && jitinfo->aliasSet() == JSJitInfo::AliasNone) {
+                size_t slot = jitinfo->slotIndex;
+                *emitted = true;
+                return pushConstant(GetReservedSlot(singleton, slot));
+            }
+
             // We can't use MLoadFixedSlot here because it might not have the
             // right aliasing behavior; we want to alias DOM setters as needed.
             get = MGetDOMMember::New(alloc(), jitinfo, obj, guard, globalGuard);

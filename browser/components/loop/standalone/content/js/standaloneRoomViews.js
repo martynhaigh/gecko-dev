@@ -127,6 +127,10 @@ loop.standaloneRoomViews = (function(mozL10n) {
             React.DOM.div({className: "room-inner-info-area"}, 
               React.DOM.p({className: "failed-room-message"}, 
                 this._getFailureString()
+              ), 
+              React.DOM.button({className: "btn btn-join btn-info", 
+                      onClick: this.props.joinRoom}, 
+                mozL10n.get("retry_call_button")
               )
             )
           );
@@ -347,6 +351,7 @@ loop.standaloneRoomViews = (function(mozL10n) {
 
       return (
         React.DOM.div({className: "room-conversation-wrapper"}, 
+          React.DOM.div({className: "beta-logo"}), 
           StandaloneRoomHeader(null), 
           StandaloneRoomInfoArea({roomState: this.state.roomState, 
                                   failureReason: this.state.failureReason, 

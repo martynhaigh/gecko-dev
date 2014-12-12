@@ -623,7 +623,10 @@ MediaDecoderStateMachine::DecodeVideo()
     mVideoDecodeStartTime = TimeStamp::Now();
   }
 
-  mReader->RequestVideoData(skipToNextKeyFrame, currentTime);
+  mReader->RequestVideoData(skipToNextKeyFrame, currentTime)
+         ->Then(DecodeTaskQueue(), __func__, this,
+                &MediaDecoderStateMachine::OnVideoDecoded,
+                &MediaDecoderStateMachine::OnVideoNotDecoded);
 }
 
 bool
@@ -666,7 +669,9 @@ MediaDecoderStateMachine::DecodeAudio()
       mIsAudioPrerolling = false;
     }
   }
-  mReader->RequestAudioData();
+  mReader->RequestAudioData()->Then(DecodeTaskQueue(), __func__, this,
+                                    &MediaDecoderStateMachine::OnAudioDecoded,
+                                    &MediaDecoderStateMachine::OnAudioNotDecoded);
 }
 
 bool
@@ -805,7 +810,7 @@ MediaDecoderStateMachine::Push(VideoData* aSample)
 
 void
 MediaDecoderStateMachine::OnNotDecoded(MediaData::Type aType,
-                                       RequestSampleCallback::NotDecodedReason aReason)
+                                       MediaDecoderReader::NotDecodedReason aReason)
 {
   ReentrantMonitorAutoEnter mon(mDecoder->GetReentrantMonitor());
   SAMPLE_LOG("OnNotDecoded (aType=%u, aReason=%u)", aType, aReason);
@@ -820,7 +825,7 @@ MediaDecoderStateMachine::OnNotDecoded(MediaData::Type aType,
   }
 
   // If this is a decode error, delegate to the generic error path.
-  if (aReason == RequestSampleCallback::DECODE_ERROR) {
+  if (aReason == MediaDecoderReader::DECODE_ERROR) {
     DecodeError();
     return;
   }
@@ -828,7 +833,7 @@ MediaDecoderStateMachine::OnNotDecoded(MediaData::Type aType,
   // If the decoder is waiting for data, we need to make sure that the requests
   // are cleared, which happened above. Additionally, if we're out of decoded
   // samples, we need to switch to buffering mode.
-  if (aReason == RequestSampleCallback::WAITING_FOR_DATA) {
+  if (aReason == MediaDecoderReader::WAITING_FOR_DATA) {
     bool outOfSamples = isAudio ? !AudioQueue().GetSize() : !VideoQueue().GetSize();
     if (outOfSamples) {
       StartBuffering();
@@ -837,14 +842,14 @@ MediaDecoderStateMachine::OnNotDecoded(MediaData::Type aType,
     return;
   }
 
-  if (aReason == RequestSampleCallback::CANCELED) {
+  if (aReason == MediaDecoderReader::CANCELED) {
     DispatchDecodeTasksIfNeeded();
     return;
   }
 
   // This is an EOS. Finish off the queue, and then handle things based on our
   // state.
-  MOZ_ASSERT(aReason == RequestSampleCallback::END_OF_STREAM);
+  MOZ_ASSERT(aReason == MediaDecoderReader::END_OF_STREAM);
   if (!isAudio && mState == DECODER_STATE_SEEKING &&
       mCurrentSeekTarget.IsValid() && mFirstVideoFrameAfterSeek) {
     // Null sample. Hit end of stream. If we have decoded a frame,
@@ -915,6 +920,7 @@ MediaDecoderStateMachine::MaybeFinishDecodeFirstFrame()
 void
 MediaDecoderStateMachine::OnVideoDecoded(VideoData* aVideoSample)
 {
+  MOZ_ASSERT(OnDecodeThread());
   ReentrantMonitorAutoEnter mon(mDecoder->GetReentrantMonitor());
   nsRefPtr<VideoData> video(aVideoSample);
   mVideoRequestPending = false;
@@ -1136,6 +1142,17 @@ void MediaDecoderStateMachine::SetSyncPointForMediaStream()
 
   mSyncPointInMediaStream = stream->GetLastOutputTime();
   mSyncPointInDecodedStream = mStartTime + mPlayDuration;
+}
+
+void MediaDecoderStateMachine::ResyncMediaStreamClock()
+{
+  AssertCurrentThreadInMonitor();
+  MOZ_ASSERT(mDecoder->GetDecodedStream());
+
+  if (IsPlaying()) {
+    SetPlayStartTime(TimeStamp::Now());
+    mPlayDuration = GetCurrentTimeViaMediaStreamSync() - mStartTime;
+  }
 }
 
 int64_t MediaDecoderStateMachine::GetCurrentTimeViaMediaStreamSync() const
@@ -2117,12 +2134,17 @@ MediaDecoderStateMachine::DecodeFirstFrame()
   } else {
     if (HasAudio()) {
       ReentrantMonitorAutoExit unlock(mDecoder->GetReentrantMonitor());
-      mReader->RequestAudioData();
+      mReader->RequestAudioData()->Then(DecodeTaskQueue(), __func__, this,
+                                        &MediaDecoderStateMachine::OnAudioDecoded,
+                                        &MediaDecoderStateMachine::OnAudioNotDecoded);
     }
     if (HasVideo()) {
       mVideoDecodeStartTime = TimeStamp::Now();
       ReentrantMonitorAutoExit unlock(mDecoder->GetReentrantMonitor());
-      mReader->RequestVideoData(false, 0);
+      mReader->RequestVideoData(false, 0)
+             ->Then(DecodeTaskQueue(), __func__, this,
+                    &MediaDecoderStateMachine::OnVideoDecoded,
+                    &MediaDecoderStateMachine::OnVideoNotDecoded);
     }
   }
 
@@ -2459,6 +2481,53 @@ private:
   nsRefPtr<MediaDecoderStateMachine> mStateMachine;
 };
 
+void
+MediaDecoderStateMachine::ShutdownReader()
+{
+  MOZ_ASSERT(OnDecodeThread());
+  mReader->Shutdown()->Then(GetStateMachineThread(), __func__, this,
+                            &MediaDecoderStateMachine::FinishShutdown,
+                            &MediaDecoderStateMachine::FinishShutdown);
+}
+
+void
+MediaDecoderStateMachine::FinishShutdown(bool aSuccess)
+{
+  MOZ_ASSERT(OnStateMachineThread());
+  MOZ_ASSERT(aSuccess);
+  ReentrantMonitorAutoEnter mon(mDecoder->GetReentrantMonitor());
+
+  // The reader's listeners hold references to the state machine,
+  // creating a cycle which keeps the state machine and its shared
+  // thread pools alive. So break it here.
+  AudioQueue().ClearListeners();
+  VideoQueue().ClearListeners();
+
+  // Now that those threads are stopped, there's no possibility of
+  // mPendingWakeDecoder being needed again. Revoke it.
+  mPendingWakeDecoder = nullptr;
+
+  MOZ_ASSERT(mState == DECODER_STATE_SHUTDOWN,
+             "How did we escape from the shutdown state?");
+  // We must daisy-chain these events to destroy the decoder. We must
+  // destroy the decoder on the main thread, but we can't destroy the
+  // decoder while this thread holds the decoder monitor. We can't
+  // dispatch an event to the main thread to destroy the decoder from
+  // here, as the event may run before the dispatch returns, and we
+  // hold the decoder monitor here. We also want to guarantee that the
+  // state machine is destroyed on the main thread, and so the
+  // event runner running this function (which holds a reference to the
+  // state machine) needs to finish and be released in order to allow
+  // that. So we dispatch an event to run after this event runner has
+  // finished and released its monitor/references. That event then will
+  // dispatch an event to the main thread to release the decoder and
+  // state machine.
+  GetStateMachineThread()->Dispatch(
+    new nsDispatchDisposeEvent(mDecoder, this), NS_DISPATCH_NORMAL);
+
+  DECODER_LOG("Dispose Event Dispatched");
+}
+
 nsresult MediaDecoderStateMachine::RunStateMachine()
 {
   AssertCurrentThreadInMonitor();
@@ -2475,47 +2544,14 @@ nsresult MediaDecoderStateMachine::RunStateMachine()
       StopAudioThread();
       FlushDecoding();
 
-      // Put a task in the decode queue to shutdown the reader and wait for
+      // Put a task in the decode queue to shutdown the reader.
       // the queue to spin down.
-      {
-        RefPtr<nsIRunnable> task;
-        task = NS_NewRunnableMethod(mReader, &MediaDecoderReader::Shutdown);
-        nsRefPtr<MediaTaskQueue> queue = DecodeTaskQueue();
-        DebugOnly<nsresult> rv = queue->Dispatch(task);
-        MOZ_ASSERT(NS_SUCCEEDED(rv));
-        ReentrantMonitorAutoExit exitMon(mDecoder->GetReentrantMonitor());
-        queue->AwaitShutdownAndIdle();
-      }
+      RefPtr<nsIRunnable> task;
+      task = NS_NewRunnableMethod(this, &MediaDecoderStateMachine::ShutdownReader);
+      DebugOnly<nsresult> rv = DecodeTaskQueue()->Dispatch(task);
+      MOZ_ASSERT(NS_SUCCEEDED(rv));
 
-      // The reader's listeners hold references to the state machine,
-      // creating a cycle which keeps the state machine and its shared
-      // thread pools alive. So break it here.
-      AudioQueue().ClearListeners();
-      VideoQueue().ClearListeners();
-
-      // Now that those threads are stopped, there's no possibility of
-      // mPendingWakeDecoder being needed again. Revoke it.
-      mPendingWakeDecoder = nullptr;
-
-      MOZ_ASSERT(mState == DECODER_STATE_SHUTDOWN,
-                 "How did we escape from the shutdown state?");
-      // We must daisy-chain these events to destroy the decoder. We must
-      // destroy the decoder on the main thread, but we can't destroy the
-      // decoder while this thread holds the decoder monitor. We can't
-      // dispatch an event to the main thread to destroy the decoder from
-      // here, as the event may run before the dispatch returns, and we
-      // hold the decoder monitor here. We also want to guarantee that the
-      // state machine is destroyed on the main thread, and so the
-      // event runner running this function (which holds a reference to the
-      // state machine) needs to finish and be released in order to allow
-      // that. So we dispatch an event to run after this event runner has
-      // finished and released its monitor/references. That event then will
-      // dispatch an event to the main thread to release the decoder and
-      // state machine.
-      GetStateMachineThread()->Dispatch(
-        new nsDispatchDisposeEvent(mDecoder, this), NS_DISPATCH_NORMAL);
-
-      DECODER_LOG("SHUTDOWN OK");
+      DECODER_LOG("Shutdown started");
       return NS_OK;
     }
 

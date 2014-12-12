@@ -23,14 +23,14 @@ loop.panel = (function(_, mozL10n) {
 
   var TabView = React.createClass({displayName: 'TabView',
     propTypes: {
-      buttonsHidden: React.PropTypes.bool,
+      buttonsHidden: React.PropTypes.array,
       // The selectedTab prop is used by the UI showcase.
       selectedTab: React.PropTypes.string
     },
 
     getDefaultProps: function() {
       return {
-        buttonsHidden: false
+        buttonsHidden: []
       };
     },
 
@@ -60,6 +60,9 @@ loop.panel = (function(_, mozL10n) {
           return;
         }
         var tabName = tab.props.name;
+        if (this.props.buttonsHidden.indexOf(tabName) > -1) {
+          return;
+        }
         var isSelected = (this.state.selectedTab == tabName);
         if (!tab.props.hidden) {
           tabButtons.push(
@@ -77,9 +80,7 @@ loop.panel = (function(_, mozL10n) {
       }, this);
       return (
         React.DOM.div({className: "tab-view-container"}, 
-          !this.props.buttonsHidden
-            ? React.DOM.ul({className: "tab-view"}, tabButtons)
-            : null, 
+          React.DOM.ul({className: "tab-view"}, tabButtons), 
           tabs
         )
       );
@@ -318,7 +319,8 @@ loop.panel = (function(_, mozL10n) {
                                    onClick: this.handleClickAccountEntry, 
                                    icon: "account", 
                                    displayed: this._isSignedIn()}), 
-            SettingsDropdownEntry({label: mozL10n.get("tour_label"), 
+            SettingsDropdownEntry({icon: "tour", 
+                                   label: mozL10n.get("tour_label"), 
                                    onClick: this.openGettingStartedTour}), 
             SettingsDropdownEntry({label: this._isSignedIn() ?
                                           mozL10n.get("settings_menu_item_signout") :
@@ -537,6 +539,12 @@ loop.panel = (function(_, mozL10n) {
       return {edit: false, text: this.props.text};
     },
 
+    componentWillReceiveProps: function(nextProps) {
+      if (nextProps.text !== this.props.text) {
+        this.setState({text: nextProps.text});
+      }
+    },
+
     handleTextClick: function(event) {
       event.stopPropagation();
       event.preventDefault();
@@ -589,6 +597,8 @@ loop.panel = (function(_, mozL10n) {
       room:       React.PropTypes.instanceOf(loop.store.Room).isRequired
     },
 
+    mixins: [loop.shared.mixins.WindowCloseMixin],
+
     getInitialState: function() {
       return { urlCopied: false };
     },
@@ -603,6 +613,7 @@ loop.panel = (function(_, mozL10n) {
       this.props.dispatcher.dispatch(new sharedActions.OpenRoom({
         roomToken: this.props.room.roomToken
       }));
+      this.closeWindow();
     },
 
     handleCopyButtonClick: function(event) {
@@ -752,7 +763,7 @@ loop.panel = (function(_, mozL10n) {
             }, this)
           ), 
           React.DOM.p(null, 
-            React.DOM.button({className: "btn btn-info", 
+            React.DOM.button({className: "btn btn-info new-room-button", 
                     onClick: this.handleCreateButtonClick, 
                     disabled: this._hasPendingOperation()}, 
               mozL10n.get("rooms_new_room_button_label")
@@ -773,6 +784,7 @@ loop.panel = (function(_, mozL10n) {
       // Mostly used for UI components showcase and unit tests
       callUrl: React.PropTypes.string,
       userProfile: React.PropTypes.object,
+      // Used only for unit tests.
       showTabButtons: React.PropTypes.bool,
       selectedTab: React.PropTypes.string,
       dispatcher: React.PropTypes.instanceOf(loop.Dispatcher).isRequired,
@@ -920,12 +932,18 @@ loop.panel = (function(_, mozL10n) {
         );
       }
 
+      // Determine which buttons to NOT show.
+      var hideButtons = [];
+      if (!this.state.userProfile && !this.props.showTabButtons) {
+        hideButtons.push("contacts");
+      }
+
       return (
         React.DOM.div(null, 
           NotificationListView({notifications: this.props.notifications, 
                                 clearOnDocumentHidden: true}), 
           TabView({ref: "tabView", selectedTab: this.props.selectedTab, 
-            buttonsHidden: !this.state.userProfile && !this.props.showTabButtons}, 
+            buttonsHidden: hideButtons}, 
             this._renderRoomsOrCallTab(), 
             Tab({name: "contacts"}, 
               ContactsList({selectTab: this.selectTab, 

@@ -893,6 +893,8 @@ class RunProgram(MachCommandBase):
     @CommandArgumentGroup('DMD')
     @CommandArgument('--dmd', action='store_true', group='DMD',
         help='Enable DMD. The following arguments have no effect without this.')
+    @CommandArgument('--mode', choices=['live', 'dark-matter', 'cumulative'], group='DMD',
+         help='Profiling mode. The default is \'dark-matter\'.')
     @CommandArgument('--sample-below', default=None, type=str, group='DMD',
         help='Sample blocks smaller than this. Use 1 for no sampling. The default is 4093.')
     @CommandArgument('--max-frames', default=None, type=str, group='DMD',
@@ -900,7 +902,7 @@ class RunProgram(MachCommandBase):
     @CommandArgument('--show-dump-stats', action='store_true', group='DMD',
         help='Show stats when doing dumps.')
     def run(self, params, remote, background, noprofile, debug, debugger,
-        debugparams, slowscript, dmd, sample_below, max_frames,
+        debugparams, slowscript, dmd, mode, sample_below, max_frames,
         show_dump_stats):
 
         try:
@@ -967,6 +969,8 @@ class RunProgram(MachCommandBase):
         if dmd:
             dmd_params = []
 
+            if mode:
+                dmd_params.append('--mode=' + mode)
             if sample_below:
                 dmd_params.append('--sample-below=' + sample_below)
             if max_frames:
@@ -974,10 +978,22 @@ class RunProgram(MachCommandBase):
             if show_dump_stats:
                 dmd_params.append('--show-dump-stats=yes')
 
+            env_vars = {
+                "Darwin": {
+                    "DYLD_INSERT_LIBRARIES": dmd_lib,
+                    "LD_LIBRARY_PATH": bin_dir,
+                },
+                "Linux": {
+                    "LD_PRELOAD": dmd_lib,
+                    "LD_LIBRARY_PATH": bin_dir,
+                },
+                "WINNT": {
+                    "MOZ_REPLACE_MALLOC_LIB": dmd_lib,
+                },
+            }
+
             if dmd_params:
-                dmd_env_var = " ".join(dmd_params)
-            else:
-                dmd_env_var = "1"
+                env_vars["DMD"] = " ".join(dmd_params)
 
             bin_dir = os.path.dirname(binpath)
             lib_name = self.substs['DLL_PREFIX'] + 'dmd' + self.substs['DLL_SUFFIX']
@@ -986,22 +1002,6 @@ class RunProgram(MachCommandBase):
                 print("Please build with |--enable-dmd| to use DMD.")
                 return 1
 
-            env_vars = {
-                "Darwin": {
-                    "DYLD_INSERT_LIBRARIES": dmd_lib,
-                    "LD_LIBRARY_PATH": bin_dir,
-                    "DMD": dmd_env_var,
-                },
-                "Linux": {
-                    "LD_PRELOAD": dmd_lib,
-                    "LD_LIBRARY_PATH": bin_dir,
-                    "DMD": dmd_env_var,
-                },
-                "WINNT": {
-                    "MOZ_REPLACE_MALLOC_LIB": dmd_lib,
-                    "DMD": dmd_env_var,
-                },
-            }
             extra_env.update(env_vars.get(self.substs['OS_ARCH'], {}))
 
         return self.run_process(args=args, ensure_exit_code=False,

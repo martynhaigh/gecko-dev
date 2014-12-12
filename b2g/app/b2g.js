@@ -15,6 +15,7 @@ pref("browser.chromeURL", "chrome://b2g/content/");
 // so that it can't be set a just a string.
 // data: url is a workaround this.
 pref("browser.startup.homepage", "data:text/plain,browser.startup.homepage=chrome://b2g/content/shell.html");
+pref("b2g.is_mulet", true);
 // Prevent having the firstrun page
 pref("startup.homepage_welcome_url", "");
 pref("browser.shell.checkDefaultBrowser", false);
@@ -98,6 +99,7 @@ pref("network.predictor.preserve", 50); // percentage of predictor data to keep 
 /* session history */
 pref("browser.sessionhistory.max_total_viewers", 1);
 pref("browser.sessionhistory.max_entries", 50);
+pref("browser.sessionhistory.contentViewerTimeout", 360);
 
 /* session store */
 pref("browser.sessionstore.resume_session_once", false);
@@ -608,6 +610,9 @@ pref("app.update.log", true);
 pref("shutdown.watchdog.timeoutSecs", -1);
 #endif
 
+// Allow webapps update checking
+pref("webapps.update.enabled", true);
+
 // Check daily for apps updates.
 pref("webapps.update.interval", 86400);
 
@@ -672,11 +677,7 @@ pref("javascript.options.mem.gc_low_frequency_heap_growth", 120);
 pref("javascript.options.mem.high_water_mark", 6);
 pref("javascript.options.mem.gc_allocation_threshold_mb", 1);
 pref("javascript.options.mem.gc_decommit_threshold_mb", 1);
-#ifdef JSGC_GENERATIONAL
 pref("javascript.options.mem.gc_min_empty_chunk_count", 1);
-#else
-pref("javascript.options.mem.gc_min_empty_chunk_count", 0);
-#endif
 pref("javascript.options.mem.gc_max_empty_chunk_count", 2);
 
 // Show/Hide scrollbars when active/inactive
@@ -1059,3 +1060,13 @@ pref("dom.udpsocket.enabled", true);
 
 // Enable TV Manager API
 pref("dom.tv.enabled", true);
+
+pref("dom.mozSettings.SettingsDB.debug.enabled", true);
+pref("dom.mozSettings.SettingsManager.debug.enabled", true);
+pref("dom.mozSettings.SettingsRequestManager.debug.enabled", true);
+pref("dom.mozSettings.SettingsService.debug.enabled", true);
+
+pref("dom.mozSettings.SettingsDB.verbose.enabled", false);
+pref("dom.mozSettings.SettingsManager.verbose.enabled", false);
+pref("dom.mozSettings.SettingsRequestManager.verbose.enabled", false);
+pref("dom.mozSettings.SettingsService.verbose.enabled", false);

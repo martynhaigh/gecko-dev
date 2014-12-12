@@ -355,7 +355,8 @@ AddAnimationForProperty(nsIFrame* aFrame, nsCSSProperty aProperty,
     aLayer->AddAnimation();
 
   const AnimationTiming& timing = aPlayer->GetSource()->Timing();
-  animation->startTime() = aPlayer->Timeline()->ToTimeStamp(aPlayer->mStartTime.Value() + timing.mDelay);
+  animation->startTime() = aPlayer->Timeline()->ToTimeStamp(
+                             aPlayer->GetStartTime().Value() + timing.mDelay);
   animation->duration() = timing.mIterationDuration;
   animation->iterationCount() = timing.mIterationCount;
   animation->direction() = timing.mDirection;
@@ -533,7 +534,7 @@ nsDisplayListBuilder::nsDisplayListBuilder(nsIFrame* aReferenceFrame,
       mCurrentTableItem(nullptr),
       mCurrentFrame(aReferenceFrame),
       mCurrentReferenceFrame(aReferenceFrame),
-      mCurrentAnimatedGeometryRoot(aReferenceFrame),
+      mCurrentAnimatedGeometryRoot(nullptr),
       mWillChangeBudgetCalculated(false),
       mDirtyRect(-1,-1,-1,-1),
       mGlassDisplayItem(nullptr),
@@ -557,11 +558,13 @@ nsDisplayListBuilder::nsDisplayListBuilder(nsIFrame* aReferenceFrame,
       mIsCompositingCheap(false),
       mContainsPluginItem(false),
       mAncestorHasTouchEventHandler(false),
+      mAncestorHasScrollEventHandler(false),
       mHaveScrollableDisplayPort(false)
 {
   MOZ_COUNT_CTOR(nsDisplayListBuilder);
   PL_InitArenaPool(&mPool, "displayListArena", 1024,
                    std::max(NS_ALIGNMENT_OF(void*),NS_ALIGNMENT_OF(double))-1);
+  RecomputeCurrentAnimatedGeometryRoot();
 
   nsPresContext* pc = aReferenceFrame->PresContext();
   nsIPresShell *shell = pc->PresShell();
@@ -770,7 +773,7 @@ nsDisplayScrollLayer::ComputeFrameMetrics(nsIFrame* aForFrame,
     if (document) {
       nsCOMPtr<nsPIDOMWindow> innerWin(document->GetInnerWindow());
       if (innerWin) {
-        metrics.SetMayHaveTouchListeners(innerWin->HasTouchEventListeners());
+        metrics.SetMayHaveTouchListeners(innerWin->HasApzAwareEventListeners());
       }
     }
     metrics.SetMayHaveTouchCaret(presShell->MayHaveTouchCaret());
@@ -1245,6 +1248,8 @@ nsDisplayListBuilder::AddToWillChangeBudget(nsIFrame* aFrame, const nsSize& aRec
 
 bool
 nsDisplayListBuilder::IsInWillChangeBudget(nsIFrame* aFrame) const {
+  uint32_t multiplier = 3;
+
   mWillChangeBudgetCalculated = true;
 
   nsPresContext* key = aFrame->PresContext();
@@ -1261,7 +1266,22 @@ nsDisplayListBuilder::IsInWillChangeBudget(nsIFrame* aFrame) const {
   uint32_t budgetLimit = nsPresContext::AppUnitsToIntCSSPixels(area.width) *
     nsPresContext::AppUnitsToIntCSSPixels(area.height);
 
-  return budget.mBudget / 3 < budgetLimit;
+  bool onBudget = budget.mBudget / multiplier < budgetLimit;
+  if (!onBudget) {
+    nsString usageStr;
+    usageStr.AppendInt(budget.mBudget);
+
+    nsString multiplierStr;
+    multiplierStr.AppendInt(multiplier);
+
+    nsString limitStr;
+    limitStr.AppendInt(budgetLimit);
+
+    const char16_t* params[] = { usageStr.get(), multiplierStr.get(), limitStr.get() };
+    key->Document()->WarnOnceAbout(nsIDocument::eWillChangeBudget, false,
+                                   params, ArrayLength(params));
+  }
+  return onBudget;
 }
 
 void nsDisplayListSet::MoveTo(const nsDisplayListSet& aDestination) const
@@ -1318,7 +1338,9 @@ TreatAsOpaque(nsDisplayItem* aItem, nsDisplayListBuilder* aBuilder)
 {
   bool snap;
   nsRegion opaque = aItem->GetOpaqueRegion(aBuilder, &snap);
-  if (aBuilder->IsForPluginGeometry()) {
+  if (aBuilder->IsForPluginGeometry() &&
+      aItem->GetType() != nsDisplayItem::TYPE_LAYER_EVENT_REGIONS)
+  {
     // Treat all leaf chrome items as opaque, unless their frames are opacity:0.
     // Since opacity:0 frames generate an nsDisplayOpacity, that item will
     // not be treated as opaque here, so opacity:0 chrome content will be
@@ -2980,7 +3002,9 @@ nsDisplayLayerEventRegions::AddFrame(nsDisplayListBuilder* aBuilder,
   } else {
     mHitRegion.Or(mHitRegion, borderBox);
   }
-  if (aBuilder->GetAncestorHasTouchEventHandler()) {
+  if (aBuilder->GetAncestorHasTouchEventHandler() ||
+      aBuilder->GetAncestorHasScrollEventHandler())
+  {
     mDispatchToContentHitRegion.Or(mDispatchToContentHitRegion, borderBox);
   }
 }

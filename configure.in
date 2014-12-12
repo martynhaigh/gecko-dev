@@ -71,7 +71,7 @@ GCONF_VERSION=1.2.1
 GIO_VERSION=2.20
 STARTUP_NOTIFICATION_VERSION=0.8
 DBUS_VERSION=0.60
-SQLITE_VERSION=3.8.7.2
+SQLITE_VERSION=3.8.7.4
 
 MSMANIFEST_TOOL=
 
@@ -7290,17 +7290,6 @@ fi
 
 AC_SUBST_LIST(MOZ_GLUE_WRAP_LDFLAGS)
 export MOZ_GLUE_WRAP_LDFLAGS
-
-dnl ========================================================
-dnl = Use JS Call tracing
-dnl ========================================================
-MOZ_ARG_ENABLE_BOOL(trace-jscalls,
-[  --enable-trace-jscalls  Enable JS call enter/exit callback (default=no)],
-    MOZ_TRACE_JSCALLS=1,
-    MOZ_TRACE_JSCALLS= )
-if test -n "$MOZ_TRACE_JSCALLS"; then
-    AC_DEFINE(MOZ_TRACE_JSCALLS)
-fi
 
 dnl ========================================================
 dnl JS opt-mode assertions and minidump instrumentation

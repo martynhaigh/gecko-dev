@@ -119,6 +119,12 @@ pref("dom.indexedDB.enabled", true);
 pref("dom.indexedDB.warningQuota", 50);
 // Whether or not indexedDB experimental features are enabled.
 pref("dom.indexedDB.experimental", false);
+// Enable indexedDB logging.
+pref("dom.indexedDB.logging.enabled", true);
+// Detailed output in log messages.
+pref("dom.indexedDB.logging.details", true);
+// Enable profiler marks for indexedDB events.
+pref("dom.indexedDB.logging.profiler-marks", false);
 
 // Whether or not Web Workers are enabled.
 pref("dom.workers.enabled", true);
@@ -177,7 +183,10 @@ pref("browser.sessionhistory.max_total_viewers", -1);
 pref("ui.use_native_colors", true);
 pref("ui.click_hold_context_menus", false);
 pref("browser.display.use_document_fonts",  1);  // 0 = never, 1 = quick, 2 = always
-pref("browser.display.use_document_colors", true);
+// 0 = default: always, except in high contrast mode
+// 1 = always
+// 2 = never
+pref("browser.display.document_color_use", 0);
 pref("browser.display.use_system_colors",   false);
 pref("browser.display.foreground_color",    "#000000");
 pref("browser.display.background_color",    "#FFFFFF");
@@ -332,8 +341,8 @@ pref("media.navigator.video.default_width",0);  // adaptive default
 pref("media.navigator.video.default_height",0); // adaptive default
 pref("media.peerconnection.enabled", true);
 pref("media.peerconnection.video.enabled", true);
-pref("media.navigator.video.max_fs", 0); // unrestricted
-pref("media.navigator.video.max_fr", 0); // unrestricted
+pref("media.navigator.video.max_fs", 12288); // Enough for 2048x1536
+pref("media.navigator.video.max_fr", 60);
 pref("media.navigator.video.h264.level", 31); // 0x42E01f - level 3.1
 pref("media.navigator.video.h264.max_br", 0);
 pref("media.navigator.video.h264.max_mbps", 0);
@@ -356,6 +365,7 @@ pref("media.peerconnection.use_document_iceservers", true);
 // Do not enable identity before fixing origin spoofing: see Bug 968335
 pref("media.peerconnection.identity.enabled", false);
 pref("media.peerconnection.identity.timeout", 10000);
+pref("media.peerconnection.ice.loopback", false); // Set only for testing in offline environments.
 // These values (aec, agc, and noice) are from media/webrtc/trunk/webrtc/common_types.h
 // kXxxUnchanged = 0, kXxxDefault = 1, and higher values are specific to each
 // setting (for Xxx = Ec, Agc, or Ns).  Defaults are all set to kXxxDefault here.
@@ -425,7 +435,7 @@ pref("media.mediasource.enabled", true);
 pref("media.mediasource.mp4.enabled", false);
 pref("media.mediasource.webm.enabled", false);
 #else
-#ifdef XP_WIN
+#if defined(XP_WIN) || defined(XP_MACOSX)
 pref("media.mediasource.mp4.enabled", true);
 pref("media.mediasource.webm.enabled", false);
 #else
@@ -795,6 +805,8 @@ pref("devtools.remote.wifi.scan", false);
 // N.B.: This does not set whether the device can be discovered via WiFi, only
 // whether the UI control to make such a choice is shown to the user
 pref("devtools.remote.wifi.visible", false);
+// Client must complete TLS handshake within this window (ms)
+pref("devtools.remote.tls-handshake-timeout", 10000);
 
 // view source
 pref("view_source.syntax_highlight", true);
@@ -1037,11 +1049,7 @@ pref("javascript.options.mem.gc_dynamic_heap_growth", true);
 pref("javascript.options.mem.gc_dynamic_mark_slice", true);
 pref("javascript.options.mem.gc_allocation_threshold_mb", 30);
 pref("javascript.options.mem.gc_decommit_threshold_mb", 32);
-#ifdef JSGC_GENERATIONAL
 pref("javascript.options.mem.gc_min_empty_chunk_count", 1);
-#else
-pref("javascript.options.mem.gc_min_empty_chunk_count", 0);
-#endif
 pref("javascript.options.mem.gc_max_empty_chunk_count", 30);
 
 pref("javascript.options.showInConsole", false);
@@ -2365,13 +2373,8 @@ pref("svg.display-lists.painting.enabled", true);
 // Is support for the SVG 2 paint-order property enabled?
 pref("svg.paint-order.enabled", true);
 
-// Is support for the new marker features from SVG 2 enabled?  Currently
-// this just includes <marker orient="auto-start-reverse">.
-#ifdef RELEASE_BUILD
-pref("svg.marker-improvements.enabled", false);
-#else
+// Is support for the <marker orient="auto-start-reverse"> feature enabled?
 pref("svg.marker-improvements.enabled", true);
-#endif
 
 #ifdef RELEASE_BUILD
 pref("svg.svg-iframe.enabled", false);
@@ -3843,7 +3846,7 @@ pref("webgl.max-warnings-per-context", 32);
 pref("webgl.enable-draft-extensions", false);
 pref("webgl.enable-privileged-extensions", false);
 #ifdef XP_WIN
-pref("webgl.angle.try-d3d11", false);
+pref("webgl.angle.try-d3d11", true);
 pref("webgl.angle.force-d3d11", false);
 #endif
 
@@ -3895,6 +3898,10 @@ pref("layers.acceleration.force-enabled", false);
 pref("layers.acceleration.draw-fps", false);
 
 pref("layers.dump", false);
+#ifdef MOZ_DUMP_PAINTING
+// If we're dumping layers, also dump the texture data
+pref("layers.dump-texture", false);
+#endif
 pref("layers.draw-borders", false);
 pref("layers.draw-tile-borders", false);
 pref("layers.draw-bigimage-borders", false);
@@ -3984,6 +3991,8 @@ pref("gfx.direct2d.force-enabled", false);
 
 pref("layers.prefer-opengl", false);
 pref("layers.prefer-d3d9", false);
+pref("layers.d3d11.force-warp", false);
+pref("layers.d3d11.disable-warp", false);
 #endif
 
 // Force all possible layers to be always active layers
@@ -4391,7 +4400,6 @@ pref("beacon.enabled", true);
 #endif
 
 // Camera prefs
-pref("camera.control.autofocus_moving_callback.enabled", true);
 pref("camera.control.face_detection.enabled", true);
 
 // Fetch API.

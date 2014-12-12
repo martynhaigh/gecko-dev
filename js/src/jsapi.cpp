@@ -43,7 +43,6 @@
 #include "jswatchpoint.h"
 #include "jsweakmap.h"
 #include "jswrapper.h"
-#include "prmjtime.h"
 
 #include "asmjs/AsmJSLink.h"
 #include "builtin/AtomicsObject.h"
@@ -1252,8 +1251,7 @@ JS_ResolveStandardClass(JSContext *cx, HandleObject obj, HandleId id, bool *reso
     if (idstr == undefinedAtom) {
         *resolved = true;
         return JSObject::defineProperty(cx, obj, undefinedAtom->asPropertyName(),
-                                        UndefinedHandleValue,
-                                        JS_PropertyStub, JS_StrictPropertyStub,
+                                        UndefinedHandleValue, nullptr, nullptr,
                                         JSPROP_PERMANENT | JSPROP_READONLY);
     }
 
@@ -2143,28 +2141,18 @@ JS_StrictPropertyStub(JSContext *cx, HandleObject obj, HandleId id, bool strict,
     return true;
 }
 
-JS_PUBLIC_API(bool)
-JS_DeletePropertyStub(JSContext *cx, HandleObject obj, HandleId id, bool *succeeded)
-{
-    *succeeded = true;
-    return true;
-}
-
-JS_PUBLIC_API(bool)
-JS_EnumerateStub(JSContext *cx, HandleObject obj)
-{
-    return true;
-}
-
+#if defined(__GNUC__) && __GNUC__ == 4 && __GNUC_MINOR__ == 4
+/* See comment in jsapi.h. */
 JS_PUBLIC_API(bool)
 JS_ResolveStub(JSContext *cx, HandleObject obj, HandleId id, bool *resolvedp)
 {
     MOZ_ASSERT(*resolvedp == false);
     return true;
 }
+#endif  /* GCC 4.4 */
 
 JS_PUBLIC_API(bool)
-JS_ConvertStub(JSContext *cx, HandleObject obj, JSType type, MutableHandleValue vp)
+JS::OrdinaryToPrimitive(JSContext *cx, HandleObject obj, JSType type, MutableHandleValue vp)
 {
     MOZ_ASSERT(type != JSTYPE_OBJECT && type != JSTYPE_FUNCTION);
     MOZ_ASSERT(obj);
@@ -2472,7 +2460,7 @@ JS_NewObject(JSContext *cx, const JSClass *jsclasp, HandleObject proto, HandleOb
 
     const Class *clasp = Valueify(jsclasp);
     if (!clasp)
-        clasp = &JSObject::class_;    /* default class is Object */
+        clasp = &PlainObject::class_;    /* default class is Object */
 
     MOZ_ASSERT(clasp != &JSFunction::class_);
     MOZ_ASSERT(!(clasp->flags & JSCLASS_IS_GLOBAL));
@@ -2492,7 +2480,7 @@ JS_NewObjectWithGivenProto(JSContext *cx, const JSClass *jsclasp, HandleObject p
 
     const Class *clasp = Valueify(jsclasp);
     if (!clasp)
-        clasp = &JSObject::class_;    /* default class is Object */
+        clasp = &PlainObject::class_;    /* default class is Object */
 
     MOZ_ASSERT(clasp != &JSFunction::class_);
     MOZ_ASSERT(!(clasp->flags & JSCLASS_IS_GLOBAL));
@@ -2819,7 +2807,6 @@ DefinePropertyById(JSContext *cx, HandleObject obj, HandleId id, HandleValue val
     MOZ_ASSERT_IF(setter == JS_StrictPropertyStub,
                   getter == JS_PropertyStub || (attrs & JSPROP_PROPOP_ACCESSORS));
 
-
     // If !(attrs & JSPROP_PROPOP_ACCESSORS), then either getter/setter are both
     // possibly-null JSNatives (or possibly-null JSFunction* if JSPROP_GETTER or
     // JSPROP_SETTER is appropriately set), or both are the well-known property
@@ -2873,6 +2860,19 @@ DefinePropertyById(JSContext *cx, HandleObject obj, HandleId id, HandleValue val
                           ? JS_FUNC_TO_DATA_PTR(JSObject *, setter)
                           : nullptr);
 
+    // In most places throughout the engine, a property with null getter and
+    // not JSPROP_GETTER/SETTER/SHARED has no getter, and the same for setters:
+    // it's just a plain old data property. However the JS_Define* APIs use
+    // null getter and setter to mean "default to the Class getProperty and
+    // setProperty ops".
+    if (!getter)
+        getter = obj->getClass()->getProperty;
+    if (!setter)
+        setter = obj->getClass()->setProperty;
+    if (getter == JS_PropertyStub)
+        getter = nullptr;
+    if (setter == JS_StrictPropertyStub)
+        setter = nullptr;
     return JSObject::defineGeneric(cx, obj, id, value, getter, setter, attrs);
 }
 
@@ -3198,7 +3198,7 @@ JS_DefineObject(JSContext *cx, HandleObject obj, const char *name, const JSClass
 
     const Class *clasp = Valueify(jsclasp);
     if (!clasp)
-        clasp = &JSObject::class_;    /* default class is Object */
+        clasp = &PlainObject::class_;    /* default class is Object */
 
     RootedObject nobj(cx, NewObjectWithClassProto(cx, clasp, proto, obj));
     if (!nobj)
@@ -4012,7 +4012,8 @@ js_generic_native_method_dispatcher(JSContext *cx, unsigned argc, Value *vp)
 }
 
 JS_PUBLIC_API(bool)
-JS_DefineFunctions(JSContext *cx, HandleObject obj, const JSFunctionSpec *fs)
+JS_DefineFunctions(JSContext *cx, HandleObject obj, const JSFunctionSpec *fs,
+                   PropertyDefinitionBehavior behavior)
 {
     MOZ_ASSERT(!cx->runtime()->isAtomsCompartment(cx->compartment()));
     AssertHeapIsIdle(cx);
@@ -4024,11 +4025,24 @@ JS_DefineFunctions(JSContext *cx, HandleObject obj, const JSFunctionSpec *fs)
         if (!PropertySpecNameToId(cx, fs->name, &id))
             return false;
 
+        unsigned flags = fs->flags;
+        switch (behavior) {
+          case DefineAllProperties:
+            break;
+          case OnlyDefineLateProperties:
+            if (!(flags & JSPROP_DEFINE_LATE))
+                continue;
+            break;
+          default:
+            MOZ_ASSERT(behavior == DontDefineLateProperties);
+            if (flags & JSPROP_DEFINE_LATE)
+                continue;
+        }
+
         /*
          * Define a generic arity N+1 static method for the arity N prototype
          * method if flags contains JSFUN_GENERIC_NATIVE.
          */
-        unsigned flags = fs->flags;
         if (flags & JSFUN_GENERIC_NATIVE) {
             // We require that any consumers using JSFUN_GENERIC_NATIVE stash
             // the prototype and constructor in the global slots before invoking
@@ -5045,20 +5059,6 @@ JS_RestoreFrameChain(JSContext *cx)
     CHECK_REQUEST(cx);
     cx->restoreFrameChain();
 }
-
-#ifdef MOZ_TRACE_JSCALLS
-JS_PUBLIC_API(void)
-JS_SetFunctionCallback(JSContext *cx, JSFunctionCallback fcb)
-{
-    cx->functionCallback = fcb;
-}
-
-JS_PUBLIC_API(JSFunctionCallback)
-JS_GetFunctionCallback(JSContext *cx)
-{
-    return cx->functionCallback;
-}
-#endif
 
 /************************************************************************/
 JS_PUBLIC_API(JSString *)
@@ -6303,6 +6303,12 @@ JS_IsIdentifier(JSContext *cx, HandleString str, bool *isIdentifier)
 
     *isIdentifier = js::frontend::IsIdentifier(linearStr);
     return true;
+}
+
+JS_PUBLIC_API(bool)
+JS_IsIdentifier(const char16_t *chars, size_t length)
+{
+    return js::frontend::IsIdentifier(chars, length);
 }
 
 namespace JS {

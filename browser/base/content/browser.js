@@ -154,9 +154,6 @@ XPCOMUtils.defineLazyModuleGetter(this, "SafeBrowsing",
   "resource://gre/modules/SafeBrowsing.jsm");
 #endif
 
-XPCOMUtils.defineLazyModuleGetter(this, "gBrowserNewTabPreloader",
-  "resource:///modules/BrowserNewTabPreloader.jsm", "BrowserNewTabPreloader");
-
 XPCOMUtils.defineLazyModuleGetter(this, "gCustomizationTabPreloader",
   "resource:///modules/CustomizationTabPreloader.jsm", "CustomizationTabPreloader");
 
@@ -2550,9 +2547,9 @@ let gMenuButtonUpdateBadge = {
         updateButtonText = gNavigatorBundle.getFormattedString(stringId,
                                                                [brandShortName]);
 
-        updateButton.label = updateButtonText;
-        updateButton.hidden = false;
+        updateButton.setAttribute("label", updateButtonText);
         updateButton.setAttribute("update-status", "succeeded");
+        updateButton.hidden = false;
 
         PanelUI.panel.addEventListener("popupshowing", this, true);
 
@@ -2565,9 +2562,9 @@ let gMenuButtonUpdateBadge = {
         stringId = "appmenu.updateFailed.description";
         updateButtonText = gNavigatorBundle.getString(stringId);
 
-        updateButton.label = updateButtonText;
-        updateButton.hidden = false;
+        updateButton.setAttribute("label", updateButtonText);
         updateButton.setAttribute("update-status", "failed");
+        updateButton.hidden = false;
 
         PanelUI.panel.addEventListener("popupshowing", this, true);
 

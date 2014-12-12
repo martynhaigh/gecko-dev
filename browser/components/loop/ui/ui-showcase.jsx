@@ -535,7 +535,7 @@
           <Section name="UnsupportedBrowserView">
             <Example summary="Standalone Unsupported Browser">
               <div className="standalone">
-                <UnsupportedBrowserView />
+                <UnsupportedBrowserView helper={{isFirefox: returnFalse}}/>
               </div>
             </Example>
           </Section>
@@ -617,6 +617,17 @@
                   dispatcher={dispatcher}
                   activeRoomStore={activeRoomStore}
                   roomState={ROOM_STATES.FULL}
+                  helper={{isFirefox: returnFalse}} />
+              </div>
+            </Example>
+
+            <Example summary="Standalone room conversation (feedback)">
+              <div className="standalone">
+                <StandaloneRoomView
+                  dispatcher={dispatcher}
+                  activeRoomStore={activeRoomStore}
+                  feedbackStore={feedbackStore}
+                  roomState={ROOM_STATES.ENDED}
                   helper={{isFirefox: returnFalse}} />
               </div>
             </Example>

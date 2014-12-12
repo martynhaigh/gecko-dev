@@ -921,7 +921,7 @@ js::XDRScript(XDRState<mode> *xdr, HandleObject enclosingScope, HandleScript enc
                 classk = CK_WithObject;
             else if (obj->is<JSFunction>())
                 classk = CK_JSFunction;
-            else if (obj->is<JSObject>() || obj->is<ArrayObject>())
+            else if (obj->is<PlainObject>() || obj->is<ArrayObject>())
                 classk = CK_JSObject;
             else
                 MOZ_CRASH("Cannot encode this class of object.");
@@ -1348,17 +1348,17 @@ const Class ScriptSourceObject::class_ = {
     "ScriptSource",
     JSCLASS_HAS_RESERVED_SLOTS(RESERVED_SLOTS) |
     JSCLASS_IMPLEMENTS_BARRIERS | JSCLASS_IS_ANONYMOUS,
-    JS_PropertyStub,        /* addProperty */
-    JS_DeletePropertyStub,  /* delProperty */
-    JS_PropertyStub,        /* getProperty */
-    JS_StrictPropertyStub,  /* setProperty */
-    JS_EnumerateStub,
-    JS_ResolveStub,
-    JS_ConvertStub,
+    nullptr, /* addProperty */
+    nullptr, /* delProperty */
+    nullptr, /* getProperty */
+    nullptr, /* setProperty */
+    nullptr, /* enumerate */
+    nullptr, /* resolve */
+    nullptr, /* convert */
     finalize,
-    nullptr,                /* call        */
-    nullptr,                /* hasInstance */
-    nullptr,                /* construct   */
+    nullptr, /* call */
+    nullptr, /* hasInstance */
+    nullptr, /* construct */
     trace
 };
 
@@ -1752,7 +1752,7 @@ ScriptSource::setSourceCopy(ExclusiveContext *cx, SourceBufferHolder &srcBuf,
 }
 
 SourceCompressionTask::ResultType
-SourceCompressionTask::work()
+SourceCompressionTask::work(Compressor &comp)
 {
     // Try to keep the maximum memory usage down by only allocating half the
     // size of the string, first.
@@ -1762,8 +1762,7 @@ SourceCompressionTask::work()
     if (!compressed)
         return OOM;
 
-    Compressor comp(reinterpret_cast<const unsigned char *>(ss->uncompressedChars()), inputBytes);
-    if (!comp.init())
+    if (!comp.prepare(reinterpret_cast<const unsigned char *>(ss->uncompressedChars()), inputBytes))
         return OOM;
 
     comp.setOutput((unsigned char *) compressed, firstSize);
@@ -2183,7 +2182,6 @@ SaveSharedScriptData(ExclusiveContext *cx, Handle<JSScript *> script, SharedScri
         }
     }
 
-#ifdef JSGC_INCREMENTAL
     /*
      * During the IGC we need to ensure that bytecode is marked whenever it is
      * accessed even if the bytecode was already in the table: at this point
@@ -2195,7 +2193,6 @@ SaveSharedScriptData(ExclusiveContext *cx, Handle<JSScript *> script, SharedScri
         if (JS::IsIncrementalGCInProgress(rt) && rt->gc.isFullGc())
             ssd->marked = true;
     }
-#endif
 
     script->setCode(ssd->data);
     script->atoms = ssd->atoms();

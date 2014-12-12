@@ -974,10 +974,8 @@ IonScript::trace(JSTracer *trc)
 /* static */ void
 IonScript::writeBarrierPre(Zone *zone, IonScript *ionScript)
 {
-#ifdef JSGC_INCREMENTAL
     if (zone->needsIncrementalBarrier())
         ionScript->trace(zone->barrierTracer());
-#endif
 }
 
 void
@@ -1538,7 +1536,7 @@ OptimizeMIR(MIRGenerator *mir)
             return false;
     }
 
-    if (mir->optimizationInfo().sinkEnabled()) {
+    {
         AutoTraceLog log(logger, TraceLogger::EliminateDeadCode);
         if (!Sink(mir, graph))
             return false;
