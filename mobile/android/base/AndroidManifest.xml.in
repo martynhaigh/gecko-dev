@@ -364,37 +364,40 @@
           </intent-filter>
   </activity>
 #endif
-<service android:name="org.mozilla.gecko.LoadInBackgroundService"
-         android:label="LIB Service">
-</service>
+
+        <service android:name="org.mozilla.gecko.LoadInBackgroundService"
+                 android:exported="false"
+                 android:taskAffinity="@ANDROID_PACKAGE_NAME@.BROWSER"/>
+
+        <service android:name="org.mozilla.gecko.BackgroundGeckoService"
+                 android:exported="false"
+                 android:taskAffinity="@ANDROID_PACKAGE_NAME@.BROWSER"/>
+
         <activity android:name="org.mozilla.gecko.LoadInBackground"
                   android:label="Load Popup"
-                    android:noHistory="true"
-                    android:excludeFromRecents="true"
-
-                    android:theme="@style/Transparent">
-        <!--android:theme="@android:style/Theme.NoDisplay"
-                  android:theme="@style/Theme.Transparent"-->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-                <data android:scheme="about" />
-                <data android:scheme="javascript" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="file" />
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-                <data android:mimeType="text/html"/>
-                <data android:mimeType="text/plain"/>
-                <data android:mimeType="application/xhtml+xml"/>
-            </intent-filter>
+                  android:noHistory="true"
+                  android:excludeFromRecents="true"
+                  android:theme="@style/Transparent">
+                <intent-filter>
+                    <action android:name="android.intent.action.VIEW"/>
+                    <category android:name="android.intent.category.DEFAULT"/>
+                    <category android:name="android.intent.category.BROWSABLE"/>
+                    <data android:scheme="http"/>
+                    <data android:scheme="https"/>
+                    <data android:scheme="about"/>
+                    <data android:scheme="javascript"/>
+                </intent-filter>
+                <intent-filter>
+                    <action android:name="android.intent.action.VIEW"/>
+                    <category android:name="android.intent.category.BROWSABLE"/>
+                    <category android:name="android.intent.category.DEFAULT"/>
+                    <data android:scheme="file"/>
+                    <data android:scheme="http"/>
+                    <data android:scheme="https"/>
+                    <data android:mimeType="text/html"/>
+                    <data android:mimeType="text/plain"/>
+                    <data android:mimeType="application/xhtml+xml"/>
+                </intent-filter>
         </activity>
 
         <activity android:name="org.mozilla.gecko.preferences.GeckoPreferences"

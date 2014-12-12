@@ -1,7 +1,5 @@
 package org.mozilla.gecko;
 
-import org.mozilla.gecko.mozglue.ContextUtils;
-
 import android.app.Service;
 import android.content.Intent;
 import android.graphics.PixelFormat;
@@ -15,31 +13,32 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
-import java.io.IOException;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 public class LoadInBackgroundService extends Service {
+
+    private static final String LOGTAG = "MTEST - LoadInBackgroundService";
+//    private static final String LOGTAG = "LoadInBackgroundService";
 
     private WindowManager windowManager;
     private View layout;
     private TextView mMessageView;
     private Button mButton;
-    private GeckoProfile mProfile;
     private final Handler mHideHandler = new Handler();
     public static int LENGTH_SHORT = 3000;
-    private AtomicInteger mCount = new AtomicInteger(0);
     private boolean mShown = false;
     private WindowManager.LayoutParams mParams;
-    private Runnable mHideRunnable;
+    private IntentRunnable mHideRunnable;
+    private boolean mReplace = false;
+    private Object mMutex = new Object();
 
-
-    @Override
-    public IBinder onBind(Intent intent) {
-        // Not used
-        return null;
+    public LoadInBackgroundService() {
+        super();
+        Log.i(LOGTAG, "Start service");
     }
+
+    protected String getURIFromIntent(Intent intent) {
+        return intent.getDataString();
+    }
+
 
     @Override
     public void onCreate() {
@@ -68,27 +67,49 @@ public class LoadInBackgroundService extends Service {
         mParams.y = 0;
     }
 
+    private abstract class IntentRunnable implements Runnable {
+        final Intent mIntent;
+
+        public IntentRunnable(Intent intent) {
+            Log.d(LOGTAG, "IntentRunnable created with intent : " + intent);
+            mIntent = intent;
+        }
+
+        public Intent getIntent() {
+            return mIntent;
+        }
+    }
+
     @Override
     public int onStartCommand(final Intent intent, int flags, int startId) {
-        Log.d("MTEST", "onStartCommand - count " + mCount);
+        if (null == intent) {
+            Log.d(LOGTAG, "Empty intent received - quitting early");
+            return super.onStartCommand(intent, flags, startId);
+        }
+        Log.d(LOGTAG, "onStartCommand - shown " + mShown + " startId " + startId + " - " + intent);
 
-        mCount.incrementAndGet();
-        if (mHideRunnable != null) {
-            Log.d("MTEST", "runnable already running - run it immediately and cancel the timeout - count " + mCount);
+        if (mShown) {
+            mReplace = true;
+            Log.d(LOGTAG, "runnable already running - run it immediately and cancel the timeout - mShown " + mShown);
 
             mHideHandler.removeCallbacks(mHideRunnable);
             mHideRunnable.run();
+            Log.d(LOGTAG, "hide runnable fired");
+            mReplace = false;
         }
 
-        mHideRunnable = new Runnable() {
+        mHideRunnable = new IntentRunnable(intent) {
+
             @Override
             public void run() {
-                Log.d("MTEST", "hide runnable - count " + mCount);
-                mCount.decrementAndGet();
 
-                addUrlToList(intent);
+                Log.d(LOGTAG, "hide runnable - " + getIntent());
 
-                if (mCount.get() == 0) {
+                Intent intent = getIntent();
+                intent.setClass(LoadInBackgroundService.this, BackgroundGeckoService.class);
+                startService(intent);
+
+                if (!mReplace) {
                     hide();
                 }
                 mHideRunnable = null;
@@ -97,9 +118,8 @@ public class LoadInBackgroundService extends Service {
         mButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d("MTEST", "button click - count " + mCount);
+                Log.d(LOGTAG, "button click - mShown " + mShown);
 
-                mCount.decrementAndGet();
                 mHideHandler.removeCallbacks(mHideRunnable);
                 mHideRunnable = null;
 
@@ -110,82 +130,27 @@ public class LoadInBackgroundService extends Service {
                 hide();
             }
         });
-
-        windowManager.addView(layout, mParams);
+        if (!mShown) {
+            windowManager.addView(layout, mParams);
+            mShown = true;
+            Log.d(LOGTAG, "Added view to window manager");
+        }
         mHideHandler.postDelayed(mHideRunnable, LENGTH_SHORT);
-        Log.d("MTEST", "SHOWING STUFF");
-        return super.onStartCommand(intent, flags, startId);
-    }
 
-    private void hide() {
-        Log.d("MTEST", "HIDE!!!");
-        windowManager.removeView(layout);
+        return START_NOT_STICKY;
     }
 
     @Override
-    public void onDestroy() {
-        super.onDestroy();
-        //hide();
+    public IBinder onBind(Intent intent) {
+        return null;
     }
 
-
-    public synchronized GeckoProfile getProfile() {
-        // fall back to default profile if we didn't load a specific one
-        if (mProfile == null) {
-            mProfile = GeckoProfile.get(this);
-        }
-        return mProfile;
+    private void hide() {
+        mShown = false;
+        Log.d(LOGTAG, "HIDE!!!");
+        windowManager.removeView(layout);
     }
 
-    private void addUrlToList(Intent intentParam) {
-        final ContextUtils.SafeIntent intent = new ContextUtils.SafeIntent(intentParam);
-        final String action = intent.getAction();
-        final String args = intent.getStringExtra("args");
-        String data = intent.getDataString();
-        getProfile();
-
-        Log.d("MTEST", "Gecko in background: " + GeckoApplication.get().isApplicationInBackground());
-
-
-        if (mProfile == null) {
-            String profileName = null;
-            String profilePath = null;
-            if (args != null) {
-                if (args.contains("-P")) {
-                    Pattern p = Pattern.compile("(?:-P\\s*)(\\w*)(\\s*)");
-                    Matcher m = p.matcher(args);
-                    if (m.find()) {
-                        profileName = m.group(1);
-                    }
-                }
-
-                if (args.contains("-profile")) {
-                    Pattern p = Pattern.compile("(?:-profile\\s*)(\\S*)(\\s*)");
-                    Matcher m = p.matcher(args);
-                    if (m.find()) {
-                        profilePath = m.group(1);
-                    }
-                    if (profileName == null) {
-                        profileName = GeckoProfile.DEFAULT_PROFILE;
-                    }
-                    GeckoProfile.sIsUsingCustomProfile = true;
-                }
-
-                if (profileName != null || profilePath != null) {
-                    mProfile = GeckoProfile.get(this, profileName, profilePath);
-                }
-            }
-        }
-
-        try {
-            Log.d("MTEST", "Reading list contents: " + mProfile.readFile("temp_reading_list.json"));
-        } catch (IOException e) {
-            Log.d("MTEST", "Couldn't read : " + e.getMessage());
-
-            e.printStackTrace();
-        }
-        mProfile.appendToFile("temp_reading_list.json", data);
-    }
 
 }
 

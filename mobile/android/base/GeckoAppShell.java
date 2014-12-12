@@ -1381,7 +1381,7 @@ public class GeckoAppShell
      */
     @WrapElementForJNI(stubName = "GetScreenDepthWrapper")
     public static synchronized int getScreenDepth() {
-        if (sScreenDepth == 0) {
+        if (sScreenDepth == 0 && getGeckoInterface().getActivity() != null) {
             sScreenDepth = 16;
             PixelFormat info = new PixelFormat();
             PixelFormat.getPixelFormatInfo(getGeckoInterface().getActivity().getWindowManager().getDefaultDisplay().getPixelFormat(), info);

@@ -32,10 +32,12 @@ public class LoadInBackground extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-                        Intent forwardIntent = new Intent(getIntent());
-                forwardIntent.setClass(getApplicationContext(), LoadInBackgroundService.class);
+        Intent intent = getIntent();
+        Log.d("MTEST", "LIB Activity - intent " + intent);
 
-        startService(forwardIntent);
+        intent.setClass(LoadInBackground.this, BackgroundGeckoService.class);
+
+        startService(intent);
         finish();
 
 //        LayoutInflater inflater = getLayoutInflater();
@@ -72,7 +74,6 @@ public class LoadInBackground extends Activity {
 //
 //
 //        toast.show();
-
 
 
 //        mButton.setCompoundDrawablesWithIntrinsicBounds(t.buttonDrawable, null, null, null);
@@ -195,10 +196,12 @@ public class LoadInBackground extends Activity {
         }
         return mProfile;
     }
+
     public ButtonToast getButtonToast() {
         ViewStub toastStub = (ViewStub) findViewById(R.id.toast_stub);
         return new ButtonToast(toastStub.inflate());
     }
+
     private final Runnable mHideRunnable = new Runnable() {
         @Override
         public void run() {

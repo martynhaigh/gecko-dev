@@ -496,6 +496,7 @@ public class BrowserApp extends GeckoApp
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        Log.d("MTEST - gecko app", "onCreate");
         mAboutHomeStartupTimer = new Telemetry.UptimeTimer("FENNEC_STARTUP_TIME_ABOUTHOME");
 
         final Intent intent = getIntent();
@@ -598,27 +599,27 @@ public class BrowserApp extends GeckoApp
         mFindInPageBar = (FindInPageBar) findViewById(R.id.find_in_page);
         mMediaCastingBar = (MediaCastingBar) findViewById(R.id.media_casting);
 
-        EventDispatcher.getInstance().registerGeckoThreadListener((GeckoEventListener)this,
-            "Menu:Open",
-            "Menu:Update",
-            "Search:Keyword",
-            "Prompt:ShowTop",
-            "Accounts:Exist");
+        EventDispatcher.getInstance().registerGeckoThreadListener((GeckoEventListener) this,
+                "Menu:Open",
+                "Menu:Update",
+                "Search:Keyword",
+                "Prompt:ShowTop",
+                "Accounts:Exist");
 
-        EventDispatcher.getInstance().registerGeckoThreadListener((NativeEventListener)this,
-            "Accounts:Create",
-            "CharEncoding:Data",
-            "CharEncoding:State",
-            "Feedback:LastUrl",
-            "Feedback:MaybeLater",
-            "Feedback:OpenPlayStore",
-            "Menu:Add",
-            "Menu:Remove",
-            "Reader:Share",
-            "Settings:Show",
-            "Telemetry:Gather",
-            "Updater:Launch",
-            "BrowserToolbar:Visibility");
+        EventDispatcher.getInstance().registerGeckoThreadListener((NativeEventListener) this,
+                "Accounts:Create",
+                "CharEncoding:Data",
+                "CharEncoding:State",
+                "Feedback:LastUrl",
+                "Feedback:MaybeLater",
+                "Feedback:OpenPlayStore",
+                "Menu:Add",
+                "Menu:Remove",
+                "Reader:Share",
+                "Settings:Show",
+                "Telemetry:Gather",
+                "Updater:Launch",
+                "BrowserToolbar:Visibility");
 
         Distribution distribution = Distribution.init(this);
 
@@ -643,7 +644,7 @@ public class BrowserApp extends GeckoApp
                         if (tab == null || tab.isPrivate()) {
                             return null;
                         }
-                        return new NdefMessage(new NdefRecord[] { NdefRecord.createUri(tab.getURL()) });
+                        return new NdefMessage(new NdefRecord[]{NdefRecord.createUri(tab.getURL())});
                     }
                 }, this);
             }
