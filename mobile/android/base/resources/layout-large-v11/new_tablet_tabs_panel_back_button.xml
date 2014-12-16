@@ -2,13 +2,37 @@
 <!-- This Source Code Form is subject to the terms of the Mozilla Public
    - License, v. 2.0. If a copy of the MPL was not distributed with this
    - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!--<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"-->
+               <!--android:layout_width="wrap_content"-->
+               <!--android:layout_height="match_parent"-->
+        <!--android:orientation="horizontal">-->
+<!--<ImageButton xmlns:android="http://schemas.android.com/apk/res/android"-->
+             <!--android:id="@+id/nav_back"-->
+             <!--android:layout_width="@dimen/tabs_panel_indicator_width"-->
+             <!--android:layout_height="match_parent"-->
+             <!--android:minWidth="@dimen/tabs_panel_indicator_width"-->
+             <!--android:src="@drawable/new_tablet_nav_back"-->
+             <!--android:contentDescription="@string/back"-->
+             <!--android:background="@drawable/tab_indicator_divider"/>-->
+<!--<ImageView-->
+        <!--android:layout_width="wrap_content"-->
+        <!--android:layout_height="match_parent"-->
+        <!--android:src="@drawable/new_tablet_tab_strip_divider" />-->
+<!--</LinearLayout>-->
+
+
+<!--<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"-->
+        <!--android:layout_height="50dp"-->
+        <!--android:layout_width="50dp"-->
+        <!--android:background="@drawable/new_tablet_back_button_background"-->
+        <!--/>-->
+
 
 <ImageButton xmlns:android="http://schemas.android.com/apk/res/android"
-             android:id="@+id/nav_back"
-             android:layout_width="@dimen/tabs_panel_indicator_width"
-             android:layout_height="match_parent"
-             android:minWidth="@dimen/tabs_panel_indicator_width"
-             android:src="@drawable/new_tablet_nav_back"
-             android:contentDescription="@string/back"
-             android:background="@drawable/action_bar_button_inverse"/>
-
+        android:id="@+id/nav_back"
+        android:layout_width="@dimen/tabs_panel_indicator_width"
+        android:layout_height="match_parent"
+        android:minWidth="@dimen/tabs_panel_indicator_width"
+        android:src="@drawable/new_tablet_nav_back"
+        android:contentDescription="@string/back"
+        android:background="@drawable/new_tablet_back_button_background"/>

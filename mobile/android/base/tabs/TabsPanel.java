@@ -167,8 +167,8 @@ public class TabsPanel extends LinearLayout
         });
 
         if(NewTabletUI.isEnabled(getContext())) {
-            ViewStub backButtonStub = (ViewStub) findViewById(R.id.nav_back_stub);
-            mNavBackButton = (ImageButton) backButtonStub.inflate( );
+            ((ViewStub) findViewById(R.id.nav_back_stub)).inflate();
+            mNavBackButton = (ImageButton) findViewById(R.id.nav_back);
             mNavBackButton.setOnClickListener(new Button.OnClickListener() {
                 @Override
                 public void onClick(View view) {
