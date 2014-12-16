@@ -4677,8 +4677,8 @@ LoadTypedThingLength(MacroAssembler &masm, TypedThingLayout layout, Register obj
         break;
       case Layout_OutlineTypedObject:
       case Layout_InlineTypedObject:
-        masm.loadObjProto(obj, result);
-        masm.unboxObject(Address(result, TypedProto::offsetOfTypeDescr()), result);
+        masm.loadPtr(Address(obj, JSObject::offsetOfType()), result);
+        masm.loadPtr(Address(result, types::TypeObject::offsetOfAddendum()), result);
         masm.unboxInt32(Address(result, ArrayTypeDescr::offsetOfLength()), result);
         break;
       default:
@@ -7848,6 +7848,13 @@ ICGetProp_ArgumentsCallee::Compiler::generateStubCode(MacroAssembler &masm)
     return true;
 }
 
+/* static */ ICGetProp_Generic *
+ICGetProp_Generic::Clone(JSContext *cx, ICStubSpace *space, ICStub *firstMonitorStub,
+                         ICGetProp_Generic &other)
+{
+    return New(space, other.jitCode(), firstMonitorStub);
+}
+
 static bool
 DoGetPropGeneric(JSContext *cx, BaselineFrame *frame, ICGetProp_Generic *stub, MutableHandleValue val, MutableHandleValue res)
 {
@@ -8516,7 +8523,7 @@ ICSetPropNativeAddCompiler::generateStubCode(MacroAssembler &masm)
     // Check if the old type still has a newScript.
     masm.loadPtr(Address(objReg, JSObject::offsetOfType()), scratch);
     masm.branchPtr(Assembler::Equal,
-                   Address(scratch, types::TypeObject::offsetOfNewScript()),
+                   Address(scratch, types::TypeObject::offsetOfAddendum()),
                    ImmWord(0),
                    &noTypeChange);
 

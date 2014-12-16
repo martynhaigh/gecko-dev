@@ -31,6 +31,7 @@
 #include "nsPrintfCString.h"
 #include "prsystem.h"
 #include "GeckoProfiler.h"
+#include "nsPluginTags.h"
 
 #ifdef XP_WIN
 #include "PluginHangUIParent.h"
@@ -153,7 +154,8 @@ PluginModuleContentParent::Create(mozilla::ipc::Transport* aTransport,
 
 // static
 PluginLibrary*
-PluginModuleChromeParent::LoadModule(const char* aFilePath, uint32_t aPluginId)
+PluginModuleChromeParent::LoadModule(const char* aFilePath, uint32_t aPluginId,
+                                     nsPluginTag* aPluginTag)
 {
     PLUGIN_LOG_DEBUG_FUNCTION;
 
@@ -190,6 +192,13 @@ PluginModuleChromeParent::LoadModule(const char* aFilePath, uint32_t aPluginId)
     mozilla::MutexAutoLock lock(parent->mCrashReporterMutex);
     parent->mCrashReporter = parent->CrashReporter();
 #endif
+#endif
+
+#ifdef XP_WIN
+    if (aPluginTag->mIsFlashPlugin &&
+        Preferences::GetBool("dom.ipc.plugins.flash.disable-protected-mode", false)) {
+        parent->SendDisableFlashProtectedMode();
+    }
 #endif
 
     return parent.forget();
@@ -907,6 +916,8 @@ PluginModuleChromeParent::ActorDestroy(ActorDestroyReason why)
 #ifdef MOZ_CRASHREPORTER
         ProcessFirstMinidump();
 #endif
+        Telemetry::Accumulate(Telemetry::SUBPROCESS_ABNORMAL_ABORT,
+                              NS_LITERAL_CSTRING("plugin"), 1);
     }
 
     // We can't broadcast settings changes anymore.
@@ -1393,14 +1404,6 @@ PluginModuleParent::NP_Initialize(NPNetscapeFuncs* bFuncs, NPPluginFuncs* pFuncs
         }
         TimeStamp callNpInitEnd = TimeStamp::Now();
         mTimeBlocked += (callNpInitEnd - callNpInitStart);
-        /** mTimeBlocked measures the time that the main thread has been blocked
-         *  on plugin module initialization. As implemented, this is the sum of
-         *  plugin-container launch + NP_Initialize
-         */
-        Telemetry::Accumulate(Telemetry::BLOCKED_ON_PLUGIN_MODULE_INIT_MS,
-                              GetHistogramKey(),
-                              static_cast<uint32_t>(mTimeBlocked.ToMilliseconds()));
-        mTimeBlocked = TimeDuration();
     }
 
     SetPluginFuncs(pFuncs);
@@ -1460,17 +1463,6 @@ PluginModuleChromeParent::NP_Initialize(NPNetscapeFuncs* bFuncs, NPError* error)
 #ifdef MOZ_CRASHREPORTER_INJECTOR
     InitializeInjector();
 #endif
-
-    /** This Accumulate must be placed below the call to InitializeInjector()
-     *  because mTimeBlocked is modified in that function.
-     *  mTimeBlocked measures the time that the main thread has been blocked
-     *  on plugin module initialization. As implemented, this is the sum of
-     *  plugin-container launch + toolhelp32 snapshot + NP_Initialize
-     */
-    Telemetry::Accumulate(Telemetry::BLOCKED_ON_PLUGIN_MODULE_INIT_MS,
-                          GetHistogramKey(),
-                          static_cast<uint32_t>(mTimeBlocked.ToMilliseconds()));
-    mTimeBlocked = TimeDuration();
 
     return NS_OK;
 }
@@ -1563,6 +1555,16 @@ PluginModuleParent::NPP_New(NPMIMEType pluginType, NPP instance,
 
     if (mPluginName.IsEmpty()) {
         GetPluginDetails(mPluginName, mPluginVersion);
+        /** mTimeBlocked measures the time that the main thread has been blocked
+         *  on plugin module initialization. As implemented, this is the sum of
+         *  plugin-container launch + toolhelp32 snapshot + NP_Initialize.
+         *  We don't accumulate its value until here because the plugin info
+         *  is not available until *after* NP_Initialize.
+         */
+        Telemetry::Accumulate(Telemetry::BLOCKED_ON_PLUGIN_MODULE_INIT_MS,
+                              GetHistogramKey(),
+                              static_cast<uint32_t>(mTimeBlocked.ToMilliseconds()));
+        mTimeBlocked = TimeDuration();
     }
 
     // create the instance on the other side

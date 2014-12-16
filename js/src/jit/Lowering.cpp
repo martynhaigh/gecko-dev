@@ -2294,8 +2294,7 @@ LIRGenerator::visitAsmJSInterruptCheck(MAsmJSInterruptCheck *ins)
 {
     gen->setPerformsCall();
 
-    LAsmJSInterruptCheck *lir = new(alloc()) LAsmJSInterruptCheck(temp(),
-                                                                  ins->interruptExit(),
+    LAsmJSInterruptCheck *lir = new(alloc()) LAsmJSInterruptCheck(ins->interruptExit(),
                                                                   ins->funcDesc());
     add(lir, ins);
 }
@@ -2496,12 +2495,10 @@ LIRGenerator::visitTypedArrayElements(MTypedArrayElements *ins)
 }
 
 void
-LIRGenerator::visitTypedObjectProto(MTypedObjectProto *ins)
+LIRGenerator::visitTypedObjectDescr(MTypedObjectDescr *ins)
 {
     MOZ_ASSERT(ins->type() == MIRType_Object);
-    defineReturn(new(alloc()) LTypedObjectProto(useFixed(ins->object(), CallTempReg0),
-                                                tempFixed(CallTempReg1)),
-                 ins);
+    define(new(alloc()) LTypedObjectDescr(useRegisterAtStart(ins->object())), ins);
 }
 
 void

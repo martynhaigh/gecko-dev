@@ -936,7 +936,7 @@ var gBrowserInit = {
         .getService(Ci.nsIEventListenerService)
         .addSystemEventListener(gBrowser, "click", contentAreaClick, true);
     } else {
-      gBrowser.updateBrowserRemoteness(gBrowser.mCurrentBrowser, true);
+      gBrowser.updateBrowserRemoteness(gBrowser.selectedBrowser, true);
     }
 
     // hook up UI through progress listener
@@ -2087,17 +2087,11 @@ function BrowserTryToCloseWindow()
 }
 
 function loadURI(uri, referrer, postData, allowThirdPartyFixup) {
-  if (postData === undefined)
-    postData = null;
-
-  var flags = nsIWebNavigation.LOAD_FLAGS_NONE;
-  if (allowThirdPartyFixup) {
-    flags |= nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP;
-    flags |= nsIWebNavigation.LOAD_FLAGS_FIXUP_SCHEME_TYPOS;
-  }
-
   try {
-    gBrowser.loadURIWithFlags(uri, flags, referrer, null, postData);
+    openLinkIn(uri, "current",
+               { referrerURI: referrer,
+                 postData: postData,
+                 allowThirdPartyFixup: allowThirdPartyFixup });
   } catch (e) {}
 }
 
@@ -2973,6 +2967,30 @@ function BrowserFullScreen()
 {
   window.fullScreen = !window.fullScreen;
 }
+
+function mirrorShow(popup) {
+  let services = CastingApps.getServicesForMirroring();
+  popup.ownerDocument.getElementById("menu_mirrorTabCmd").disabled = !services.length;
+}
+
+function mirrorMenuItemClicked(event) {
+  gBrowser.selectedBrowser.messageManager.sendAsyncMessage("SecondScreen:tab-mirror",
+                                                           {service: event.originalTarget._service});
+}
+
+function populateMirrorTabMenu(popup) {
+  let videoEl = this.target;
+  popup.innerHTML = null;
+  let doc = popup.ownerDocument;
+  let services = CastingApps.getServicesForMirroring();
+  services.forEach(service => {
+    let item = doc.createElement("menuitem");
+    item.setAttribute("label", service.friendlyName);
+    item._service = service;
+    item.addEventListener("command", mirrorMenuItemClicked);
+    popup.appendChild(item);
+  });
+};
 
 function _checkDefaultAndSwitchToMetro() {
 #ifdef HAVE_SHELL_SERVICE
@@ -7474,8 +7492,10 @@ let gRemoteTabsUI = {
  *        This object also allows:
  *        - 'ignoreFragment' property to be set to true to exclude fragment-portion
  *        matching when comparing URIs.
+ *        - 'ignoreQueryString' property to be set to true to exclude query string
+ *        matching when comparing URIs.
  *        - 'replaceQueryString' property to be set to true to exclude query string
- *        matching when comparing URIs and ovewrite the initial query string with
+ *        matching when comparing URIs and overwrite the initial query string with
  *        the one from the new URI.
  * @return True if an existing tab was found, false otherwise
  */
@@ -7487,11 +7507,13 @@ function switchToTabHavingURI(aURI, aOpenNew, aOpenParams={}) {
   ]);
 
   let ignoreFragment = aOpenParams.ignoreFragment;
+  let ignoreQueryString = aOpenParams.ignoreQueryString;
   let replaceQueryString = aOpenParams.replaceQueryString;
 
-  // This property is only used by switchToTabHavingURI and should
+  // These properties are only used by switchToTabHavingURI and should
   // not be used as a parameter for the new load.
   delete aOpenParams.ignoreFragment;
+  delete aOpenParams.ignoreQueryString;
 
   // This will switch to the tab in aWindow having aURI, if present.
   function switchIfURIInWindow(aWindow) {
@@ -7520,12 +7542,14 @@ function switchToTabHavingURI(aURI, aOpenNew, aOpenParams={}) {
         }
         return true;
       }
-      if (replaceQueryString) {
+      if (ignoreQueryString || replaceQueryString) {
         if (browser.currentURI.spec.split("?")[0] == aURI.spec.split("?")[0]) {
           // Focus the matching window & tab
           aWindow.focus();
           aWindow.gBrowser.tabContainer.selectedIndex = i;
-          browser.loadURI(aURI.spec);
+          if (replaceQueryString) {
+            browser.loadURI(aURI.spec);
+          }
           return true;
         }
       }
