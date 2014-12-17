@@ -205,20 +205,20 @@ let gInitialPages = [
 ];
 
 #include browser-addons.js
+#include browser-ctrlTab.js
 #include browser-customization.js
 #include browser-devedition.js
 #include browser-feeds.js
 #include browser-fullScreen.js
 #include browser-fullZoom.js
+#include browser-gestureSupport.js
 #include browser-loop.js
 #include browser-places.js
 #include browser-plugins.js
 #include browser-safebrowsing.js
 #include browser-social.js
-#include browser-tabPreviews.js
 #include browser-tabview.js
 #include browser-thumbnails.js
-#include browser-gestureSupport.js
 
 #ifdef MOZ_DATA_REPORTING
 #include browser-data-submission-info-bar.js
@@ -6999,7 +6999,7 @@ var gIdentityHandler = {
 
     // Chrome URIs however get special treatment. Some chrome URIs are
     // whitelisted to provide a positive security signal to the user.
-    let whitelist = /^about:(accounts|addons|app-manager|config|crashes|customizing|healthreport|home|license|newaddon|permissions|preferences|privatebrowsing|rights|sessionrestore|support|welcomeback)/i;
+    let whitelist = /^about:(accounts|addons|app-manager|config|crashes|customizing|downloads|healthreport|home|license|newaddon|permissions|preferences|privatebrowsing|rights|sessionrestore|support|welcomeback)/i;
     let isChromeUI = uri.schemeIs("about") && whitelist.test(uri.spec);
     if (isChromeUI) {
       this.setMode(this.IDENTITY_MODE_CHROMEUI);
