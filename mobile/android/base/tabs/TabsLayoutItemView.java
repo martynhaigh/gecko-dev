@@ -25,14 +25,14 @@ import android.widget.TextView;
 
 public class TabsLayoutItemView extends LinearLayout
                                 implements Checkable {
-    private static final String LOGTAG = "Gecko" + TabsLayoutItemView.class.getSimpleName();
+    private static final String LOGTAG = "MTEST Gecko" + TabsLayoutItemView.class.getSimpleName();
     private static final int[] STATE_CHECKED = { android.R.attr.state_checked };
     private boolean mChecked;
 
     private int mTabId;
     private TextView mTitle;
     private ImageView mThumbnail;
-    private ImageButton mCloseButton;
+    private ImageView mCloseButton;
     private TabThumbnailWrapper mThumbnailWrapper;
 
     public TabsLayoutItemView(Context context, AttributeSet attrs) {
@@ -48,6 +48,11 @@ public class TabsLayoutItemView extends LinearLayout
         }
 
         return drawableState;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
     }
 
     @Override
@@ -87,7 +92,7 @@ public class TabsLayoutItemView extends LinearLayout
         super.onFinishInflate();
         mTitle = (TextView) findViewById(R.id.title);
         mThumbnail = (ImageView) findViewById(R.id.thumbnail);
-        mCloseButton = (ImageButton) findViewById(R.id.close);
+        mCloseButton = (ImageView) findViewById(R.id.close);
         mThumbnailWrapper = (TabThumbnailWrapper) findViewById(R.id.wrapper);
 
         if (NewTabletUI.isEnabled(getContext())) {

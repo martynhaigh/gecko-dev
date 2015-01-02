@@ -9,6 +9,7 @@ import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,7 +19,7 @@ import java.util.ArrayList;
 
 // Adapter to bind tabs into a list
 public class TabsLayoutAdapter extends BaseAdapter {
-    public static final String LOGTAG = "Gecko" + TabsLayoutAdapter.class.getSimpleName();
+    public static final String LOGTAG = "MTEST Gecko" + TabsLayoutAdapter.class.getSimpleName();
 
     private final Context mContext;
     private final int mTabLayoutId;
@@ -46,6 +47,7 @@ public class TabsLayoutAdapter extends BaseAdapter {
 
     final void clear() {
         mTabs = null;
+
         notifyDataSetChanged(); // Be sure to call this whenever mTabs changes.
     }
 
@@ -69,6 +71,11 @@ public class TabsLayoutAdapter extends BaseAdapter {
             return -1;
 
         return mTabs.indexOf(tab);
+    }
+
+    @Override
+    public boolean isEnabled(int position) {
+        return true;
     }
 
     @Override
