@@ -358,6 +358,8 @@ class IonBuilder
 
     // Add a guard which ensure that the set of type which goes through this
     // generated code correspond to the observed types for the bytecode.
+    MDefinition *addTypeBarrier(MDefinition *def, types::TemporaryTypeSet *observed,
+                                BarrierKind kind, MTypeBarrier **pbarrier = nullptr);
     bool pushTypeBarrier(MDefinition *def, types::TemporaryTypeSet *observed, BarrierKind kind);
 
     // As pushTypeBarrier, but will compute the needBarrier boolean itself based
@@ -598,6 +600,8 @@ class IonBuilder
     MDefinition *getAliasedVar(ScopeCoordinate sc);
     MDefinition *addLexicalCheck(MDefinition *input);
 
+    bool tryFoldInstanceOf(MDefinition *lhs, JSObject *protoObject);
+
     bool jsop_add(MDefinition *left, MDefinition *right);
     bool jsop_bitnot();
     bool jsop_bitop(JSOp op);
@@ -774,6 +778,10 @@ class IonBuilder
     // ForkJoin intrinsics
     InliningStatus inlineForkJoinGetSlice(CallInfo &callInfo);
 
+    // TypedArray intrinsics.
+    InliningStatus inlineIsTypedArray(CallInfo &callInfo);
+    InliningStatus inlineTypedArrayLength(CallInfo &callInfo);
+
     // TypedObject intrinsics and natives.
     InliningStatus inlineObjectIsTypeDescr(CallInfo &callInfo);
     InliningStatus inlineSetTypedObjectOffset(CallInfo &callInfo);
@@ -784,7 +792,6 @@ class IonBuilder
     // Utility intrinsics.
     InliningStatus inlineIsCallable(CallInfo &callInfo);
     InliningStatus inlineIsObject(CallInfo &callInfo);
-    InliningStatus inlineHaveSameClass(CallInfo &callInfo);
     InliningStatus inlineToObject(CallInfo &callInfo);
     InliningStatus inlineToInteger(CallInfo &callInfo);
     InliningStatus inlineToString(CallInfo &callInfo);
@@ -836,6 +843,7 @@ class IonBuilder
     MDefinition *patchInlinedReturn(CallInfo &callInfo, MBasicBlock *exit, MBasicBlock *bottom);
     MDefinition *patchInlinedReturns(CallInfo &callInfo, MIRGraphReturns &returns,
                                      MBasicBlock *bottom);
+    MDefinition *specializeInlinedReturn(MDefinition *rdef, MBasicBlock *exit);
 
     bool objectsHaveCommonPrototype(types::TemporaryTypeSet *types, PropertyName *name,
                                     bool isGetter, JSObject *foundProto, bool *guardGlobal);

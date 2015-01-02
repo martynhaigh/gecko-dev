@@ -429,7 +429,7 @@ class GCRuntime
     void disallowIncrementalGC() { incrementalAllowed = false; }
 
     bool isIncrementalGCEnabled() { return mode == JSGC_MODE_INCREMENTAL && incrementalAllowed; }
-    bool isIncrementalGCInProgress() { return state() != gc::NO_INCREMENTAL && !verifyPreData; }
+    bool isIncrementalGCInProgress() { return state() != gc::NO_INCREMENTAL; }
 
     bool isGenerationalGCEnabled() { return generationalDisabled == 0; }
     void disableGenerationalGC();
@@ -836,7 +836,7 @@ class GCRuntime
 
     bool poked;
 
-    volatile js::HeapState heapState;
+    mozilla::Atomic<js::HeapState> heapState;
 
     /*
      * ForkJoin workers enter and leave GC independently; this counter
