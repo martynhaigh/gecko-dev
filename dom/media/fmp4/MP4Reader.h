@@ -37,6 +37,9 @@ public:
 
   virtual nsresult Init(MediaDecoderReader* aCloneDonor) MOZ_OVERRIDE;
 
+  virtual size_t SizeOfVideoQueueInFrames() MOZ_OVERRIDE;
+  virtual size_t SizeOfAudioQueueInFrames() MOZ_OVERRIDE;
+
   virtual nsRefPtr<VideoDataPromise>
   RequestVideoData(bool aSkipToNextKeyframe, int64_t aTimeThreshold) MOZ_OVERRIDE;
 
@@ -55,10 +58,11 @@ public:
 
   virtual void ReadUpdatedMetadata(MediaInfo* aInfo) MOZ_OVERRIDE;
 
-  virtual void Seek(int64_t aTime,
-                    int64_t aStartTime,
-                    int64_t aEndTime,
-                    int64_t aCurrentTime) MOZ_OVERRIDE;
+  virtual nsRefPtr<SeekPromise>
+  Seek(int64_t aTime,
+       int64_t aStartTime,
+       int64_t aEndTime,
+       int64_t aCurrentTime) MOZ_OVERRIDE;
 
   virtual bool IsMediaSeekable() MOZ_OVERRIDE;
 
@@ -98,6 +102,7 @@ private:
   // Blocks until the demuxer produces an sample of specified type.
   // Returns nullptr on error on EOS. Caller must delete sample.
   mp4_demuxer::MP4Sample* PopSample(mp4_demuxer::TrackType aTrack);
+  mp4_demuxer::MP4Sample* PopSampleLocked(mp4_demuxer::TrackType aTrack);
 
   bool SkipVideoDemuxToNextKeyFrame(int64_t aTimeThreshold, uint32_t& parsed);
 
@@ -116,8 +121,10 @@ private:
   bool IsWaitingOnCodecResource();
   virtual bool IsWaitingOnCDMResource() MOZ_OVERRIDE;
 
+  size_t SizeOfQueue(TrackType aTrack);
+
   nsAutoPtr<mp4_demuxer::MP4Demuxer> mDemuxer;
-  nsAutoPtr<PlatformDecoderModule> mPlatform;
+  nsRefPtr<PlatformDecoderModule> mPlatform;
 
   class DecoderCallback : public MediaDataDecoderCallback {
   public:
@@ -253,7 +260,7 @@ private:
   bool mIsEncrypted;
 
   bool mIndexReady;
-  Monitor mIndexMonitor;
+  Monitor mDemuxerMonitor;
   nsRefPtr<SharedDecoderManager> mSharedDecoderManager;
 };
 

@@ -49,14 +49,6 @@ selfHosting_ErrorReporter(JSContext *cx, const char *message, JSErrorReport *rep
     PrintError(cx, stderr, message, report, true);
 }
 
-static const JSClass self_hosting_global_class = {
-    "self-hosting-global", JSCLASS_GLOBAL_FLAGS,
-    nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr,
-    JS_GlobalObjectTraceHook
-};
-
 bool
 js::intrinsic_ToObject(JSContext *cx, unsigned argc, Value *vp)
 {
@@ -588,18 +580,6 @@ js::intrinsic_UnsafeGetReservedSlot(JSContext *cx, unsigned argc, Value *vp)
 }
 
 bool
-js::intrinsic_HaveSameClass(JSContext *cx, unsigned argc, Value *vp)
-{
-    CallArgs args = CallArgsFromVp(argc, vp);
-    MOZ_ASSERT(args.length() == 2);
-    MOZ_ASSERT(args[0].isObject());
-    MOZ_ASSERT(args[1].isObject());
-
-    args.rval().setBoolean(args[0].toObject().getClass() == args[1].toObject().getClass());
-    return true;
-}
-
-bool
 js::intrinsic_IsPackedArray(JSContext *cx, unsigned argc, Value *vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
@@ -795,21 +775,8 @@ intrinsic_GeneratorSetClosed(JSContext *cx, unsigned argc, Value *vp)
     return true;
 }
 
-// Return the value of [[ArrayLength]] internal slot of the TypedArray
-static bool
-intrinsic_TypedArrayLength(JSContext *cx, unsigned argc, Value *vp)
-{
-    CallArgs args = CallArgsFromVp(argc, vp);
-    MOZ_ASSERT(args.length() == 1);
-
-    RootedObject obj(cx, &args[0].toObject());
-    MOZ_ASSERT(obj->is<TypedArrayObject>());
-    args.rval().setInt32(obj->as<TypedArrayObject>().length());
-    return true;
-}
-
-static bool
-intrinsic_IsTypedArray(JSContext *cx, unsigned argc, Value *vp)
+bool
+js::intrinsic_IsTypedArray(JSContext *cx, unsigned argc, Value *vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
     MOZ_ASSERT(args.length() == 1);
@@ -817,6 +784,19 @@ intrinsic_IsTypedArray(JSContext *cx, unsigned argc, Value *vp)
 
     RootedObject obj(cx, &args[0].toObject());
     args.rval().setBoolean(obj->is<TypedArrayObject>());
+    return true;
+}
+
+// Return the value of [[ArrayLength]] internal slot of the TypedArray
+bool
+js::intrinsic_TypedArrayLength(JSContext *cx, unsigned argc, Value *vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+    MOZ_ASSERT(args.length() == 1);
+
+    RootedObject obj(cx, &args[0].toObject());
+    MOZ_ASSERT(obj->is<TypedArrayObject>());
+    args.rval().setInt32(obj->as<TypedArrayObject>().length());
     return true;
 }
 
@@ -1095,7 +1075,6 @@ static const JSFunctionSpec intrinsic_functions[] = {
     JS_FN("_DefineDataProperty",     intrinsic_DefineDataProperty,      4,0),
     JS_FN("UnsafeSetReservedSlot",   intrinsic_UnsafeSetReservedSlot,   3,0),
     JS_FN("UnsafeGetReservedSlot",   intrinsic_UnsafeGetReservedSlot,   2,0),
-    JS_FN("HaveSameClass",           intrinsic_HaveSameClass,           2,0),
     JS_FN("IsPackedArray",           intrinsic_IsPackedArray,           1,0),
 
     JS_FN("GetIteratorPrototype",    intrinsic_GetIteratorPrototype,    0,0),
@@ -1123,8 +1102,8 @@ static const JSFunctionSpec intrinsic_functions[] = {
     JS_FN("GeneratorIsRunning",      intrinsic_GeneratorIsRunning,      1,0),
     JS_FN("GeneratorSetClosed",      intrinsic_GeneratorSetClosed,      1,0),
 
-    JS_FN("TypedArrayLength",        intrinsic_TypedArrayLength,        1,0),
     JS_FN("IsTypedArray",            intrinsic_IsTypedArray,            1,0),
+    JS_FN("TypedArrayLength",        intrinsic_TypedArrayLength,        1,0),
 
     JS_FN("CallTypedArrayMethodIfWrapped",
           CallNonGenericSelfhostedMethod<Is<TypedArrayObject>>, 2, 0),
@@ -1284,6 +1263,45 @@ js::FillSelfHostingCompileOptions(CompileOptions &options)
 #endif
 }
 
+GlobalObject *
+JSRuntime::createSelfHostingGlobal(JSContext *cx)
+{
+    MOZ_ASSERT(!cx->isExceptionPending());
+    MOZ_ASSERT(!cx->runtime()->isAtomsCompartment(cx->compartment()));
+
+    JS::CompartmentOptions options;
+    options.setDiscardSource(true);
+    options.setZone(JS::FreshZone);
+
+    JSCompartment *compartment = NewCompartment(cx, nullptr, nullptr, options);
+    if (!compartment)
+        return nullptr;
+
+    static const Class shgClass = {
+        "self-hosting-global", JSCLASS_GLOBAL_FLAGS,
+        nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr,
+        JS_GlobalObjectTraceHook
+    };
+
+    AutoCompartment ac(cx, compartment);
+    Rooted<GlobalObject*> shg(cx, GlobalObject::createInternal(cx, &shgClass));
+    if (!shg)
+        return nullptr;
+
+    cx->runtime()->selfHostingGlobal_ = shg;
+    compartment->isSelfHosting = true;
+    compartment->isSystem = true;
+
+    if (!GlobalObject::initSelfHostingBuiltins(cx, shg, intrinsic_functions))
+        return nullptr;
+
+    JS_FireOnNewGlobalObject(cx, shg);
+
+    return shg;
+}
+
 bool
 JSRuntime::initSelfHosting(JSContext *cx)
 {
@@ -1300,24 +1318,11 @@ JSRuntime::initSelfHosting(JSContext *cx)
      */
     JS::AutoDisableGenerationalGC disable(cx->runtime());
 
-    JS::CompartmentOptions compartmentOptions;
-    compartmentOptions.setDiscardSource(true);
-    if (!(selfHostingGlobal_ = MaybeNativeObject(JS_NewGlobalObject(cx, &self_hosting_global_class,
-                                                                    nullptr, JS::DontFireOnNewGlobalHook,
-                                                                    compartmentOptions))))
-    {
-        return false;
-    }
-
-    JSAutoCompartment ac(cx, selfHostingGlobal_);
-    Rooted<GlobalObject*> shg(cx, &selfHostingGlobal_->as<GlobalObject>());
-    selfHostingGlobal_->compartment()->isSelfHosting = true;
-    selfHostingGlobal_->compartment()->isSystem = true;
-
-    if (!GlobalObject::initSelfHostingBuiltins(cx, shg, intrinsic_functions))
+    Rooted<GlobalObject*> shg(cx, JSRuntime::createSelfHostingGlobal(cx));
+    if (!shg)
         return false;
 
-    JS_FireOnNewGlobalObject(cx, shg);
+    JSAutoCompartment ac(cx, shg);
 
     CompileOptions options(cx);
     FillSelfHostingCompileOptions(options);
@@ -1329,7 +1334,7 @@ JSRuntime::initSelfHosting(JSContext *cx)
      */
     JSErrorReporter oldReporter = JS_SetErrorReporter(cx->runtime(), selfHosting_ErrorReporter);
     RootedValue rv(cx);
-    bool ok = false;
+    bool ok = true;
 
     char *filename = getenv("MOZ_SELFHOSTEDJS");
     if (filename) {
@@ -1345,10 +1350,10 @@ JSRuntime::initSelfHosting(JSContext *cx)
         if (!src || !DecompressString(compressed, compressedLen,
                                       reinterpret_cast<unsigned char *>(src.get()), srcLen))
         {
-            return false;
+            ok = false;
         }
 
-        ok = Evaluate(cx, shg, options, src, srcLen, &rv);
+        ok = ok && Evaluate(cx, shg, options, src, srcLen, &rv);
     }
     JS_SetErrorReporter(cx->runtime(), oldReporter);
     return ok;
