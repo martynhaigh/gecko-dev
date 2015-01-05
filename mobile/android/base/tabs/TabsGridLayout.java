@@ -93,7 +93,12 @@ class TabsGridLayout extends GridView
 
         final int padding = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding);
         final int paddingTop = resources.getDimensionPixelSize(R.dimen.new_tablet_tab_panel_grid_padding_top);
-        setPadding(padding, paddingTop, padding, padding);
+
+        // Lets set double the top padding on the bottom so that the last row shows up properly!
+        // Your demise, GridView, cannot come fast enough.
+        final int paddingBottom = paddingTop * 2;
+
+        setPadding(padding, paddingTop, padding, paddingBottom);
     }
 
     private class TabsGridLayoutAdapter extends TabsLayoutAdapter {
@@ -392,5 +397,4 @@ class TabsGridLayout extends GridView
             }
         });
     }
-
 }
