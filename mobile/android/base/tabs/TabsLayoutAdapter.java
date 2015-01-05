@@ -9,7 +9,6 @@ import org.mozilla.gecko.R;
 import org.mozilla.gecko.Tab;
 
 import android.content.Context;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
