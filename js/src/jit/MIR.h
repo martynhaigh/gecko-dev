@@ -1322,6 +1322,7 @@ class MSimdValueX4 : public MQuaternaryInstruction
       : MQuaternaryInstruction(x, y, z, w)
     {
         MOZ_ASSERT(IsSimdType(type));
+        MOZ_ASSERT(SimdTypeToLength(type) == 4);
         mozilla::DebugOnly<MIRType> scalarType = SimdTypeToScalarType(type);
         MOZ_ASSERT(scalarType == x->type());
         MOZ_ASSERT(scalarType == y->type());
@@ -1339,6 +1340,10 @@ class MSimdValueX4 : public MQuaternaryInstruction
                              MDefinition *y, MDefinition *z, MDefinition *w)
     {
         return new(alloc) MSimdValueX4(type, x, y, z, w);
+    }
+
+    bool canConsumeFloat32(MUse *use) const {
+        return SimdTypeToScalarType(type()) == MIRType_Float32;
     }
 
     AliasSet getAliasSet() const {
@@ -1375,6 +1380,10 @@ class MSimdSplatX4 : public MUnaryInstruction
     static MSimdSplatX4 *New(TempAllocator &alloc, MIRType type, MDefinition *v)
     {
         return new(alloc) MSimdSplatX4(type, v);
+    }
+
+    bool canConsumeFloat32(MUse *use) const {
+        return SimdTypeToScalarType(type()) == MIRType_Float32;
     }
 
     AliasSet getAliasSet() const {
@@ -1556,6 +1565,10 @@ class MSimdInsertElement : public MBinaryInstruction
     }
     SimdLane lane() const {
         return lane_;
+    }
+
+    bool canConsumeFloat32(MUse *use) const {
+        return use == getUseFor(1) && SimdTypeToScalarType(type()) == MIRType_Float32;
     }
 
     AliasSet getAliasSet() const {
@@ -3353,11 +3366,11 @@ class MCallDOMNative : public MCall
         : MCall(target, numActualArgs, false)
     {
         // If our jitinfo is not marked movable, that means that our C++
-        // implementation is fallible or that we have no hope of ever doing the
-        // sort of argument analysis that would allow us to detemine that we're
-        // side-effect-free.  In the latter case we wouldn't get DCEd no matter
-        // what, but for the former case we have to explicitly say that we can't
-        // be DCEd.
+        // implementation is fallible or that it never wants to be eliminated or
+        // coalesced or that we have no hope of ever doing the sort of argument
+        // analysis that would allow us to detemine that we're side-effect-free.
+        // In the latter case we wouldn't get DCEd no matter what, but for the
+        // former two cases we have to explicitly say that we can't be DCEd.
         if (!getJitInfo()->isMovable)
             setGuard();
     }
@@ -10592,14 +10605,18 @@ class MGetDOMProperty
     }
 
     bool congruentTo(const MDefinition *ins) const {
-        if (!isDomMovable())
-            return false;
-
         if (!ins->isGetDOMProperty())
             return false;
 
+        return congruentTo(ins->toGetDOMProperty());
+    }
+
+    bool congruentTo(const MGetDOMProperty *ins) const {
+        if (!isDomMovable())
+            return false;
+
         // Checking the jitinfo is the same as checking the constant function
-        if (!(info() == ins->toGetDOMProperty()->info()))
+        if (!(info() == ins->info()))
             return false;
 
         return congruentIfOperandsEqual(ins);
@@ -10622,10 +10639,12 @@ class MGetDOMProperty
 
 class MGetDOMMember : public MGetDOMProperty
 {
-    // We inherit everything from MGetDOMProperty except our possiblyCalls value
+    // We inherit everything from MGetDOMProperty except our
+    // possiblyCalls value and the congruentTo behavior.
     explicit MGetDOMMember(const JSJitInfo *jitinfo)
         : MGetDOMProperty(jitinfo)
     {
+        setResultType(MIRTypeFromValueType(jitinfo->returnType()));
     }
 
   public:
@@ -10642,6 +10661,13 @@ class MGetDOMMember : public MGetDOMProperty
 
     bool possiblyCalls() const {
         return false;
+    }
+
+    bool congruentTo(const MDefinition *ins) const {
+        if (!ins->isGetDOMMember())
+            return false;
+
+        return MGetDOMProperty::congruentTo(ins->toGetDOMMember());
     }
 };
 
