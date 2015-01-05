@@ -46,7 +46,7 @@ import com.nineoldandroids.animation.ValueAnimator;
 class TabsGridLayout extends GridView
                      implements TabsLayout,
                                 Tabs.OnTabsChangedListener {
-    private static final String LOGTAG = "MTEST Gecko" + TabsGridLayout.class.getSimpleName();
+    private static final String LOGTAG = "Gecko" + TabsGridLayout.class.getSimpleName();
 
     private static final int ANIM_TIME_MS = 200;
     public static final int ANIM_DELAY_MULTIPLE_MS = 20;
