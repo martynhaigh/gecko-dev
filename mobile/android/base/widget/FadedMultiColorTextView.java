@@ -56,7 +56,7 @@ public class FadedMultiColorTextView extends FadedTextView {
 
             final float center = getHeight() / 2;
 
-            // Shrink top and bottom by one pixel to stop gradient overlaying parent view border
+            // Shrink height of gradient to prevent it overlaying parent view border
             final float top = center - getTextSize() + 1;
             final float bottom = center + getTextSize() - 1;
 
