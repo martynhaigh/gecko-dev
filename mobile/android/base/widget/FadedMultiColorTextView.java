@@ -14,13 +14,9 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
-import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.Shader;
 import android.util.AttributeSet;
-import android.view.Display;
-import android.view.View;
-import android.view.WindowManager;
 
 /**
  * Fades the end of the text by gecko:fadeWidth amount,
