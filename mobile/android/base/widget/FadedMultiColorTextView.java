@@ -54,14 +54,12 @@ public class FadedMultiColorTextView extends FadedTextView {
             final float left = right - fadeWidth;
 
             updateGradientShader(needsEllipsis, right);
-
+            
+            final Paint.FontMetrics fontMetrics = getPaint().getFontMetrics();
+            final float totalFontHeight = fontMetrics.bottom - fontMetrics.top;
             final float center = getHeight() / 2;
-
-            Rect bounds = new Rect();
-            getPaint().getTextBounds(getText().toString(), 0, getText().length(), bounds);
-
-            final float top = center - bounds.centerY() + bounds.top;
-            final float bottom = center - bounds.centerY() + bounds.bottom;
+            final float top = center - (totalFontHeight / 2);
+            final float bottom = top + totalFontHeight;
 
             canvas.drawRect(left, top, right, bottom, fadePaint);
         }
