@@ -14,8 +14,13 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.Shader;
 import android.util.AttributeSet;
+import android.view.Display;
+import android.view.View;
+import android.view.WindowManager;
 
 /**
  * Fades the end of the text by gecko:fadeWidth amount,
@@ -56,9 +61,11 @@ public class FadedMultiColorTextView extends FadedTextView {
 
             final float center = getHeight() / 2;
 
-            // Shrink height of gradient to prevent it overlaying parent view border.
-            final float top = center - getTextSize() + 1;
-            final float bottom = center + getTextSize() - 1;
+            Rect bounds = new Rect();
+            getPaint().getTextBounds(getText().toString(), 0, getText().length(), bounds);
+
+            final float top = center - bounds.centerY() + bounds.top;
+            final float bottom = center - bounds.centerY() + bounds.bottom;
 
             canvas.drawRect(left, top, right, bottom, fadePaint);
         }
