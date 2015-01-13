@@ -267,7 +267,7 @@ SelectorSearch.prototype = {
       }
       this.searchBox.classList.add("devtools-no-search-result");
       return this.showSuggestions();
-    }).then(() => this.emit("processing-done")).catch(Cu.reportError);
+    }).then(() => this.emit("processing-done"), Cu.reportError);
   },
 
   /**

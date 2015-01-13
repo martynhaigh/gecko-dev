@@ -10748,7 +10748,9 @@ FactoryOp::CheckPermission(ContentParent* aContentParent,
   MOZ_ASSERT(NS_IsMainThread());
   MOZ_ASSERT(mState == State_Initial || mState == State_PermissionRetry);
 
-  if (NS_WARN_IF(!Preferences::GetBool(kPrefIndexedDBEnabled, false))) {
+  const PrincipalInfo& principalInfo = mCommonParams.principalInfo();
+  if (principalInfo.type() != PrincipalInfo::TSystemPrincipalInfo &&
+      NS_WARN_IF(!Preferences::GetBool(kPrefIndexedDBEnabled, false))) {
     if (aContentParent) {
       // The DOM in the other process should have kept us from receiving any
       // indexedDB messages so assume that the child is misbehaving.
@@ -10764,7 +10766,6 @@ FactoryOp::CheckPermission(ContentParent* aContentParent,
 
   PersistenceType persistenceType = mCommonParams.metadata().persistenceType();
 
-  const PrincipalInfo& principalInfo = mCommonParams.principalInfo();
   MOZ_ASSERT(principalInfo.type() != PrincipalInfo::TNullPrincipalInfo);
 
   if (principalInfo.type() == PrincipalInfo::TSystemPrincipalInfo) {
@@ -10851,6 +10852,14 @@ FactoryOp::CheckPermission(ContentParent* aContentParent,
   if (NS_WARN_IF(NS_FAILED(rv))) {
     return rv;
   }
+
+#if defined(MOZ_WIDGET_ANDROID) || defined(MOZ_WIDGET_GONK)
+  if (persistenceType == PERSISTENCE_TYPE_PERSISTENT &&
+      !QuotaManager::IsOriginWhitelistedForPersistentStorage(origin) &&
+      !isApp) {
+    return NS_ERROR_DOM_INDEXEDDB_NOT_ALLOWED_ERR;
+  }
+#endif
 
   PermissionRequestBase::PermissionValue permission;
 

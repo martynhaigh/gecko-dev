@@ -700,8 +700,8 @@ StaticBlockObject::addVar(ExclusiveContext *cx, Handle<StaticBlockObject*> block
     *redeclared = false;
 
     /* Inline NativeObject::addProperty in order to trap the redefinition case. */
-    Shape **spp;
-    if (Shape::search(cx, block->lastProperty(), id, &spp, true)) {
+    ShapeTable::Entry *entry;
+    if (Shape::search(cx, block->lastProperty(), id, &entry, true)) {
         *redeclared = true;
         return nullptr;
     }
@@ -719,7 +719,7 @@ StaticBlockObject::addVar(ExclusiveContext *cx, Handle<StaticBlockObject*> block
                                              slot,
                                              propFlags,
                                              /* attrs = */ 0,
-                                             spp,
+                                             entry,
                                              /* allowDictionary = */ false);
 }
 
@@ -1353,7 +1353,7 @@ class DebugScopeProxy : public BaseProxyHandler
                 return true;
 
             if (bi->kind() == Binding::VARIABLE || bi->kind() == Binding::CONSTANT) {
-                if (script->bodyLevelLocalIsAliased(bi.localIndex()))
+                if (script->bindingIsAliased(bi))
                     return true;
 
                 uint32_t i = bi.frameIndex();
@@ -1574,7 +1574,7 @@ class DebugScopeProxy : public BaseProxyHandler
     }
 
     bool getOwnPropertyDescriptor(JSContext *cx, HandleObject proxy, HandleId id,
-                                  MutableHandle<PropertyDescriptor> desc) const
+                                  MutableHandle<PropertyDescriptor> desc) const MOZ_OVERRIDE
     {
         Rooted<DebugScopeObject*> debugScope(cx, &proxy->as<DebugScopeObject>());
         Rooted<ScopeObject*> scope(cx, &debugScope->scope());
@@ -1732,7 +1732,7 @@ class DebugScopeProxy : public BaseProxyHandler
                                      JS_PROPERTYOP_SETTER(desc.setter()));
     }
 
-    bool ownPropertyKeys(JSContext *cx, HandleObject proxy, AutoIdVector &props) const
+    bool ownPropertyKeys(JSContext *cx, HandleObject proxy, AutoIdVector &props) const MOZ_OVERRIDE
     {
         Rooted<ScopeObject*> scope(cx, &proxy->as<DebugScopeObject>().scope());
 
