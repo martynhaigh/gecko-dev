@@ -9,7 +9,9 @@ android {
             proguardFile getDefaultProguardFile('proguard-android.txt')
         }
     }
-
+    defaultConfig {
+        applicationId 'org.mozilla.gecko'
+    }
     sourceSets {
         androidTest {
             java {
@@ -25,4 +27,13 @@ android {
 dependencies {
     compile project(':base')
     androidTestCompile fileTree(dir: 'libs', include: ['*.jar'])
+}
+apply plugin: 'org.lucasr.probe'
+
+probe {
+    buildVariants {
+        debug {
+            enabled = true
+        }
+    }
 }

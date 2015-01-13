@@ -14,7 +14,7 @@ MOZ_OFFICIAL_BRANDING_DIRECTORY=mobile/android/branding/official
 
 # We support Android SDK version 9 and up by default.
 # See the --enable-android-min-sdk and --enable-android-max-sdk arguments in configure.in.
-MOZ_ANDROID_MIN_SDK_VERSION=9
+MOZ_ANDROID_MIN_SDK_VERSION=14
 
 MOZ_SAFE_BROWSING=1
 

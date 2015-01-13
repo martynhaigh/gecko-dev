@@ -495,7 +495,7 @@ public class BrowserApp extends GeckoApp
     @Override
     public void onCreate(Bundle savedInstanceState) {
         mAboutHomeStartupTimer = new Telemetry.UptimeTimer("FENNEC_STARTUP_TIME_ABOUTHOME");
-
+//        Probe.deploy(this, new OvermeasureInterceptor());
         final Intent intent = getIntent();
 
         // Note that we're calling GeckoProfile.get *before GeckoApp.onCreate*.
