@@ -86,9 +86,8 @@ public:
     return TestCheckPublicKey(subjectPublicKeyInfo);
   }
 
-private:
-  OCSPTestTrustDomain(const OCSPTestTrustDomain&) /*delete*/;
-  void operator=(const OCSPTestTrustDomain&) /*delete*/;
+  OCSPTestTrustDomain(const OCSPTestTrustDomain&) = delete;
+  void operator=(const OCSPTestTrustDomain&) = delete;
 };
 
 namespace {
@@ -477,8 +476,7 @@ protected:
 
     const ByteString extensions[] = {
       signerEKUDER
-        ? CreateEncodedEKUExtension(*signerEKUDER,
-                                    ExtensionCriticality::NotCritical)
+        ? CreateEncodedEKUExtension(*signerEKUDER, Critical::No)
         : ByteString(),
       ByteString()
     };
@@ -628,8 +626,7 @@ TEST_F(pkixocsp_VerifyEncodedResponse_DelegatedResponder, good_expired)
   static const char* signerName = "good_indirect_expired";
 
   const ByteString extensions[] = {
-    CreateEncodedEKUExtension(OCSPSigningEKUDER,
-                              ExtensionCriticality::NotCritical),
+    CreateEncodedEKUExtension(OCSPSigningEKUDER, Critical::No),
     ByteString()
   };
 
@@ -664,8 +661,7 @@ TEST_F(pkixocsp_VerifyEncodedResponse_DelegatedResponder, good_future)
   static const char* signerName = "good_indirect_future";
 
   const ByteString extensions[] = {
-    CreateEncodedEKUExtension(OCSPSigningEKUDER,
-                              ExtensionCriticality::NotCritical),
+    CreateEncodedEKUExtension(OCSPSigningEKUDER, Critical::No),
     ByteString()
   };
 
@@ -772,8 +768,7 @@ TEST_F(pkixocsp_VerifyEncodedResponse_DelegatedResponder, good_unknown_issuer)
 
   // Delegated responder cert signed by unknown issuer
   const ByteString extensions[] = {
-    CreateEncodedEKUExtension(OCSPSigningEKUDER,
-                              ExtensionCriticality::NotCritical),
+    CreateEncodedEKUExtension(OCSPSigningEKUDER, Critical::No),
     ByteString()
   };
   ScopedTestKeyPair signerKeyPair(GenerateKeyPair());
@@ -813,7 +808,7 @@ TEST_F(pkixocsp_VerifyEncodedResponse_DelegatedResponder,
 
   // sub-CA of root (root is the direct issuer of endEntity)
   const ByteString subCAExtensions[] = {
-    CreateEncodedBasicConstraints(true, 0, ExtensionCriticality::NotCritical),
+    CreateEncodedBasicConstraints(true, 0, Critical::No),
     ByteString()
   };
   ScopedTestKeyPair subCAKeyPair(GenerateKeyPair());
@@ -825,8 +820,7 @@ TEST_F(pkixocsp_VerifyEncodedResponse_DelegatedResponder,
 
   // Delegated responder cert signed by that sub-CA
   const ByteString extensions[] = {
-    CreateEncodedEKUExtension(OCSPSigningEKUDER,
-                              ExtensionCriticality::NotCritical),
+    CreateEncodedEKUExtension(OCSPSigningEKUDER, Critical::No),
     ByteString(),
   };
   ScopedTestKeyPair signerKeyPair(GenerateKeyPair());
@@ -867,7 +861,7 @@ TEST_F(pkixocsp_VerifyEncodedResponse_DelegatedResponder,
 
   // sub-CA of root (root is the direct issuer of endEntity)
   const ByteString subCAExtensions[] = {
-    CreateEncodedBasicConstraints(true, 0, ExtensionCriticality::NotCritical),
+    CreateEncodedBasicConstraints(true, 0, Critical::No),
     ByteString()
   };
   ScopedTestKeyPair subCAKeyPair(GenerateKeyPair());
@@ -881,8 +875,7 @@ TEST_F(pkixocsp_VerifyEncodedResponse_DelegatedResponder,
 
   // Delegated responder cert signed by that sub-CA
   const ByteString extensions[] = {
-    CreateEncodedEKUExtension(OCSPSigningEKUDER,
-                              ExtensionCriticality::NotCritical),
+    CreateEncodedEKUExtension(OCSPSigningEKUDER, Critical::No),
     ByteString()
   };
   ScopedTestKeyPair signerKeyPair(GenerateKeyPair());

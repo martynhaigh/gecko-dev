@@ -862,7 +862,7 @@ pref("browser.preferences.animateFadeIn", false);
 #endif
 
 // Toggles between the two Preferences implementations, pop-up window and in-content
-#ifndef RELEASE_BUILD
+#ifdef EARLY_BETA_OR_EARLIER
 pref("browser.preferences.inContent", true);
 pref("browser.preferences.instantApply", true);
 #else
@@ -1173,6 +1173,9 @@ pref("toolbar.customization.usesheet", true);
 pref("toolbar.customization.usesheet", false);
 #endif
 
+// Disable Flash protected mode to reduce hang/crash rates.
+pref("dom.ipc.plugins.flash.disable-protected-mode", true);
+
 #ifdef XP_MACOSX
 // On mac, the default pref is per-architecture
 pref("dom.ipc.plugins.enabled.i386", true);
@@ -1374,6 +1377,8 @@ pref("devtools.inspector.show_pseudo_elements", true);
 pref("devtools.inspector.imagePreviewTooltipSize", 300);
 // Enable user agent style inspection in rule-view
 pref("devtools.inspector.showUserAgentStyles", false);
+// Show all native anonymous content (like controls in <video> tags)
+pref("devtools.inspector.showAllAnonymousContent", false);
 
 // DevTools default color unit
 pref("devtools.defaultColorUnit", "hex");
@@ -1644,6 +1649,7 @@ pref("image.mem.max_decoded_image_kb", 256000);
 pref("loop.enabled", true);
 pref("loop.server", "https://loop.services.mozilla.com/v0");
 pref("loop.seenToS", "unseen");
+pref("loop.showPartnerLogo", true);
 pref("loop.gettingStarted.seen", false);
 pref("loop.gettingStarted.url", "https://www.mozilla.org/%LOCALE%/firefox/%VERSION%/hello/start/");
 pref("loop.gettingStarted.resumeOnFirstJoin", false);

@@ -269,7 +269,6 @@ struct ResumeFromException
 };
 
 void HandleException(ResumeFromException *rfe);
-void HandleParallelFailure(ResumeFromException *rfe);
 
 void EnsureExitFrame(CommonFrameLayout *frame);
 
@@ -289,7 +288,7 @@ MakeFrameDescriptor(uint32_t frameSize, FrameType type)
 
 // Returns the JSScript associated with the topmost JIT frame.
 inline JSScript *
-GetTopJitJSScript(ThreadSafeContext *cx, void **returnAddrOut = nullptr)
+GetTopJitJSScript(JSContext *cx, void **returnAddrOut = nullptr)
 {
     JitFrameIterator iter(cx);
     MOZ_ASSERT(iter.type() == JitFrame_Exit);

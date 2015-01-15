@@ -1,10 +1,10 @@
 add_task(function*() {
   // This test is only relevant if UnifiedComplete is enabled.
-  if (!Services.prefs.getBoolPref("browser.urlbar.unifiedcomplete"))
-    return;
+  Services.prefs.setBoolPref("browser.urlbar.unifiedcomplete", true);
 
   registerCleanupFunction(() => {
     PlacesUtils.bookmarks.removeFolderChildren(PlacesUtils.unfiledBookmarksFolderId);
+    Services.prefs.clearUserPref("browser.urlbar.unifiedcomplete");
     Services.prefs.clearUserPref("browser.urlbar.suggest.bookmark");
   });
 

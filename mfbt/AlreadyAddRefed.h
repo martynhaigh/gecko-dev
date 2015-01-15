@@ -12,7 +12,6 @@
 #include "mozilla/Assertions.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/Move.h"
-#include "mozilla/NullPtr.h"
 
 namespace mozilla {
 
@@ -68,7 +67,7 @@ struct already_AddRefed
   explicit already_AddRefed(T* aRawPtr) : mRawPtr(aRawPtr) {}
 
   // Disallowed. Use move semantics instead.
-  already_AddRefed(const already_AddRefed<T>& aOther) MOZ_DELETE;
+  already_AddRefed(const already_AddRefed<T>& aOther) = delete;
 
   already_AddRefed(already_AddRefed<T>&& aOther) : mRawPtr(aOther.take()) {}
 

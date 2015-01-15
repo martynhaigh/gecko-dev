@@ -2218,6 +2218,20 @@ nsFrameLoader::DeactivateRemoteFrame() {
   return NS_ERROR_UNEXPECTED;
 }
 
+void
+nsFrameLoader::ActivateUpdateHitRegion() {
+  if (mRemoteBrowser) {
+    unused << mRemoteBrowser->SendSetUpdateHitRegion(true);
+  }
+}
+
+void
+nsFrameLoader::DeactivateUpdateHitRegion() {
+  if (mRemoteBrowser) {
+    unused << mRemoteBrowser->SendSetUpdateHitRegion(false);
+  }
+}
+
 NS_IMETHODIMP
 nsFrameLoader::SendCrossProcessMouseEvent(const nsAString& aType,
                                           float aX,
@@ -2291,7 +2305,7 @@ nsFrameLoader::CreateStaticClone(nsIFrameLoader* aDest)
 bool
 nsFrameLoader::DoLoadFrameScript(const nsAString& aURL, bool aRunInGlobalScope)
 {
-  mozilla::dom::PBrowserParent* tabParent = GetRemoteBrowser();
+  auto* tabParent = static_cast<TabParent*>(GetRemoteBrowser());
   if (tabParent) {
     return tabParent->SendLoadRemoteScript(nsString(aURL), aRunInGlobalScope);
   }
@@ -2407,7 +2421,13 @@ nsFrameLoader::EnsureMessageManager()
     return rv;
   }
 
-  if (!mIsTopLevelContent && !OwnerIsBrowserOrAppFrame() && !mRemoteFrame) {
+  if (!mIsTopLevelContent &&
+      !OwnerIsBrowserOrAppFrame() &&
+      !mRemoteFrame &&
+      !(mOwnerContent->IsXUL() &&
+        mOwnerContent->AttrValueIs(kNameSpaceID_None,
+                                   nsGkAtoms::forcemessagemanager,
+                                   nsGkAtoms::_true, eCaseMatters))) {
     return NS_OK;
   }
 

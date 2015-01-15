@@ -525,8 +525,8 @@ struct MainThreadWorkerStructuredCloneCallbacks
         FileImpl* blobImpl = blob->Impl();
         MOZ_ASSERT(blobImpl);
 
-        if (blobImpl->IsCCed()) {
-          NS_WARNING("Cycle collected blob objects are not supported!");
+        if (!blobImpl->MayBeClonedToOtherThreads()) {
+          NS_WARNING("Not all the blob implementations can be sent between threads.");
         } else if (WriteBlobOrFile(aCx, aWriter, blobImpl, *clonedObjects)) {
           return true;
         }
@@ -6020,14 +6020,14 @@ WorkerPrivate::GarbageCollectInternal(JSContext* aCx, bool aShrinking,
     JS::PrepareForFullGC(rt);
 
     if (aShrinking) {
-      JS::ShrinkingGC(rt, JS::gcreason::DOM_WORKER);
+      JS::GCForReason(rt, GC_SHRINK, JS::gcreason::DOM_WORKER);
 
       if (!aCollectChildren) {
         LOG(("Worker %p collected idle garbage\n", this));
       }
     }
     else {
-      JS::GCForReason(rt, JS::gcreason::DOM_WORKER);
+      JS::GCForReason(rt, GC_NORMAL, JS::gcreason::DOM_WORKER);
       LOG(("Worker %p collected garbage\n", this));
     }
   }

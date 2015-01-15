@@ -243,6 +243,7 @@ bool nsContentUtils::sFullscreenApiIsContentOnly = false;
 bool nsContentUtils::sIsPerformanceTimingEnabled = false;
 bool nsContentUtils::sIsResourceTimingEnabled = false;
 bool nsContentUtils::sIsExperimentalAutocompleteEnabled = false;
+bool nsContentUtils::sEncodeDecodeURLHash = false;
 
 uint32_t nsContentUtils::sHandlingInputTimeout = 1000;
 
@@ -519,6 +520,9 @@ nsContentUtils::Init()
 
   Preferences::AddBoolVarCache(&sIsExperimentalAutocompleteEnabled,
                                "dom.forms.autocomplete.experimental", false);
+
+  Preferences::AddBoolVarCache(&sEncodeDecodeURLHash,
+                               "dom.url.encode_decode_hash", false);
 
   Preferences::AddUintVarCache(&sHandlingInputTimeout,
                                "dom.event.handling-user-input-time-limit",
@@ -3954,8 +3958,7 @@ nsContentUtils::TraverseListenerManager(nsINode *aNode,
 
   EventListenerManagerMapEntry *entry =
     static_cast<EventListenerManagerMapEntry *>
-               (PL_DHashTableOperate(&sEventListenerManagersHash, aNode,
-                                        PL_DHASH_LOOKUP));
+               (PL_DHashTableLookup(&sEventListenerManagersHash, aNode));
   if (PL_DHASH_ENTRY_IS_BUSY(entry)) {
     CycleCollectionNoteChild(cb, entry->mListenerManager.get(),
                              "[via hash] mListenerManager");
@@ -3974,8 +3977,7 @@ nsContentUtils::GetListenerManagerForNode(nsINode *aNode)
 
   EventListenerManagerMapEntry *entry =
     static_cast<EventListenerManagerMapEntry *>
-               (PL_DHashTableOperate(&sEventListenerManagersHash, aNode,
-                                        PL_DHASH_ADD));
+               (PL_DHashTableAdd(&sEventListenerManagersHash, aNode));
 
   if (!entry) {
     return nullptr;
@@ -4006,8 +4008,7 @@ nsContentUtils::GetExistingListenerManagerForNode(const nsINode *aNode)
 
   EventListenerManagerMapEntry *entry =
     static_cast<EventListenerManagerMapEntry *>
-               (PL_DHashTableOperate(&sEventListenerManagersHash, aNode,
-                                        PL_DHASH_LOOKUP));
+               (PL_DHashTableLookup(&sEventListenerManagersHash, aNode));
   if (PL_DHASH_ENTRY_IS_BUSY(entry)) {
     return entry->mListenerManager;
   }
@@ -4022,8 +4023,7 @@ nsContentUtils::RemoveListenerManager(nsINode *aNode)
   if (sEventListenerManagersHash.ops) {
     EventListenerManagerMapEntry *entry =
       static_cast<EventListenerManagerMapEntry *>
-                 (PL_DHashTableOperate(&sEventListenerManagersHash, aNode,
-                                          PL_DHASH_LOOKUP));
+                 (PL_DHashTableLookup(&sEventListenerManagersHash, aNode));
     if (PL_DHASH_ENTRY_IS_BUSY(entry)) {
       nsRefPtr<EventListenerManager> listenerManager;
       listenerManager.swap(entry->mListenerManager);
