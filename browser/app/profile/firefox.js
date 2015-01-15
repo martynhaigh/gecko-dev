@@ -1660,6 +1660,8 @@ pref("loop.do_not_disturb", false);
 pref("loop.ringtone", "chrome://browser/content/loop/shared/sounds/ringtone.ogg");
 pref("loop.retry_delay.start", 60000);
 pref("loop.retry_delay.limit", 300000);
+pref("loop.ping.interval", 1800000);
+pref("loop.ping.timeout", 10000);
 pref("loop.feedback.baseUrl", "https://input.mozilla.org/api/v1/feedback");
 pref("loop.feedback.product", "Loop");
 pref("loop.debug.loglevel", "Error");
@@ -1783,7 +1785,7 @@ pref("privacy.trackingprotection.ui.enabled", false);
 #endif
 
 #ifdef NIGHTLY_BUILD
-pref("browser.tabs.remote.autostart.1", false);
+pref("browser.tabs.remote.autostart.1", true);
 #endif
 
 // Temporary pref to allow printing in e10s windows on some platforms.
