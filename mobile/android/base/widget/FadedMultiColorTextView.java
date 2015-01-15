@@ -14,6 +14,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.graphics.Shader;
 import android.util.AttributeSet;
 
@@ -59,6 +60,11 @@ public class FadedMultiColorTextView extends FadedTextView {
             final float center = getHeight() / 2;
             final float top = center - (totalFontHeight / 2);
             final float bottom = top + totalFontHeight;
+
+            final Rect fontRect = new Rect();
+            getPaint().getTextBounds("x", 0, 1, fontRect);
+
+            final float capSize = fontRect.height();
 
             canvas.drawRect(left, top, right, bottom, fadePaint);
         }
