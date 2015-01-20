@@ -479,8 +479,6 @@ nsContentUtils::Init()
   if (!sEventListenerManagersHash.ops) {
     static const PLDHashTableOps hash_table_ops =
     {
-      PL_DHashAllocTable,
-      PL_DHashFreeTable,
       PL_DHashVoidPtrKeyStub,
       PL_DHashMatchEntryStub,
       PL_DHashMoveEntryStub,
@@ -1543,32 +1541,6 @@ nsContentUtils::IsHTMLBlock(nsIAtom* aLocalName)
     (aLocalName == nsGkAtoms::table) ||
     (aLocalName == nsGkAtoms::ul) ||
     (aLocalName == nsGkAtoms::xmp);
-}
-
-/* static */
-bool
-nsContentUtils::IsHTMLVoid(nsIAtom* aLocalName)
-{
-  return
-    (aLocalName == nsGkAtoms::area) ||
-    (aLocalName == nsGkAtoms::base) ||
-    (aLocalName == nsGkAtoms::basefont) ||
-    (aLocalName == nsGkAtoms::bgsound) ||
-    (aLocalName == nsGkAtoms::br) ||
-    (aLocalName == nsGkAtoms::col) ||
-    (aLocalName == nsGkAtoms::command) ||
-    (aLocalName == nsGkAtoms::embed) ||
-    (aLocalName == nsGkAtoms::frame) ||
-    (aLocalName == nsGkAtoms::hr) ||
-    (aLocalName == nsGkAtoms::img) ||
-    (aLocalName == nsGkAtoms::input) ||
-    (aLocalName == nsGkAtoms::keygen) ||
-    (aLocalName == nsGkAtoms::link) ||
-    (aLocalName == nsGkAtoms::meta) ||
-    (aLocalName == nsGkAtoms::param) ||
-    (aLocalName == nsGkAtoms::source) ||
-    (aLocalName == nsGkAtoms::track) ||
-    (aLocalName == nsGkAtoms::wbr);
 }
 
 /* static */

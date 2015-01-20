@@ -1358,7 +1358,7 @@ Interpret(JSContext *cx, RunState &state)
  * IBM's C compiler when run with the right options (e.g., -qlanglvl=extended)
  * also supports threading. Ditto the SunPro C compiler.
  */
-#if (__GNUC__ >= 3 ||                                                         \
+#if (defined(__GNUC__) ||                                                         \
      (__IBMC__ >= 700 && defined __IBM_COMPUTED_GOTO) ||                      \
      __SUNPRO_C >= 0x570)
 // Non-standard but faster indirect-goto-based dispatch.
@@ -1684,7 +1684,12 @@ CASE(JSOP_LOOPENTRY)
             goto error;
         if (status == jit::Method_Compiled) {
             bool wasSPS = REGS.fp()->hasPushedSPSFrame();
-            jit::JitExecStatus maybeOsr = jit::EnterBaselineAtBranch(cx, REGS.fp(), REGS.pc);
+
+            jit::JitExecStatus maybeOsr;
+            {
+                SPSBaselineOSRMarker spsOSR(cx->runtime(), wasSPS);
+                maybeOsr = jit::EnterBaselineAtBranch(cx, REGS.fp(), REGS.pc);
+            }
 
             // We failed to call into baseline at all, so treat as an error.
             if (maybeOsr == jit::JitExec_Aborted)
