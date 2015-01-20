@@ -235,7 +235,20 @@ class TabsGridLayout extends GridView
                        updateSelectedStyle(selected);
                    }
                }
-               break;
+                if (mIsPrivate) {
+                    final Iterable<Tab> tabsInOrder = Tabs.getInstance().getTabsInOrder();
+                    boolean lastPrivateTab = true;
+                    for (Tab tabIter : tabsInOrder) {
+                        if (tabIter.isPrivate()) {
+                            lastPrivateTab = false;
+                            break;
+                        }
+                    }
+                    if (lastPrivateTab) {
+                        mTabsPanel.show(TabsPanel.Panel.NORMAL_TABS);
+                    }
+                }
+                break;
 
             case SELECTED:
                 // Update the selected position, then fall through...
