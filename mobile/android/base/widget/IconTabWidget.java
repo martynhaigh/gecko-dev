@@ -38,6 +38,11 @@ public class IconTabWidget extends TabWidget {
         }
     }
 
+    @Override
+    public void setDividerPadding(int padding) {
+        super.setDividerPadding(padding);
+    }
+
     public void addTab(int imageResId, int stringResId) {
         View button = LayoutInflater.from(getContext()).inflate(mButtonLayoutId, this, false);
         if (mIsIcon) {
