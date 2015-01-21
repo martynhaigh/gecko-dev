@@ -229,13 +229,31 @@ class TabsGridLayout extends GridView
                 if(mTabsAdapter.getCount() > 0) {
                     animateRemoveTab(tab);
                 }
-               if (tab.isPrivate() == mIsPrivate && mTabsAdapter.getCount() > 0) {
-                   if (mTabsAdapter.removeTab(tab)) {
-                       int selected = mTabsAdapter.getPositionForTab(Tabs.getInstance().getSelectedTab());
-                       updateSelectedStyle(selected);
-                   }
-               }
-               break;
+
+                final Tabs tabsInstance = Tabs.getInstance();
+
+                if (tab.isPrivate() == mIsPrivate && mTabsAdapter.getCount() > 0) {
+                    if (mTabsAdapter.removeTab(tab)) {
+                        int selected = mTabsAdapter.getPositionForTab(tabsInstance.getSelectedTab());
+                        updateSelectedStyle(selected);
+                    }
+                }
+
+                // Make sure we always have at least one normal tab
+                if (!tab.isPrivate()) {
+                    final Iterable<Tab> tabs = tabsInstance.getTabsInOrder();
+                    boolean lastNormalTab = true;
+                    for (Tab singleTab : tabs) {
+                        if(!singleTab.isPrivate()) {
+                            lastNormalTab = false;
+                            break;
+                        }
+                    }
+                    if (lastNormalTab) {
+                        tabsInstance.addTab();
+                    }
+                }
+                break;
 
             case SELECTED:
                 // Update the selected position, then fall through...
