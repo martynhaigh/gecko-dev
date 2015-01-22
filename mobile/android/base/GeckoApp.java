@@ -1637,6 +1637,9 @@ public abstract class GeckoApp
         if(!TextUtils.isEmpty(readingList)) {
             String[] sites = TextUtils.split(readingList, "\n");
             Log.d("MTEST", "reading list - found " + sites.length);
+            for (String site : sites) {
+                Log.d("MTEST", " - " + site);
+            }
             Toast.makeText(getContext(), "Found" + sites.length + " sites", Toast.LENGTH_SHORT).show();
             mProfile.deleteFile("temp_reading_list.json");
         }

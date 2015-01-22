@@ -15,7 +15,14 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -141,27 +148,56 @@ public class LoadInBackgroundService extends Service {
         final ContextUtils.SafeIntent intent = new ContextUtils.SafeIntent(intentParam);
         final String action = intent.getAction();
         final String args = intent.getStringExtra("args");
-        String data = intent.getDataString();
+        String intentData = intent.getDataString();
         getProfile();
 
         Log.d("MTEST", "Gecko in background: " + GeckoApplication.get().isApplicationInBackground());
+        Log.d("MTEST", "Intent data: " + intentData);
 
+        URL url;
+        String htmlContent = "";
+        try {
+            url = new URL(intentData);
+
+            HttpURLConnection urlConnection = (HttpURLConnection) url
+                    .openConnection();
+
+            Map<String, List<String>> map = urlConnection.getHeaderFields();
+            for (Map.Entry<String, List<String>> entry : map.entrySet()) {
+                Log.d("MTEST", "Key : " + entry.getKey() +
+                        " ,Value : " + entry.getValue());
+            }
+            htmlContent = convertInputStreamToString(urlConnection.getInputStream());
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        Log.d("MTEST", "HTML CONTENT: " + htmlContent);
+        htmlContent = htmlContent.replaceAll("\\s+", " ");
+        Pattern p = Pattern.compile("<title>(.*?)</title>");
+        Matcher m = p.matcher(htmlContent);
+        String htmlTitle = "";
+        while (m.find() == true) {
+            htmlTitle = m.group(1);
+            Log.d("MTEST", "MATCH: " + htmlTitle);
+        }
 
         if (mProfile == null) {
             String profileName = null;
             String profilePath = null;
             if (args != null) {
                 if (args.contains("-P")) {
-                    Pattern p = Pattern.compile("(?:-P\\s*)(\\w*)(\\s*)");
-                    Matcher m = p.matcher(args);
+                     p = Pattern.compile("(?:-P\\s*)(\\w*)(\\s*)");
+                     m = p.matcher(args);
                     if (m.find()) {
                         profileName = m.group(1);
                     }
                 }
 
                 if (args.contains("-profile")) {
-                    Pattern p = Pattern.compile("(?:-profile\\s*)(\\S*)(\\s*)");
-                    Matcher m = p.matcher(args);
+                     p = Pattern.compile("(?:-profile\\s*)(\\S*)(\\s*)");
+                     m = p.matcher(args);
                     if (m.find()) {
                         profilePath = m.group(1);
                     }
@@ -184,8 +220,26 @@ public class LoadInBackgroundService extends Service {
 
             e.printStackTrace();
         }
-        mProfile.appendToFile("temp_reading_list.json", data);
+        mProfile.appendToFile("temp_reading_list.json", String.format("%s|%s", intentData, htmlTitle);
     }
 
+    private String convertInputStreamToString(InputStream inputStream) throws IOException {
+
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+
+        String line = "";
+        String result = "";
+
+        while ((line = bufferedReader.readLine()) != null) {
+            result += line;
+        }
+
+            /* Close Stream */
+        if (null != inputStream) {
+            inputStream.close();
+        }
+
+        return result;
+    }
 }
 
