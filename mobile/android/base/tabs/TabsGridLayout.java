@@ -226,31 +226,30 @@ class TabsGridLayout extends GridView
                 break;
 
             case CLOSED:
-                if(mTabsAdapter.getCount() > 0) {
+                if (mTabsAdapter.getCount() > 0) {
                     animateRemoveTab(tab);
                 }
 
                 final Tabs tabsInstance = Tabs.getInstance();
 
-                if (tab.isPrivate() == mIsPrivate && mTabsAdapter.getCount() > 0) {
-                    if (mTabsAdapter.removeTab(tab)) {
+                if (mTabsAdapter.removeTab(tab)) {
+                    if (tab.isPrivate() == mIsPrivate && mTabsAdapter.getCount() > 0) {
                         int selected = mTabsAdapter.getPositionForTab(tabsInstance.getSelectedTab());
                         updateSelectedStyle(selected);
                     }
-                }
-
-                // Make sure we always have at least one normal tab
-                if (!tab.isPrivate()) {
-                    final Iterable<Tab> tabs = tabsInstance.getTabsInOrder();
-                    boolean lastNormalTab = true;
-                    for (Tab singleTab : tabs) {
-                        if(!singleTab.isPrivate()) {
-                            lastNormalTab = false;
-                            break;
+                    if(!tab.isPrivate()) {
+                        // Make sure we always have at least one normal tab
+                        final Iterable<Tab> tabs = tabsInstance.getTabsInOrder();
+                        boolean removedTabIsLastNormalTab = true;
+                        for (Tab singleTab : tabs) {
+                            if (!singleTab.isPrivate()) {
+                                removedTabIsLastNormalTab = false;
+                                break;
+                            }
                         }
-                    }
-                    if (lastNormalTab) {
-                        tabsInstance.addTab();
+                        if (removedTabIsLastNormalTab) {
+                            tabsInstance.addTab();
+                        }
                     }
                 }
                 break;
