@@ -5,8 +5,11 @@ import org.mozilla.gecko.widget.ButtonToast;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.StrictMode;
+import android.support.v4.app.DialogFragment;
 import android.util.Log;
 import android.view.ViewStub;
 import android.widget.Button;
@@ -27,15 +30,33 @@ public class LoadInBackground extends Activity {
     public static int LENGTH_SHORT = 3000;
 
 
+    public static final String PREF_LOAD_IN_BACKGROUND_ENABLED = "load_in_background_enabled";
     private final Handler mHideHandler = new Handler();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-                        Intent forwardIntent = new Intent(getIntent());
-                forwardIntent.setClass(getApplicationContext(), LoadInBackgroundService.class);
 
-        startService(forwardIntent);
+        Intent forwardIntent = new Intent(getIntent());
+
+        final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
+        boolean showOpenInBackgroundToast = false;
+        try {
+            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
+
+            showOpenInBackgroundToast = prefs.getBoolean(PREF_LOAD_IN_BACKGROUND_ENABLED, false);
+        } finally {
+            StrictMode.setThreadPolicy(savedPolicy);
+        }
+        Log.d("MTEST", "open in background: " + showOpenInBackgroundToast);
+        if (AppConstants.NIGHTLY_BUILD && showOpenInBackgroundToast) {
+            forwardIntent.setClass(getApplicationContext(), LoadInBackgroundService.class);
+            startService(forwardIntent);
+        } else {
+            forwardIntent.setClass(getApplicationContext(), BrowserApp.class);
+            startActivity(forwardIntent);
+        }
+
         finish();
 
 //        LayoutInflater inflater = getLayoutInflater();

@@ -25,6 +25,8 @@ import java.util.regex.Pattern;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import org.mozilla.gecko.AppConstants;
 import org.mozilla.gecko.AppConstants.Versions;
 import org.mozilla.gecko.GeckoProfileDirectories.NoMozillaDirectoryException;
 import org.mozilla.gecko.db.BrowserDB;
@@ -1950,7 +1952,9 @@ public abstract class GeckoApp
             }
         });
 
-        processReadingList();
+        if (AppConstants.NIGHTLY_BUILD) {
+            processReadingList();
+        }
     }
 
     @Override

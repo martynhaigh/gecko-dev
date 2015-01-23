@@ -154,39 +154,14 @@ public class LoadInBackgroundService extends Service {
         Log.d("MTEST", "Gecko in background: " + GeckoApplication.get().isApplicationInBackground());
         Log.d("MTEST", "Intent data: " + intentData);
 
-        URL url;
-        String htmlContent = "";
-        try {
-            url = new URL(intentData);
 
-            HttpURLConnection urlConnection = (HttpURLConnection) url
-                    .openConnection();
-
-            Map<String, List<String>> map = urlConnection.getHeaderFields();
-            for (Map.Entry<String, List<String>> entry : map.entrySet()) {
-                Log.d("MTEST", "Key : " + entry.getKey() +
-                        " ,Value : " + entry.getValue());
-            }
-            htmlContent = convertInputStreamToString(urlConnection.getInputStream());
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-
-        Log.d("MTEST", "HTML CONTENT: " + htmlContent);
-        htmlContent = htmlContent.replaceAll("\\s+", " ");
-        Pattern p = Pattern.compile("<title>(.*?)</title>");
-        Matcher m = p.matcher(htmlContent);
-        String htmlTitle = "";
-        while (m.find() == true) {
-            htmlTitle = m.group(1);
-            Log.d("MTEST", "MATCH: " + htmlTitle);
-        }
 
         if (mProfile == null) {
             String profileName = null;
             String profilePath = null;
             if (args != null) {
+                Pattern p;
+                Matcher m;
                 if (args.contains("-P")) {
                      p = Pattern.compile("(?:-P\\s*)(\\w*)(\\s*)");
                      m = p.matcher(args);
@@ -220,26 +195,8 @@ public class LoadInBackgroundService extends Service {
 
             e.printStackTrace();
         }
-        mProfile.appendToFile("temp_reading_list.json", String.format("%s|%s", intentData, htmlTitle);
+        mProfile.appendToFile("temp_reading_list.json", String.format("%s", intentData));
     }
 
-    private String convertInputStreamToString(InputStream inputStream) throws IOException {
-
-        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
-
-        String line = "";
-        String result = "";
-
-        while ((line = bufferedReader.readLine()) != null) {
-            result += line;
-        }
-
-            /* Close Stream */
-        if (null != inputStream) {
-            inputStream.close();
-        }
-
-        return result;
-    }
 }
 
