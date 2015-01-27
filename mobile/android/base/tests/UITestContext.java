@@ -23,7 +23,8 @@ public interface UITestContext {
         ABOUTHOME,
         APPMENU,
         GECKOVIEW,
-        TOOLBAR
+        TOOLBAR,
+        TABSTRIP
     }
 
     public Activity getActivity();

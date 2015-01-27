@@ -14,6 +14,7 @@ import org.mozilla.gecko.tests.components.AboutHomeComponent;
 import org.mozilla.gecko.tests.components.AppMenuComponent;
 import org.mozilla.gecko.tests.components.BaseComponent;
 import org.mozilla.gecko.tests.components.GeckoViewComponent;
+import org.mozilla.gecko.tests.components.TabStripComponent;
 import org.mozilla.gecko.tests.components.ToolbarComponent;
 import org.mozilla.gecko.tests.helpers.HelperInitializer;
 
@@ -41,6 +42,7 @@ abstract class UITest extends BaseRobocopTest
     protected AppMenuComponent mAppMenu;
     protected GeckoViewComponent mGeckoView;
     protected ToolbarComponent mToolbar;
+    protected TabStripComponent mTabStrip;
 
     @Override
     protected void setUp() throws Exception {
@@ -93,6 +95,7 @@ abstract class UITest extends BaseRobocopTest
         mAppMenu = new AppMenuComponent(this);
         mGeckoView = new GeckoViewComponent(this);
         mToolbar = new ToolbarComponent(this);
+        mTabStrip = new TabStripComponent(this);
     }
 
     private void initHelpers() {
@@ -143,6 +146,9 @@ abstract class UITest extends BaseRobocopTest
 
             case TOOLBAR:
                 return mToolbar;
+
+            case TABSTRIP:
+                return mTabStrip;
 
             default:
                 fail("Unknown component type, " + type + ".");
