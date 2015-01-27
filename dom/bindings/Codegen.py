@@ -6506,8 +6506,10 @@ class CGPerSignatureCall(CGThing):
                 for i in descriptor.interface.getInheritedInterfaces())):
                 cgThings.append(CGGeneric(dedent(
                     """
-                    if (mozilla::dom::CheckSafetyInPrerendering(cx, obj)) {
-                        //TODO: Handle call into unsafe API during Prerendering (Bug 730101)
+                    if (!mozilla::dom::EnforceNotInPrerendering(cx, obj)) {
+                        // Return false from the JSNative in order to trigger
+                        // an uncatchable exception.
+                        MOZ_ASSERT(!JS_IsExceptionPending(cx));
                         return false;
                     }
                     """)))
@@ -8440,10 +8442,10 @@ class CGEnum(CGThing):
     def declare(self):
         decl = fill(
             """
-            MOZ_BEGIN_ENUM_CLASS(${name}, uint32_t)
+            enum class ${name} : uint32_t {
               $*{enums}
               EndGuard_
-            MOZ_END_ENUM_CLASS(${name})
+            };
             """,
             name=self.enum.identifier.name,
             enums=",\n".join(map(getEnumValueName, self.enum.values())) + ",\n")
