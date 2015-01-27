@@ -1219,8 +1219,9 @@ public abstract class GeckoApp
             Telemetry.addToHistogram("FENNEC_RESTORING_ACTIVITY", 1);
 
         } else {
-            final String uri = getURIFromIntent(intent);
 
+            final String uri = getURIFromIntent(intent);
+Log.d("MTEST", "Gecko loading uri: " + uri);
             GeckoThread.setArgs(args);
             GeckoThread.setAction(action);
             GeckoThread.setUri(TextUtils.isEmpty(uri) ? null : uri);
@@ -1496,7 +1497,7 @@ public abstract class GeckoApp
             GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Session:Restore", restoreMessage));
         }
 
-        processReadingList();
+
 
         // External URLs should always be loaded regardless of whether Gecko is
         // already running.
@@ -1625,11 +1626,16 @@ public abstract class GeckoApp
         } else if (NotificationHelper.HELPER_BROADCAST_ACTION.equals(action)) {
             NotificationHelper.getInstance(getApplicationContext()).handleNotificationIntent(intent);
         }
+
+        if (AppConstants.NIGHTLY_BUILD) {
+            Log.d("MTEST", "Checking reading list INIT");
+
+            processReadingList();
+        }
     }
 
     private void processReadingList() {
         // Check background load tabs
-        Log.d("MTEST", "Checking reading list");
         String readingList = null;
         try {
             readingList = mProfile.readFile("temp_reading_list.json");
@@ -1639,8 +1645,17 @@ public abstract class GeckoApp
         if(!TextUtils.isEmpty(readingList)) {
             String[] sites = TextUtils.split(readingList, "\n");
             Log.d("MTEST", "reading list - found " + sites.length);
-            for (String site : sites) {
-                Log.d("MTEST", " - " + site);
+
+            final Tabs tabs = Tabs.getInstance();
+            String site;
+            for (int i = sites.length - 1; i >= 0; i--) {
+                site = sites[i];
+                if(!TextUtils.isEmpty(site)) {
+                    Log.d("MTEST", " - " + site);
+                    tabs.loadUrlInTab(site);
+                } else {
+                    Log.d("MTEST", " - empty");
+                }
             }
             Toast.makeText(getContext(), "Found" + sites.length + " sites", Toast.LENGTH_SHORT).show();
             mProfile.deleteFile("temp_reading_list.json");
@@ -1953,6 +1968,8 @@ public abstract class GeckoApp
         });
 
         if (AppConstants.NIGHTLY_BUILD) {
+            Log.d("MTEST", "Checking reading list RESUME");
+
             processReadingList();
         }
     }

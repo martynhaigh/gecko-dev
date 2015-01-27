@@ -1,10 +1,12 @@
 package org.mozilla.gecko;
 
+import org.mozilla.gecko.mozglue.ContextUtils;
 import org.mozilla.gecko.preferences.GeckoPreferences;
 
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 
 public class LoadInBackground extends Activity {
 
@@ -19,6 +21,9 @@ public class LoadInBackground extends Activity {
         Intent forwardIntent = new Intent(getIntent());
 
         boolean showOpenInBackgroundToast = GeckoSharedPrefs.forApp(this).getBoolean(GeckoPreferences.PREFS_OPEN_IN_BACKGROUND, false);
+
+        String intentData = forwardIntent.getDataString();
+        Log.d("MTEST", "LIBA: Processing URL: " + intentData);
 
         if (AppConstants.NIGHTLY_BUILD && showOpenInBackgroundToast) {
             forwardIntent.setClass(getApplicationContext(), LoadInBackgroundService.class);

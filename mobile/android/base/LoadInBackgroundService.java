@@ -36,10 +36,9 @@ public class LoadInBackgroundService extends Service {
     private GeckoProfile mProfile;
     private final Handler mHideHandler = new Handler();
     public static int LENGTH_SHORT = 3000;
-    private AtomicInteger mCount = new AtomicInteger(0);
     private boolean mShown = false;
     private WindowManager.LayoutParams mParams;
-    private Runnable mHideRunnable;
+    private HideRunnable mHideRunnable;
 
 
     @Override
@@ -75,38 +74,51 @@ public class LoadInBackgroundService extends Service {
         mParams.y = 0;
     }
 
-    @Override
-    public int onStartCommand(final Intent intent, int flags, int startId) {
-        Log.d("MTEST", "onStartCommand - count " + mCount);
+    private abstract class HideRunnable implements Runnable {
 
-        mCount.incrementAndGet();
-        if (mHideRunnable != null) {
-            Log.d("MTEST", "runnable already running - run it immediately and cancel the timeout - count " + mCount);
+        private boolean mShouldHide = true;
 
-            mHideHandler.removeCallbacks(mHideRunnable);
-            mHideRunnable.run();
+        public void shouldHide(boolean hide) {
+            mShouldHide = hide;
         }
 
-        mHideRunnable = new Runnable() {
+        public void run() {
+            if (mShouldHide) {
+                hide();
+            }
+            execute();
+        }
+
+        public abstract void execute();
+
+    }
+
+    @Override
+    public int onStartCommand(final Intent intent, int flags, int startId) {
+        if (mHideRunnable != null) {
+            Log.d("MTEST", "runnable already running - run it immediately and cancel the timeout - count ");
+
+            mHideHandler.removeCallbacks(mHideRunnable);
+            mHideRunnable.shouldHide(false);
+            mHideRunnable.run();
+        } else {
+            Log.d("MTEST", "Add view to window ");
+
+            windowManager.addView(layout, mParams);
+        }
+
+        mHideRunnable = new HideRunnable() {
             @Override
-            public void run() {
-                Log.d("MTEST", "hide runnable - count " + mCount);
-                mCount.decrementAndGet();
-
+            public void execute() {
                 addUrlToList(intent);
-
-                if (mCount.get() == 0) {
-                    hide();
-                }
                 mHideRunnable = null;
             }
         };
         mButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d("MTEST", "button click - count " + mCount);
+                Log.d("MTEST", "button clicked ");
 
-                mCount.decrementAndGet();
                 mHideHandler.removeCallbacks(mHideRunnable);
                 mHideRunnable = null;
 
@@ -118,9 +130,8 @@ public class LoadInBackgroundService extends Service {
             }
         });
 
-        windowManager.addView(layout, mParams);
         mHideHandler.postDelayed(mHideRunnable, LENGTH_SHORT);
-        Log.d("MTEST", "SHOWING STUFF");
+
         return super.onStartCommand(intent, flags, startId);
     }
 
@@ -132,7 +143,6 @@ public class LoadInBackgroundService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        //hide();
     }
 
 
@@ -151,9 +161,8 @@ public class LoadInBackgroundService extends Service {
         String intentData = intent.getDataString();
         getProfile();
 
-        Log.d("MTEST", "Gecko in background: " + GeckoApplication.get().isApplicationInBackground());
+//        Log.d("MTEST", "Gecko in background: " + GeckoApplication.get().isApplicationInBackground());
         Log.d("MTEST", "Intent data: " + intentData);
-
 
 
         if (mProfile == null) {
@@ -163,16 +172,16 @@ public class LoadInBackgroundService extends Service {
                 Pattern p;
                 Matcher m;
                 if (args.contains("-P")) {
-                     p = Pattern.compile("(?:-P\\s*)(\\w*)(\\s*)");
-                     m = p.matcher(args);
+                    p = Pattern.compile("(?:-P\\s*)(\\w*)(\\s*)");
+                    m = p.matcher(args);
                     if (m.find()) {
                         profileName = m.group(1);
                     }
                 }
 
                 if (args.contains("-profile")) {
-                     p = Pattern.compile("(?:-profile\\s*)(\\S*)(\\s*)");
-                     m = p.matcher(args);
+                    p = Pattern.compile("(?:-profile\\s*)(\\S*)(\\s*)");
+                    m = p.matcher(args);
                     if (m.find()) {
                         profilePath = m.group(1);
                     }
@@ -196,6 +205,7 @@ public class LoadInBackgroundService extends Service {
             e.printStackTrace();
         }
         mProfile.appendToFile("temp_reading_list.json", String.format("%s", intentData));
+        Log.d("MTEST", "Added " + intentData);
     }
 
 }

@@ -7,6 +7,7 @@ package org.mozilla.gecko;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URLEncoder;
 import java.util.EnumSet;
@@ -1186,6 +1187,37 @@ public class BrowserApp extends GeckoApp
         if (HardwareUtils.isTablet()) {
             onCreatePanelMenu(Window.FEATURE_OPTIONS_PANEL, null);
             invalidateOptionsMenu();
+        }
+    }
+
+
+
+    private void processReadingList() {
+        // Check background load tabs
+        Log.d("MTEST", "Checking reading list");
+        String readingList = null;
+        try {
+            readingList = mProfile.readFile("temp_reading_list.json");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if(!TextUtils.isEmpty(readingList)) {
+            String[] sites = TextUtils.split(readingList, "\n");
+            Log.d("MTEST", "reading list - found " + sites.length);
+
+            final Tabs tabs = Tabs.getInstance();
+            String site;
+            for (int i = sites.length - 1; i >= 0; i--) {
+                site = sites[i];
+                if(!TextUtils.isEmpty(site)) {
+                    Log.d("MTEST", " - " + site);
+                    tabs.loadUrl(site);
+                } else {
+                    Log.d("MTEST", " - empty");
+                }
+            }
+            Toast.makeText(getContext(), "Found" + sites.length + " sites", Toast.LENGTH_SHORT).show();
+            mProfile.deleteFile("temp_reading_list.json");
         }
     }
 
