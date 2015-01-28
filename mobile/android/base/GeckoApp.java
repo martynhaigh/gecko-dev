@@ -19,14 +19,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import org.mozilla.gecko.AppConstants;
 import org.mozilla.gecko.AppConstants.Versions;
 import org.mozilla.gecko.GeckoProfileDirectories.NoMozillaDirectoryException;
 import org.mozilla.gecko.db.BrowserDB;
@@ -1502,7 +1499,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         if (AppConstants.NIGHTLY_BUILD) {
             Log.d("MTEST", "Checking reading list INIT");
 
-            processReadingList();
+            processReadingList(isExternalURL);
         }
 
         // External URLs should always be loaded regardless of whether Gecko is
@@ -1635,7 +1632,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
 
     }
 
-    private void processReadingList() {
+    private void processReadingList(boolean isExternalURL) {
         // Check background load tabs
         String readingList = null;
         try {
@@ -1648,10 +1645,11 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             Log.d("MTEST", "reading list - found " + sites.length);
 
             final Tabs tabs = Tabs.getInstance();
-            for (String site : sites) {
+            for (int i = 0; i < sites.length; i++) {
+                String site = sites[i];
                 if(!TextUtils.isEmpty(site)) {
                     Log.d("MTEST", " - " + site);
-                    tabs.loadUrlInTab(site);
+                    tabs.loadUrl(site, Tabs.LOADURL_BACKGROUND);
                 } else {
                     Log.d("MTEST", " - empty");
                 }
@@ -1969,7 +1967,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         if (AppConstants.NIGHTLY_BUILD) {
             Log.d("MTEST", "Checking reading list RESUME");
 
-            processReadingList();
+            processReadingList(isExternalURL);
         }
     }
 
