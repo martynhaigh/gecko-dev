@@ -1498,6 +1498,12 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         }
 
 
+        // Process temp reading list before we load the tab from the intent
+        if (AppConstants.NIGHTLY_BUILD) {
+            Log.d("MTEST", "Checking reading list INIT");
+
+            processReadingList();
+        }
 
         // External URLs should always be loaded regardless of whether Gecko is
         // already running.
@@ -1627,11 +1633,6 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             NotificationHelper.getInstance(getApplicationContext()).handleNotificationIntent(intent);
         }
 
-        if (AppConstants.NIGHTLY_BUILD) {
-            Log.d("MTEST", "Checking reading list INIT");
-
-            processReadingList();
-        }
     }
 
     private void processReadingList() {
@@ -1647,9 +1648,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             Log.d("MTEST", "reading list - found " + sites.length);
 
             final Tabs tabs = Tabs.getInstance();
-            String site;
-            for (int i = sites.length - 1; i >= 0; i--) {
-                site = sites[i];
+            for (String site : sites) {
                 if(!TextUtils.isEmpty(site)) {
                     Log.d("MTEST", " - " + site);
                     tabs.loadUrlInTab(site);
