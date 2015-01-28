@@ -11,7 +11,6 @@
 #include "mozilla/Attributes.h"
 #include "mozilla/LinkedList.h"
 #include "mozilla/Preferences.h"
-#include "mozilla/TypedEnum.h"
 #include "mozilla/TypedEnumBits.h"
 #include "mozilla/WeakPtr.h"
 #include "mozilla/dom/BindingUtils.h"
@@ -276,7 +275,7 @@ class ServiceWorkerManager MOZ_FINAL : public nsIServiceWorkerManager
   friend class GetRegistrationsRunnable;
   friend class GetRegistrationRunnable;
   friend class QueueFireUpdateFoundRunnable;
-  friend class UnregisterRunnable;
+  friend class ServiceWorkerUnregisterJob;
 
 public:
   NS_DECL_ISUPPORTS
@@ -461,6 +460,13 @@ private:
   void
   FireEventOnServiceWorkerRegistrations(ServiceWorkerRegistrationInfo* aRegistration,
                                         const nsAString& aName);
+
+  void
+  FireUpdateFound(ServiceWorkerRegistrationInfo* aRegistration)
+  {
+    FireEventOnServiceWorkerRegistrations(aRegistration,
+                                          NS_LITERAL_STRING("updatefound"));
+  }
 
   void
   FireControllerChange(ServiceWorkerRegistrationInfo* aRegistration);

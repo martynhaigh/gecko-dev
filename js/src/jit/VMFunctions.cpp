@@ -561,16 +561,8 @@ bool
 OperatorIn(JSContext *cx, HandleValue key, HandleObject obj, bool *out)
 {
     RootedId id(cx);
-    if (!ValueToId<CanGC>(cx, key, &id))
-        return false;
-
-    RootedObject obj2(cx);
-    RootedShape prop(cx);
-    if (!LookupProperty(cx, obj, id, &obj2, &prop))
-        return false;
-
-    *out = !!prop;
-    return true;
+    return ValueToId<CanGC>(cx, key, &id) &&
+           HasProperty(cx, obj, id, out);
 }
 
 bool
@@ -777,7 +769,7 @@ DebugEpilogue(JSContext *cx, BaselineFrame *frame, jsbytecode *pc, bool ok)
 
         JitFrameLayout *prefix = frame->framePrefix();
         EnsureExitFrame(prefix);
-        cx->mainThread().jitTop = (uint8_t *)prefix;
+        cx->runtime()->jitTop = (uint8_t *)prefix;
         return false;
     }
 

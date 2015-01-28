@@ -452,18 +452,6 @@ JS_DoubleIsInt32(double d, int32_t *ip)
     return mozilla::NumberIsInt32(d, ip);
 }
 
-JS_PUBLIC_API(int32_t)
-JS_DoubleToInt32(double d)
-{
-    return ToInt32(d);
-}
-
-JS_PUBLIC_API(uint32_t)
-JS_DoubleToUint32(double d)
-{
-    return ToUint32(d);
-}
-
 JS_PUBLIC_API(JSType)
 JS_TypeOfValue(JSContext *cx, HandleValue value)
 {
@@ -1732,7 +1720,7 @@ JS_SetNativeStackQuota(JSRuntime *rt, size_t systemCodeStackSize, size_t trusted
     SetNativeStackQuotaAndLimit(rt, StackForTrustedScript, trustedScriptStackSize);
     SetNativeStackQuotaAndLimit(rt, StackForUntrustedScript, untrustedScriptStackSize);
 
-    rt->mainThread.initJitStackLimit();
+    rt->initJitStackLimit();
 }
 
 /************************************************************************/
@@ -5894,7 +5882,7 @@ HideScriptedCaller(JSContext *cx)
 
     // If there's no accessible activation on the stack, we'll return null from
     // DescribeScriptedCaller anyway, so there's no need to annotate anything.
-    Activation *act = cx->runtime()->mainThread.activation();
+    Activation *act = cx->runtime()->activation();
     if (!act)
         return;
     act->hideScriptedCaller();
@@ -5903,7 +5891,7 @@ HideScriptedCaller(JSContext *cx)
 JS_PUBLIC_API(void)
 UnhideScriptedCaller(JSContext *cx)
 {
-    Activation *act = cx->runtime()->mainThread.activation();
+    Activation *act = cx->runtime()->activation();
     if (!act)
         return;
     act->unhideScriptedCaller();
@@ -5942,15 +5930,15 @@ AutoGCRooter::AutoGCRooter(ContextFriendFields *cx, ptrdiff_t tag)
     *stackTop = this;
 }
 
-#ifdef DEBUG
+#ifdef JS_DEBUG
 JS_PUBLIC_API(void)
-JS::AssertArgumentsAreSane(JSContext *cx, HandleValue value)
+JS::detail::AssertArgumentsAreSane(JSContext *cx, HandleValue value)
 {
     AssertHeapIsIdle(cx);
     CHECK_REQUEST(cx);
     assertSameCompartment(cx, value);
 }
-#endif /* DEBUG */
+#endif /* JS_DEBUG */
 
 JS_PUBLIC_API(void *)
 JS_EncodeScript(JSContext *cx, HandleScript scriptArg, uint32_t *lengthp)
