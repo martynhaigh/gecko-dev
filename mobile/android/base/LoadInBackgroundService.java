@@ -14,16 +14,11 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
+import ch.boye.httpclientandroidlib.util.TextUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -197,15 +192,52 @@ public class LoadInBackgroundService extends Service {
             }
         }
 
+        appendSiteToList("temp_reading_list.json", intentData);
+
+//        boolean readingListExists = false;
+//        String readingListContent = null;
+//        try {
+//            readingListContent = mProfile.readFile("temp_reading_list.json");
+//        } catch (IOException e) {
+//            Log.d("MTEST", "Error reading file");
+//
+//            e.printStackTrace();
+//        }
+//        readingListExists = !TextUtils.isEmpty(readingListContent);
+//        String format = readingListExists ? "~%s" : "%s";
+//        Log.d("MTEST", "Reading list contents:" + readingListContent);
+//        Log.d("MTEST", "Reading list exists:" + readingListExists);
+//        mProfile.appendToFile("temp_reading_list.json", String.format(format, intentData));
+//        Log.d("MTEST", "Added " + intentData);
+    }
+
+    private void appendSiteToList(String filename, String url) {
+        String readingListContent = null;
         try {
-            Log.d("MTEST", "Reading list contents: " + mProfile.readFile("temp_reading_list.json"));
+            readingListContent = mProfile.readFile("temp_reading_list.json");
         } catch (IOException e) {
-            Log.d("MTEST", "Couldn't read : " + e.getMessage());
+            Log.d("MTEST", "Error reading file");
 
             e.printStackTrace();
         }
-        mProfile.appendToFile("temp_reading_list.json", String.format("%s", intentData));
-        Log.d("MTEST", "Added " + intentData);
+        boolean readingListExists = !TextUtils.isEmpty(readingListContent);
+        JSONArray jsonArray = null;
+        if (readingListExists) {
+            try {
+                jsonArray = new JSONArray(readingListContent);
+            } catch (JSONException e) {
+                Log.d("MTEST", "Error parsing JSONARRAY");
+                e.printStackTrace();
+            }
+        } else {
+            jsonArray = new JSONArray();
+        }
+        jsonArray.put(url);
+
+        Log.d("MTEST", "Reading list contents:" + readingListContent);
+        Log.d("MTEST", "Reading list exists:" + readingListExists);
+        mProfile.writeFile("temp_reading_list.json", jsonArray.toString());
+        Log.d("MTEST", "Added " + url);
     }
 
 }
