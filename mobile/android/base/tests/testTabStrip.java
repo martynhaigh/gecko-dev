@@ -7,6 +7,9 @@ package org.mozilla.gecko.tests;
 import org.mozilla.gecko.tests.helpers.GeckoHelper;
 
 public class testTabStrip extends UITest {
+
+
+
     public void testTabStrip() {
         GeckoHelper.blockForReady();
 
@@ -16,25 +19,22 @@ public class testTabStrip extends UITest {
 
         mTabStrip.assertNumberOfTabs(2);
 
-//
-//
-//        String url = getAbsoluteUrl(StringHelper.ROBOCOP_BLANK_PAGE_01_URL);
-//        inputAndLoadUrl(url);
-//
-//        mDriver.setupScrollHandling();
-//        // Calculate where we should be dragging.
-//        int midX = mDriver.getGeckoLeft() + mDriver.getGeckoWidth()/2;
-//        int midY = mDriver.getGeckoTop() + mDriver.getGeckoHeight()/2;
-//        int endY = mDriver.getGeckoTop() + mDriver.getGeckoHeight()/10;
-//        for (int i = 0; i < 10; i++) {
-//            mActions.drag(midX, midX, midY, endY);
-//            try {
-//                Thread.sleep(200);
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            }
-//        }
-//
-//        verifyUrl(url);
+
+        mTabStrip.closeTab(1);
+
+        mTabStrip.assertNumberOfTabs(1);
+        mTabStrip.clickAddTab();
+        mTabStrip.clickAddTab();
+
+
+        mTabStrip.assertNumberOfTabs(3);
+
+        mTabStrip.addPrivateTabThroughMenu(mAppMenu);
+
+        mTabStrip.assertNumberOfTabs(1);
+
+        mTabStrip.finish();
     }
+
+
 }

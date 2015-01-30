@@ -39,7 +39,8 @@ public class AppMenuComponent extends BaseComponent {
         FORWARD(R.string.forward),
         NEW_TAB(R.string.new_tab),
         PAGE(R.string.page),
-        RELOAD(R.string.reload);
+        RELOAD(R.string.reload),
+        NEW_PRIVATE_TAB(R.string.new_private_tab);
 
         private final int resourceID;
         private String stringResource;
