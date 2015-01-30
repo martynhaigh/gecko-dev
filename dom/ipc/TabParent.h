@@ -22,6 +22,7 @@
 #include "Units.h"
 #include "WritingModes.h"
 #include "js/TypeDecls.h"
+#include "nsIDOMEventListener.h"
 
 class nsFrameLoader;
 class nsIContent;
@@ -29,10 +30,13 @@ class nsIPrincipal;
 class nsIURI;
 class nsIWidget;
 class nsILoadContext;
-class CpowHolder;
 class nsIDocShell;
 
 namespace mozilla {
+
+namespace jsipc {
+class CpowHolder;
+}
 
 namespace layers {
 struct FrameMetrics;
@@ -54,7 +58,8 @@ class nsIContentParent;
 class Element;
 struct StructuredCloneData;
 
-class TabParent : public PBrowserParent 
+class TabParent : public PBrowserParent
+                , public nsIDOMEventListener
                 , public nsITabParent 
                 , public nsIAuthPromptProvider
                 , public nsISecureBrowserUI
@@ -94,6 +99,9 @@ public:
     void SetBrowserDOMWindow(nsIBrowserDOMWindow* aBrowserDOMWindow) {
         mBrowserDOMWindow = aBrowserDOMWindow;
     }
+
+    // nsIDOMEventListener interfaces 
+    NS_DECL_NSIDOMEVENTLISTENER
 
     already_AddRefed<nsILoadContext> GetLoadContext();
 
@@ -363,7 +371,7 @@ protected:
     bool ReceiveMessage(const nsString& aMessage,
                         bool aSync,
                         const StructuredCloneData* aCloneData,
-                        CpowHolder* aCpows,
+                        mozilla::jsipc::CpowHolder* aCpows,
                         nsIPrincipal* aPrincipal,
                         InfallibleTArray<nsString>* aJSONRetVal = nullptr);
 
@@ -422,6 +430,7 @@ protected:
     nsIntRect mRect;
     nsIntSize mDimensions;
     ScreenOrientation mOrientation;
+    nsIntPoint mChromeDisp;
     float mDPI;
     CSSToLayoutDeviceScale mDefaultScale;
     bool mShown;
