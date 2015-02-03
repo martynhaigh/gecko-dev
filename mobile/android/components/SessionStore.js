@@ -88,6 +88,7 @@ SessionStore.prototype = {
         observerService.addObserver(this, "ClosedTabs:StopNotifications", true);
         observerService.addObserver(this, "last-pb-context-exited", true);
         observerService.addObserver(this, "Session:RestoreRecentTabs", true);
+        observerService.addObserver(this, "Tabs:OpenMultiple", true);
         break;
       case "final-ui-startup":
         observerService.removeObserver(this, "final-ui-startup");
@@ -157,6 +158,11 @@ SessionStore.prototype = {
         }
         break;
       }
+      case "Tabs:OpenMultiple":
+        dump("MTEST - opening multiple tabs - data =" + aData)
+        let data = JSON.parse(aData);
+        this._openTabs(data);
+        break;
       case "application-background":
         // We receive this notification when Android's onPause callback is
         // executed. After onPause, the application may be terminated at any
@@ -926,6 +932,22 @@ SessionStore.prototype = {
     }
   },
 
+  // This function iterates through a list of urls opening a new tabs for each.
+  _openTabs: function ss_openTabs(aData) {
+    let window = Services.wm.getMostRecentWindow("navigator:browser");
+    dump("MTEST opening " + aData.urls.length + " tabs");
+    for (let i = 0; i < aData.urls.length; i++) {
+      let tabData = aData.urls[i];
+      let params = {
+        selected: (i == aData.urls.length - 1),
+        isPrivate: tabData.isPrivate,
+        desktopMode: tabData.desktopMode,
+      };
+      dump("MTEST opening " + tabData.url);
+
+      let tab = window.BrowserApp.addTab(tabData.url, params);
+    }
+  },
   /**
    * Don't save sensitive data if the user doesn't want to
    * (distinguishes between encrypted and non-encrypted sites)

@@ -392,7 +392,7 @@ public abstract class GeckoApp
                 onPreparePanel(featureId, mMenuPanel, mMenu);
             }
 
-            return mMenuPanel; 
+            return mMenuPanel;
         }
 
         return super.onCreatePanelView(featureId);
@@ -505,7 +505,7 @@ public abstract class GeckoApp
             mMenuPanel.addView((GeckoMenu) mMenu);
         }
     }
- 
+
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         // Handle hardware menu key presses separately so that we can show a custom menu in some cases.
@@ -1066,7 +1066,7 @@ public abstract class GeckoApp
     public void requestRender() {
         mLayerView.requestRender();
     }
-    
+
     public void hidePlugins(Tab tab) {
         for (Layer layer : tab.getPluginLayers()) {
             if (layer instanceof PluginLayer) {
@@ -1503,7 +1503,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         if (AppConstants.NIGHTLY_BUILD) {
             Log.d("MTEST", "Checking reading list INIT");
 
-            processReadingList(isExternalURL);
+            processReadingList();
         }
 
         // External URLs should always be loaded regardless of whether Gecko is
@@ -1641,18 +1641,21 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
 
     }
 
-    private void processReadingList(boolean isExternalURL) {
+    private void processReadingList() {
+        Log.d("MTEST", "Processing processReadingList");
+        final String filename = "open_in_background_url_list.json";
+
         // Check background load tabs
         String readingList = null;
         try {
-            readingList = mProfile.readFile("temp_reading_list.json");
+            readingList = mProfile.readFile(filename);
         } catch (IOException e) {
             e.printStackTrace();
         }
         Log.d("MTEST", "reading list - found " + readingList);
 
-        if(!TextUtils.isEmpty(readingList)) {
-            JSONArray jsonArray = null;
+        if (!TextUtils.isEmpty(readingList)) {
+            JSONArray jsonArray;
             try {
                 jsonArray = new JSONArray(readingList);
 
@@ -1662,33 +1665,48 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
                 e.printStackTrace();
             }
 
-            if(jsonArray != null ) {
+            if (jsonArray != null) {
+                JSONArray dataArray = new JSONArray();
+
                 Log.d("MTEST", "reading list - found " + jsonArray.length());
 
-                final Tabs tabs = Tabs.getInstance();
+                JSONObject jsonObject;
+
                 for (int i = 0; i < jsonArray.length(); i++) {
-                    String site = null;
+                    String site;
                     try {
                         site = jsonArray.getString(i);
                     } catch (JSONException e) {
                         e.printStackTrace();
                         continue;
-
                     }
+
                     if (!TextUtils.isEmpty(site)) {
-                        Log.d("MTEST", " - " + site);
-                        if (isExternalURL || i == jsonArray.length()) {
-                            tabs.loadUrl(site, Tabs.LOADURL_BACKGROUND);
-                        } else {
-                            tabs.loadUrl(site);
+                        jsonObject = new JSONObject();
+                        try {
+                            jsonObject.put("url", site);
+                            jsonObject.put("isPrivate", false);
+                            jsonObject.put("desktopMode", false);
+                            dataArray.put(jsonObject);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
                         }
                     } else {
                         Log.d("MTEST", " - empty");
                     }
                 }
+
+                JSONObject data = new JSONObject();
+                try {
+                    data.put("urls", dataArray);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Tabs:OpenMultiple", data.toString()));
+
             }
             Toast.makeText(getContext(), "Found" + jsonArray.length() + " sites", Toast.LENGTH_SHORT).show();
-            mProfile.deleteFile("temp_reading_list.json");
+            mProfile.deleteFile(filename);
         }
     }
 
@@ -1909,7 +1927,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             if (AppConstants.NIGHTLY_BUILD) {
                 Log.d("MTEST", "Checking reading list ON NEW INTENT");
 
-                processReadingList(true);
+                processReadingList();
             }
 
             String uri = intent.getDataString();
@@ -2009,7 +2027,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         if (AppConstants.NIGHTLY_BUILD) {
             Log.d("MTEST", "Checking reading list RESUME");
 
-            processReadingList(false);
+            processReadingList();
         }
     }
 

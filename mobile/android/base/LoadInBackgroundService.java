@@ -31,7 +31,6 @@ public class LoadInBackgroundService extends Service {
     private GeckoProfile mProfile;
     private final Handler mHideHandler = new Handler();
     public static int LENGTH_SHORT = 3000;
-    private boolean mShown = false;
     private WindowManager.LayoutParams mParams;
     private HideRunnable mHideRunnable;
 
@@ -70,7 +69,6 @@ public class LoadInBackgroundService extends Service {
     }
 
     private abstract class HideRunnable implements Runnable {
-
         private boolean mShouldHide = true;
 
         public void shouldHide(boolean hide) {
@@ -85,20 +83,15 @@ public class LoadInBackgroundService extends Service {
         }
 
         public abstract void execute();
-
     }
 
     @Override
     public int onStartCommand(final Intent intent, int flags, int startId) {
         if (mHideRunnable != null) {
-            Log.d("MTEST", "runnable already running - run it immediately and cancel the timeout - count ");
-
             mHideHandler.removeCallbacks(mHideRunnable);
             mHideRunnable.shouldHide(false);
             mHideRunnable.run();
         } else {
-            Log.d("MTEST", "Add view to window ");
-
             windowManager.addView(layout, mParams);
         }
 
@@ -109,11 +102,10 @@ public class LoadInBackgroundService extends Service {
                 mHideRunnable = null;
             }
         };
+
         mButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d("MTEST", "button clicked ");
-
                 mHideHandler.removeCallbacks(mHideRunnable);
                 mHideRunnable = null;
 
@@ -131,7 +123,6 @@ public class LoadInBackgroundService extends Service {
     }
 
     private void hide() {
-        Log.d("MTEST", "HIDE!!!");
         windowManager.removeView(layout);
     }
 
@@ -150,15 +141,15 @@ public class LoadInBackgroundService extends Service {
     }
 
     private void addUrlToList(Intent intentParam) {
+        if (intentParam == null) {
+            Log.d("MTEST", "No intent params - quitting");
+            return;
+        }
         final ContextUtils.SafeIntent intent = new ContextUtils.SafeIntent(intentParam);
-        final String action = intent.getAction();
         final String args = intent.getStringExtra("args");
-        String intentData = intent.getDataString();
+        final String intentData = intent.getDataString();
+
         getProfile();
-
-//        Log.d("MTEST", "Gecko in background: " + GeckoApplication.get().isApplicationInBackground());
-        Log.d("MTEST", "Intent data: " + intentData);
-
 
         if (mProfile == null) {
             String profileName = null;
@@ -191,33 +182,20 @@ public class LoadInBackgroundService extends Service {
                 }
             }
         }
-
-        appendSiteToList("temp_reading_list.json", intentData);
-
-//        boolean readingListExists = false;
-//        String readingListContent = null;
-//        try {
-//            readingListContent = mProfile.readFile("temp_reading_list.json");
-//        } catch (IOException e) {
-//            Log.d("MTEST", "Error reading file");
-//
-//            e.printStackTrace();
-//        }
-//        readingListExists = !TextUtils.isEmpty(readingListContent);
-//        String format = readingListExists ? "~%s" : "%s";
-//        Log.d("MTEST", "Reading list contents:" + readingListContent);
-//        Log.d("MTEST", "Reading list exists:" + readingListExists);
-//        mProfile.appendToFile("temp_reading_list.json", String.format(format, intentData));
-//        Log.d("MTEST", "Added " + intentData);
+        Handler handler = new Handler();
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                appendSiteToList("open_in_background_url_list.json", intentData);
+            }
+        });
     }
 
     private void appendSiteToList(String filename, String url) {
         String readingListContent = null;
         try {
-            readingListContent = mProfile.readFile("temp_reading_list.json");
+            readingListContent = mProfile.readFile(filename);
         } catch (IOException e) {
-            Log.d("MTEST", "Error reading file");
-
             e.printStackTrace();
         }
         boolean readingListExists = !TextUtils.isEmpty(readingListContent);
@@ -226,7 +204,6 @@ public class LoadInBackgroundService extends Service {
             try {
                 jsonArray = new JSONArray(readingListContent);
             } catch (JSONException e) {
-                Log.d("MTEST", "Error parsing JSONARRAY");
                 e.printStackTrace();
             }
         } else {
@@ -234,11 +211,7 @@ public class LoadInBackgroundService extends Service {
         }
         jsonArray.put(url);
 
-        Log.d("MTEST", "Reading list contents:" + readingListContent);
-        Log.d("MTEST", "Reading list exists:" + readingListExists);
-        mProfile.writeFile("temp_reading_list.json", jsonArray.toString());
-        Log.d("MTEST", "Added " + url);
+        Log.d("MTEST", "OIB List now: " + jsonArray.toString());
+        mProfile.writeFile(filename, jsonArray.toString());
     }
-
 }
-
