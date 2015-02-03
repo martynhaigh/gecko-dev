@@ -1503,7 +1503,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         if (AppConstants.NIGHTLY_BUILD) {
             Log.d("MTEST", "Checking reading list INIT");
 
-            processReadingList();
+            processOpenInBackgroundUrls();
         }
 
         // External URLs should always be loaded regardless of whether Gecko is
@@ -1641,8 +1641,8 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
 
     }
 
-    private void processReadingList() {
-        Log.d("MTEST", "Processing processReadingList");
+    private void processOpenInBackgroundUrls() {
+        Log.d("MTEST", "Processing processOpenInBackgroundUrls");
         final String filename = "open_in_background_url_list.json";
 
         // Check background load tabs
@@ -1927,7 +1927,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             if (AppConstants.NIGHTLY_BUILD) {
                 Log.d("MTEST", "Checking reading list ON NEW INTENT");
 
-                processReadingList();
+                processOpenInBackgroundUrls();
             }
 
             String uri = intent.getDataString();
@@ -2027,7 +2027,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         if (AppConstants.NIGHTLY_BUILD) {
             Log.d("MTEST", "Checking reading list RESUME");
 
-            processReadingList();
+            processOpenInBackgroundUrls();
         }
     }
 
