@@ -2197,10 +2197,7 @@ BytecodeEmitter::tellDebuggerAboutCompiledScript(ExclusiveContext *cx)
     // Lazy scripts are never top level (despite always being invoked with a
     // nullptr parent), and so the hook should never be fired.
     if (emitterMode != LazyFunction && !parent) {
-        GlobalObject *compileAndGoGlobal = nullptr;
-        if (script->compileAndGo())
-            compileAndGoGlobal = &script->global();
-        Debugger::onNewScript(cx->asJSContext(), script, compileAndGoGlobal);
+        Debugger::onNewScript(cx->asJSContext(), script);
     }
 }
 
@@ -4298,7 +4295,7 @@ ParseNode::getConstantValue(ExclusiveContext *cx, AllowConstantObjects allowObje
         }
         MOZ_ASSERT(idx == count);
 
-        types::FixArrayType(cx, obj);
+        types::FixArrayGroup(cx, obj);
         vp.setObject(*obj);
         return true;
       }
@@ -4361,7 +4358,7 @@ ParseNode::getConstantValue(ExclusiveContext *cx, AllowConstantObjects allowObje
             }
         }
 
-        types::FixObjectType(cx, obj);
+        types::FixObjectGroup(cx, obj);
         vp.setObject(*obj);
         return true;
       }
@@ -4379,7 +4376,7 @@ EmitSingletonInitialiser(ExclusiveContext *cx, BytecodeEmitter *bce, ParseNode *
         return false;
 
     RootedNativeObject obj(cx, &value.toObject().as<NativeObject>());
-    if (!obj->is<ArrayObject>() && !JSObject::setSingletonType(cx, obj))
+    if (!obj->is<ArrayObject>() && !JSObject::setSingleton(cx, obj))
         return false;
 
     ObjectBox *objbox = bce->parser->newObjectBox(obj);
@@ -4884,15 +4881,10 @@ EmitIterator(ExclusiveContext *cx, BytecodeEmitter *bce)
     // Convert iterable to iterator.
     if (Emit1(cx, bce, JSOP_DUP) < 0)                          // OBJ OBJ
         return false;
-#ifdef JS_HAS_SYMBOLS
     if (Emit2(cx, bce, JSOP_SYMBOL, jsbytecode(JS::SymbolCode::iterator)) < 0) // OBJ OBJ @@ITERATOR
         return false;
     if (!EmitElemOpBase(cx, bce, JSOP_CALLELEM))               // OBJ ITERFN
         return false;
-#else
-    if (!EmitAtomOp(cx, cx->names().std_iterator, JSOP_CALLPROP, bce))  // OBJ ITERFN
-        return false;
-#endif
     if (Emit1(cx, bce, JSOP_SWAP) < 0)                         // ITERFN OBJ
         return false;
     if (EmitCall(cx, bce, JSOP_CALL, 0) < 0)                   // ITER

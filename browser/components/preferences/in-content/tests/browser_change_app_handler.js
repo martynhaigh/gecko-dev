@@ -12,18 +12,10 @@ function setupFakeHandler() {
   gHandlerSvc.store(infoToModify);
 }
 
-function promisePopupEvent(popup, ev) {
-  return new Promise((resolve, reject) => {
-    popup.addEventListener(ev, () => {
-      popup.removeEventListener(ev, arguments.callee);
-      resolve();
-    }, false);
-  });
-}
-
 add_task(function*() {
   setupFakeHandler();
   yield openPreferencesViaOpenPreferencesAPI("applications", null, {leaveOpen: true});
+  info("Preferences page opened on the applications pane.");
   let win = gBrowser.selectedBrowser.contentWindow;
 
   let container = win.document.getElementById("handlersView");
@@ -34,20 +26,15 @@ add_task(function*() {
   ok(ourItem.selected, "Should be able to select our item.");
 
   let list = yield waitForCondition(() => win.document.getAnonymousElementByAttribute(ourItem, "class", "actionsMenu"));
-  let popup = list.firstChild;
-  let popupShownPromise = promisePopupEvent(popup, "popupshown");
-  list.boxObject.openMenu(true);
-  yield popupShownPromise;
+  info("Got list after item was selected");
 
+  let chooseItem = list.firstChild.querySelector(".choose-app-item");
   let dialogLoadedPromise = promiseLoadSubDialog("chrome://global/content/appPicker.xul");
-  let popupHiddenPromise = promisePopupEvent(popup, "popuphidden");
-
-  let chooseItem = popup.querySelector(".choose-app-item");
   chooseItem.click();
-  popup.hidePopup(); // Not clear why we need to do this manually, but we do. :-\
 
-  yield popupHiddenPromise;
   let dialog = yield dialogLoadedPromise;
+  info("Dialog loaded");
+
   let dialogDoc = dialog.document;
   let dialogList = dialogDoc.getElementById("app-picker-listbox");
   dialogList.selectItem(dialogList.firstChild);
@@ -60,26 +47,21 @@ add_task(function*() {
 
   // Check that we display this result:
   list = yield waitForCondition(() => win.document.getAnonymousElementByAttribute(ourItem, "class", "actionsMenu"));
+  info("Got list after item was selected");
   ok(list.selectedItem, "Should have a selected item");
   ok(mimeInfo.preferredApplicationHandler.equals(list.selectedItem.handlerApp),
      "App should be visible as preferred item.");
 
 
   // Now try to 'manage' this list:
-  popup = list.firstChild;
-  popupShownPromise = promisePopupEvent(popup, "popupshown");
-  list.boxObject.openMenu(true);
-  yield popupShownPromise;
-
   dialogLoadedPromise = promiseLoadSubDialog("chrome://browser/content/preferences/applicationManager.xul");
-  popupHiddenPromise = promisePopupEvent(popup, "popuphidden");
 
-  let manageItem = popup.querySelector(".manage-app-item");
+  let manageItem = list.firstChild.querySelector(".manage-app-item");
   manageItem.click();
-  popup.hidePopup();
 
-  yield popupHiddenPromise;
   dialog = yield dialogLoadedPromise;
+  info("Dialog loaded the second time");
+
   dialogDoc = dialog.document;
   dialogList = dialogDoc.getElementById("appList");
   let itemToRemove = dialogList.querySelector('listitem[label="' + selectedApp.name + '"]');

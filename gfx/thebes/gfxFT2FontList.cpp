@@ -715,13 +715,10 @@ public:
         if (!mMap.IsInitialized()) {
             return;
         }
-        PLDHashEntryHdr *hdr =
-            PL_DHashTableLookup(&mMap, aFileName.get());
-        if (!hdr) {
-            return;
-        }
-        FNCMapEntry* entry = static_cast<FNCMapEntry*>(hdr);
-        if (entry && entry->mFilesize) {
+        FNCMapEntry *entry =
+            static_cast<FNCMapEntry*>(PL_DHashTableSearch(&mMap,
+                                                          aFileName.get()));
+        if (entry) {
             *aTimestamp = entry->mTimestamp;
             *aFilesize = entry->mFilesize;
             aFaceList.Assign(entry->mFaces);
@@ -1099,7 +1096,6 @@ gfxFT2FontList::AppendFacesFromOmnijarEntry(nsZipArchive* aArchive,
     uint32_t bufSize = item->RealSize();
     // We use fallible allocation here; if there's not enough RAM, we'll simply
     // ignore the bundled fonts and fall back to the device's installed fonts.
-    static const fallible_t fallible = fallible_t();
     nsAutoArrayPtr<uint8_t> buf(new (fallible) uint8_t[bufSize]);
     if (!buf) {
         return;

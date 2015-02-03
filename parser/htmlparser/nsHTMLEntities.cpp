@@ -85,12 +85,12 @@ nsHTMLEntities::AddRefTable(void)
   if (!gTableRefCnt) {
     if (!PL_DHashTableInit(&gEntityToUnicode, &EntityToUnicodeOps,
                            sizeof(EntityNodeEntry),
-                           fallible_t(), NS_HTML_ENTITY_COUNT)) {
+                           fallible, NS_HTML_ENTITY_COUNT)) {
       return NS_ERROR_OUT_OF_MEMORY;
     }
     if (!PL_DHashTableInit(&gUnicodeToEntity, &UnicodeToEntityOps,
                            sizeof(EntityNodeEntry),
-                           fallible_t(), NS_HTML_ENTITY_COUNT)) {
+                           fallible, NS_HTML_ENTITY_COUNT)) {
       PL_DHashTableFinish(&gEntityToUnicode);
       return NS_ERROR_OUT_OF_MEMORY;
     }
@@ -155,15 +155,12 @@ nsHTMLEntities::EntityToUnicode(const nsCString& aEntity)
       temp.Truncate(aEntity.Length()-1);
       return EntityToUnicode(temp);
     }
-      
-  EntityNodeEntry* entry = 
-    static_cast<EntityNodeEntry*>
-               (PL_DHashTableLookup(&gEntityToUnicode, aEntity.get()));
 
-  if (!entry || PL_DHASH_ENTRY_IS_FREE(entry))
-  return -1;
-        
-  return entry->node->mUnicode;
+  EntityNodeEntry* entry =
+    static_cast<EntityNodeEntry*>
+               (PL_DHashTableSearch(&gEntityToUnicode, aEntity.get()));
+
+  return entry ? entry->node->mUnicode : -1;
 }
 
 
@@ -185,12 +182,9 @@ nsHTMLEntities::UnicodeToEntity(int32_t aUnicode)
                "no lookup table, needs addref");
   EntityNodeEntry* entry =
     static_cast<EntityNodeEntry*>
-               (PL_DHashTableLookup(&gUnicodeToEntity, NS_INT32_TO_PTR(aUnicode)));
-                   
-  if (!entry || PL_DHASH_ENTRY_IS_FREE(entry))
-  return nullptr;
-    
-  return entry->node->mStr;
+               (PL_DHashTableSearch(&gUnicodeToEntity, NS_INT32_TO_PTR(aUnicode)));
+
+  return entry ? entry->node->mStr : nullptr;
 }
 
 #ifdef DEBUG

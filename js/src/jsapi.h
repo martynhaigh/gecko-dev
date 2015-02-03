@@ -1957,7 +1957,10 @@ typedef enum JSGCParamKey {
     JSGC_MIN_EMPTY_CHUNK_COUNT = 21,
 
     /* We never keep more than this many unused chunks in the free chunk pool. */
-    JSGC_MAX_EMPTY_CHUNK_COUNT = 22
+    JSGC_MAX_EMPTY_CHUNK_COUNT = 22,
+
+    /* Whether compacting GC is enabled. */
+    JSGC_COMPACTING_ENABLED = 23
 } JSGCParamKey;
 
 extern JS_PUBLIC_API(void)
@@ -2288,8 +2291,7 @@ struct JSFunctionSpec {
  *
  * The _SYM variants allow defining a function with a symbol key rather than a
  * string key. For example, use JS_SYM_FN(iterator, ...) to define an
- * @@iterator method. (In builds without ES6 symbols, it defines a method with
- * the string id "@@iterator".)
+ * @@iterator method.
  */
 #define JS_FS(name,call,nargs,flags)                                          \
     JS_FNSPEC(name, call, nullptr, nargs, flags, nullptr)
@@ -2303,17 +2305,10 @@ struct JSFunctionSpec {
     JS_FNSPEC(name, nullptr, nullptr, nargs, flags, selfHostedName)
 #define JS_SELF_HOSTED_SYM_FN(symbol, selfHostedName, nargs, flags)           \
     JS_SYM_FNSPEC(symbol, nullptr, nullptr, nargs, flags, selfHostedName)
-
-#ifdef JS_HAS_SYMBOLS
 #define JS_SYM_FNSPEC(symbol, call, info, nargs, flags, selfHostedName)       \
     JS_FNSPEC(reinterpret_cast<const char *>(                                 \
                   uint32_t(::JS::SymbolCode::symbol) + 1),                    \
               call, info, nargs, flags, selfHostedName)
-#else
-#define JS_SYM_FNSPEC(symbol, call, info, nargs, flags, selfHostedName)       \
-    JS_FNSPEC("@@" #symbol, call, info, nargs, flags, selfHostedName)
-#endif
-
 #define JS_FNSPEC(name,call,info,nargs,flags,selfHostedName)                  \
     {name, {call, info}, nargs, flags, selfHostedName}
 
@@ -2577,8 +2572,7 @@ extern JS_PUBLIC_API(void)
 JS_FireOnNewGlobalObject(JSContext *cx, JS::HandleObject global);
 
 extern JS_PUBLIC_API(JSObject *)
-JS_NewObject(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> proto,
-             JS::Handle<JSObject*> parent);
+JS_NewObject(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> parent = JS::NullPtr());
 
 /* Queries the [[Extensible]] property of the object. */
 extern JS_PUBLIC_API(bool)
@@ -2591,8 +2585,8 @@ extern JS_PUBLIC_API(JSRuntime *)
 JS_GetObjectRuntime(JSObject *obj);
 
 /*
- * Unlike JS_NewObject, JS_NewObjectWithGivenProto does not compute a default
- * proto if proto's actual parameter value is null.
+ * Unlike JS_NewObject, JS_NewObjectWithGivenProto does not compute a default proto.
+ * If proto is JS::NullPtr, the JS object will have `null` as [[Prototype]].
  */
 extern JS_PUBLIC_API(JSObject *)
 JS_NewObjectWithGivenProto(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> proto,
@@ -4565,6 +4559,37 @@ GetWeakMapEntry(JSContext *cx, JS::HandleObject mapObj, JS::HandleObject key,
 extern JS_PUBLIC_API(bool)
 SetWeakMapEntry(JSContext *cx, JS::HandleObject mapObj, JS::HandleObject key,
                 JS::HandleValue val);
+
+/*
+ * Map
+ */
+extern JS_PUBLIC_API(JSObject *)
+NewMapObject(JSContext *cx);
+
+extern JS_PUBLIC_API(uint32_t)
+MapSize(JSContext *cx, HandleObject obj);
+
+extern JS_PUBLIC_API(bool)
+MapGet(JSContext *cx, HandleObject obj,
+       HandleValue key, MutableHandleValue rval);
+
+extern JS_PUBLIC_API(bool)
+MapHas(JSContext *cx, HandleObject obj, HandleValue key, bool *rval);
+
+extern JS_PUBLIC_API(bool)
+MapSet(JSContext *cx, HandleObject obj, HandleValue key, HandleValue val);
+
+extern JS_PUBLIC_API(bool)
+MapClear(JSContext *cx, HandleObject obj);
+
+extern JS_PUBLIC_API(bool)
+MapKeys(JSContext *cx, HandleObject obj, MutableHandleValue rval);
+
+extern JS_PUBLIC_API(bool)
+MapValues(JSContext *cx, HandleObject obj, MutableHandleValue rval);
+
+extern JS_PUBLIC_API(bool)
+MapEntries(JSContext *cx, HandleObject obj, MutableHandleValue rval);
 
 } /* namespace JS */
 

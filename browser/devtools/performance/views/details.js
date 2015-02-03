@@ -11,12 +11,14 @@ const DEFAULT_DETAILS_SUBVIEW = "waterfall";
  */
 let DetailsView = {
   /**
-   * Name to index mapping of subviews, used by selecting view.
+   * Name to node+object mapping of subviews.
    */
   components: {
-    waterfall: { index: 0, view: WaterfallView },
-    calltree: { index: 1, view: CallTreeView },
-    flamegraph: { index: 2, view: FlameGraphView }
+    "waterfall": { id: "waterfall-view", view: WaterfallView },
+    "js-calltree": { id: "js-calltree-view", view: JsCallTreeView },
+    "js-flamegraph": { id: "js-flamegraph-view", view: JsFlameGraphView },
+    "memory-calltree": { id: "memory-calltree-view", view: MemoryCallTreeView },
+    "memory-flamegraph": { id: "memory-flamegraph-view", view: MemoryFlameGraphView }
   },
 
   /**
@@ -32,9 +34,9 @@ let DetailsView = {
       button.addEventListener("command", this._onViewToggle);
     }
 
-    yield WaterfallView.initialize();
-    yield CallTreeView.initialize();
-    yield FlameGraphView.initialize();
+    for (let [_, { view }] of Iterator(this.components)) {
+      yield view.initialize();
+    }
 
     this.selectView(DEFAULT_DETAILS_SUBVIEW);
   }),
@@ -47,9 +49,9 @@ let DetailsView = {
       button.removeEventListener("command", this._onViewToggle);
     }
 
-    yield WaterfallView.destroy();
-    yield CallTreeView.destroy();
-    yield FlameGraphView.destroy();
+    for (let [_, { view }] of Iterator(this.components)) {
+      yield view.destroy();
+    }
   }),
 
   /**
@@ -60,7 +62,7 @@ let DetailsView = {
    *        Name of the view to be shown.
    */
   selectView: function (viewName) {
-    this.el.selectedIndex = this.components[viewName].index;
+    this.el.selectedPanel = $("#" + this.components[viewName].id);
 
     for (let button of $$("toolbarbutton[data-view]", this.toolbar)) {
       if (button.getAttribute("data-view") === viewName) {
@@ -80,10 +82,11 @@ let DetailsView = {
    * @return boolean
    */
   isViewSelected: function(viewObject) {
-    let selectedIndex = this.el.selectedIndex;
+    let selectedPanel = this.el.selectedPanel;
+    let selectedId = selectedPanel.id;
 
-    for (let [, { index, view }] of Iterator(this.components)) {
-      if (index == selectedIndex && view == viewObject) {
+    for (let [, { id, view }] of Iterator(this.components)) {
+      if (id == selectedId && view == viewObject) {
         return true;
       }
     }

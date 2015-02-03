@@ -2064,7 +2064,7 @@ IsResumableMIRType(MIRType type)
       case MIRType_Elements:
       case MIRType_Pointer:
       case MIRType_Shape:
-      case MIRType_TypeObject:
+      case MIRType_ObjectGroup:
       case MIRType_Float32x4:
       case MIRType_Int32x4:
       case MIRType_Doublex2:
@@ -2880,7 +2880,7 @@ jit::ConvertLinearInequality(TempAllocator &alloc, MBasicBlock *block, const Lin
 }
 
 static bool
-AnalyzePoppedThis(JSContext *cx, types::TypeObject *type,
+AnalyzePoppedThis(JSContext *cx, types::ObjectGroup *group,
                   MDefinition *thisValue, MInstruction *ins, bool definitelyExecuted,
                   HandlePlainObject baseobj,
                   Vector<types::TypeNewScript::Initializer> *initializerList,
@@ -2929,7 +2929,7 @@ AnalyzePoppedThis(JSContext *cx, types::TypeObject *type,
             return true;
 
         RootedId id(cx, NameToId(setprop->name()));
-        if (!types::AddClearDefiniteGetterSetterForPrototypeChain(cx, type, id)) {
+        if (!types::AddClearDefiniteGetterSetterForPrototypeChain(cx, group, id)) {
             // The prototype chain already contains a getter/setter for this
             // property, or type information is too imprecise.
             return true;
@@ -2989,7 +2989,7 @@ AnalyzePoppedThis(JSContext *cx, types::TypeObject *type,
         if (!baseobj->lookup(cx, id) && !accessedProperties->append(get->name()))
             return false;
 
-        if (!types::AddClearDefiniteGetterSetterForPrototypeChain(cx, type, id)) {
+        if (!types::AddClearDefiniteGetterSetterForPrototypeChain(cx, group, id)) {
             // The |this| value can escape if any property reads it does go
             // through a getter.
             return true;
@@ -3016,7 +3016,7 @@ CmpInstructions(const void *a, const void *b)
 
 bool
 jit::AnalyzeNewScriptDefiniteProperties(JSContext *cx, JSFunction *fun,
-                                        types::TypeObject *type, HandlePlainObject baseobj,
+                                        types::ObjectGroup *group, HandlePlainObject baseobj,
                                         Vector<types::TypeNewScript::Initializer> *initializerList)
 {
     MOZ_ASSERT(cx->zone()->types.activeAnalysis);
@@ -3053,7 +3053,7 @@ jit::AnalyzeNewScriptDefiniteProperties(JSContext *cx, JSFunction *fun,
             return true;
     }
 
-    types::TypeScript::SetThis(cx, script, types::Type::ObjectType(type));
+    types::TypeScript::SetThis(cx, script, types::Type::ObjectType(group));
 
     MIRGraph graph(&temp);
     InlineScriptTree *inlineScriptTree = InlineScriptTree::New(&temp, nullptr, nullptr, script);
@@ -3158,7 +3158,7 @@ jit::AnalyzeNewScriptDefiniteProperties(JSContext *cx, JSFunction *fun,
 
         bool handled = false;
         size_t slotSpan = baseobj->slotSpan();
-        if (!AnalyzePoppedThis(cx, type, thisValue, ins, definitelyExecuted,
+        if (!AnalyzePoppedThis(cx, group, thisValue, ins, definitelyExecuted,
                                baseobj, initializerList, &accessedProperties, &handled))
         {
             return false;
@@ -3186,7 +3186,7 @@ jit::AnalyzeNewScriptDefiniteProperties(JSContext *cx, JSFunction *fun,
             if (MResumePoint *rp = block->callerResumePoint()) {
                 if (block->numPredecessors() == 1 && block->getPredecessor(0) == rp->block()) {
                     JSScript *script = rp->block()->info().script();
-                    if (!types::AddClearDefiniteFunctionUsesInScript(cx, type, script, block->info().script()))
+                    if (!types::AddClearDefiniteFunctionUsesInScript(cx, group, script, block->info().script()))
                         return false;
                 }
             }
@@ -3482,9 +3482,7 @@ MakeLoopContiguous(MIRGraph &graph, MBasicBlock *header, size_t numMarked)
     size_t headerId = header->id();
     size_t inLoopId = headerId;
     size_t notInLoopId = inLoopId + numMarked;
-    size_t numOSRDominated = 0;
     ReversePostorderIterator i = graph.rpoBegin(header);
-    MBasicBlock *osrBlock = graph.osrBlock();
     for (;;) {
         MBasicBlock *block = *i++;
         MOZ_ASSERT(block->id() >= header->id() && block->id() <= backedge->id(),
@@ -3497,15 +3495,6 @@ MakeLoopContiguous(MIRGraph &graph, MBasicBlock *header, size_t numMarked)
             // If we've reached the loop backedge, we're done!
             if (block == backedge)
                 break;
-        } else if (osrBlock && osrBlock->dominates(block)) {
-            // This block is not in the loop, but since it's dominated by the
-            // OSR entry, the block was probably in the loop before some
-            // folding. This probably means that the block has outgoing paths
-            // which re-enter the loop in the middle. And that, finally, means
-            // that we can't move this block to the end, since it could create a
-            // backwards branch to a block which is not the loop header.
-            block->setId(inLoopId++);
-            ++numOSRDominated;
         } else {
             // This block is not in the loop. Move it to the end.
             graph.moveBlockBefore(insertPt, block);
@@ -3513,11 +3502,8 @@ MakeLoopContiguous(MIRGraph &graph, MBasicBlock *header, size_t numMarked)
         }
     }
     MOZ_ASSERT(header->id() == headerId, "Loop header id changed");
-    MOZ_ASSERT(inLoopId == headerId + numMarked + numOSRDominated,
-               "Wrong number of blocks kept in loop");
-    MOZ_ASSERT(notInLoopId == (insertIter != graph.rpoEnd()
-                               ? insertPt->id()
-                               : graph.numBlocks()) - numOSRDominated,
+    MOZ_ASSERT(inLoopId == headerId + numMarked, "Wrong number of blocks kept in loop");
+    MOZ_ASSERT(notInLoopId == (insertIter != graph.rpoEnd() ? insertPt->id() : graph.numBlocks()),
                "Wrong number of blocks moved out of loop");
 }
 
@@ -3538,6 +3524,13 @@ jit::MakeLoopsContiguous(MIRGraph &graph)
         // If the loop isn't a loop, don't try to optimize it.
         if (numMarked == 0)
             continue;
+
+        // If there's an OSR block entering the loop in the middle, it's tricky,
+        // so don't try to handle it, for now.
+        if (canOsr) {
+            UnmarkLoopBlocks(graph, header);
+            continue;
+        }
 
         // Move all blocks between header and backedge that aren't marked to
         // the end of the loop, making the loop itself contiguous.

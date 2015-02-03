@@ -12,6 +12,7 @@
 #include "mozilla/BasicEvents.h"
 #include "mozilla/EventForwards.h" // for KeyNameIndex, temporarily
 #include "mozilla/TextRange.h"
+#include "mozilla/FontRange.h"
 #include "nsCOMPtr.h"
 #include "nsIDOMKeyEvent.h"
 #include "nsITransferable.h"
@@ -179,6 +180,8 @@ public:
     }
     GetDOMCodeName(mCodeNameIndex, aCodeName);
   }
+
+  static uint32_t ComputeLocationFromCodeValue(CodeNameIndex aCodeNameIndex);
 
   static void GetDOMKeyName(KeyNameIndex aKeyNameIndex,
                             nsAString& aKeyName);
@@ -397,6 +400,7 @@ public:
     , mSucceeded(false)
     , mWasAsync(false)
     , mUseNativeLineBreak(true)
+    , mWithFontRanges(false)
   {
   }
 
@@ -445,6 +449,13 @@ public:
     refPoint = aPoint;
   }
 
+  void RequestFontRanges()
+  {
+    NS_ASSERTION(message == NS_QUERY_TEXT_CONTENT,
+                 "not querying text content");
+    mWithFontRanges = true;
+  }
+
   uint32_t GetSelectionStart(void) const
   {
     NS_ASSERTION(message == NS_QUERY_SELECTED_TEXT,
@@ -469,6 +480,7 @@ public:
   bool mSucceeded;
   bool mWasAsync;
   bool mUseNativeLineBreak;
+  bool mWithFontRanges;
   struct
   {
     uint32_t mOffset;
@@ -493,6 +505,8 @@ public:
     mozilla::WritingMode mWritingMode;
     // used by NS_QUERY_SELECTION_AS_TRANSFERABLE
     nsCOMPtr<nsITransferable> mTransferable;
+    // used by NS_QUERY_TEXT_CONTENT with font ranges requested
+    nsAutoTArray<mozilla::FontRange, 1> mFontRanges;
   } mReply;
 
   enum

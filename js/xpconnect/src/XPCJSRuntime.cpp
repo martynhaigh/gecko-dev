@@ -1928,13 +1928,13 @@ ReportZoneStats(const JS::ZoneStats &zStats,
         zStats.jitCodesGCHeap,
         "References to executable code pools used by the JITs.");
 
-    ZCREPORT_GC_BYTES(pathPrefix + NS_LITERAL_CSTRING("type-objects/gc-heap"),
-        zStats.typeObjectsGCHeap,
-        "Type inference information about objects.");
+    ZCREPORT_GC_BYTES(pathPrefix + NS_LITERAL_CSTRING("object-groups/gc-heap"),
+        zStats.objectGroupsGCHeap,
+        "Classification and type inference information about objects.");
 
-    ZCREPORT_BYTES(pathPrefix + NS_LITERAL_CSTRING("type-objects/malloc-heap"),
-        zStats.typeObjectsMallocHeap,
-        "Type object addenda.");
+    ZCREPORT_BYTES(pathPrefix + NS_LITERAL_CSTRING("object-groups/malloc-heap"),
+        zStats.objectGroupsMallocHeap,
+        "Object group addenda.");
 
     ZCREPORT_BYTES(pathPrefix + NS_LITERAL_CSTRING("type-pool"),
         zStats.typePool,
@@ -3292,7 +3292,7 @@ XPCJSRuntime::XPCJSRuntime(nsXPConnect* aXPConnect)
     // 1MB is the default stack size on Windows, so use 900k.
     // Windows PGO stack frames have unfortunately gotten pretty large lately. :-(
     const size_t kStackQuota = 900 * 1024;
-    const size_t kTrustedScriptBuffer = (sizeof(size_t) == 8) ? 120 * 1024
+    const size_t kTrustedScriptBuffer = (sizeof(size_t) == 8) ? 140 * 1024
                                                               : 80 * 1024;
     // The following two configurations are linux-only. Given the numbers above,
     // we use 50k and 100k trusted buffers on 32-bit and 64-bit respectively.
