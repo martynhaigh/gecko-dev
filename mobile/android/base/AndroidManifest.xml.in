@@ -245,6 +245,10 @@
                  android:label="LIB Service">
         </service>
 
+        <service android:name="org.mozilla.gecko.loadinbackground.LoadInBackgroundPromptService"
+                 android:label="LIB Prompt Service">
+        </service>
+
         <activity android:name="org.mozilla.gecko.loadinbackground.LoadInBackground"
                   android:label="@MOZ_APP_DISPLAYNAME@"
                   android:noHistory="true"

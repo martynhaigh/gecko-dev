@@ -282,6 +282,24 @@
         <item name="android:textSize">18sp</item>
     </style>
 
+
+    <style name="Widget.LoadInBackground.Button.Highlight" parent="Widget.LoadInBackground.Button">
+        <item name="android:layout_width">@dimen/firstrun_content_width</item>
+        <item name="android:layout_height">60dp</item>
+        <item name="android:textColor">@color/android:white</item>
+        <item name="android:background">@color/loadinbackground_button_highlight</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
+
+    <style name="Widget.LoadInBackground.Button" parent="Widget.BaseButton">
+        <item name="android:layout_width">@dimen/firstrun_content_width</item>
+        <item name="android:layout_height">60dp</item>
+        <item name="android:textColor">@color/android:white</item>
+        <item name="android:background">@color/loadinbackground_button</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
     <!--
         TextAppearance
         Note: Gecko uses light theme as default, while Android uses dark.
