@@ -241,11 +241,11 @@
             </intent-filter>
         </activity-alias>
 
-        <service android:name="org.mozilla.gecko.LoadInBackgroundService"
+        <service android:name="org.mozilla.gecko.loadinbackground.LoadInBackgroundService"
                  android:label="LIB Service">
         </service>
 
-        <activity android:name="org.mozilla.gecko.LoadInBackground"
+        <activity android:name="org.mozilla.gecko.loadinbackground.LoadInBackground"
                   android:label="@MOZ_APP_DISPLAYNAME@"
                   android:noHistory="true"
                   android:excludeFromRecents="true"
