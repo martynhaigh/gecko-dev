@@ -4,8 +4,8 @@
    - file, You can obtain one at http://mozilla.org/MPL/2.0/.  -->
 
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:state_pressed="true"
-          android:drawable="@drawable/loadinbackground_button_highlight_pressed" />
     <item android:state_enabled="true"
           android:drawable="@drawable/loadinbackground_button_highlight_enabled" />
+    <item android:state_pressed="true"
+          android:drawable="@drawable/loadinbackground_button_highlight_pressed" />
 </selector>

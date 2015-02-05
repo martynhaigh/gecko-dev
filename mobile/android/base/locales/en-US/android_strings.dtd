@@ -197,9 +197,10 @@
 <!ENTITY pref_restore "Tabs">
 <!ENTITY pref_restore_always "Always restore">
 <!ENTITY pref_restore_quit "Don\'t restore after quitting &brandShortName;">
-<!ENTITY pref_open_in_background "Open in background">
-<!ENTITY pref_open_in_background_show_toast "Show open in background toast">
-<!ENTITY pref_open_in_background_always_open "Always open in browser">
+<!ENTITY pref_load_in_background "Open in background">
+<!ENTITY pref_load_in_background_summary "Prevent tabs from opening immediately, but open all queued tabs the next time &brandShortName; loads.">
+<!ENTITY pref_load_in_background_show_toast "Show open in background toast">
+<!ENTITY pref_load_in_background_always_open "Always open in browser">
 <!ENTITY pref_font_size_tiny "Tiny">
 <!ENTITY pref_font_size_small "Small">
 <!ENTITY pref_font_size_medium "Medium">

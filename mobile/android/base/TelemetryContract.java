@@ -38,6 +38,9 @@ public interface TelemetryContract {
         // Editing an item.
         EDIT("edit.1"),
 
+        // don't try an option.
+        NOT_NOW("notnow.1"),
+
         // Launching (opening) an external application.
         // Note: Only used in JavaScript for now, but here for completeness.
         LAUNCH("launch.1"),
@@ -166,6 +169,9 @@ public interface TelemetryContract {
 
         // Actions triggered from the share overlay.
         SHARE_OVERLAY("shareoverlay"),
+
+        // Actions triggered from the open in background overlay.
+        OPEN_IN_BACKGROUND("open_in_background"),
 
         // Action triggered from a suggestion provided to the user.
         SUGGESTION("suggestion"),

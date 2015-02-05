@@ -59,8 +59,8 @@
 
     <color name="loadinbackground_button_highlight">#E66000</color>
     <color name="loadinbackground_button_highlight_pressed">#DC5600</color>
-    <color name="loadinbackground_button">#16A3DF</color>
-    <color name="loadinbackground_button_pressed">#1193CB</color>
+    <color name="loadinbackground_dismiss_button_foreground">#16A3DF</color>
+    <color name="loadinbackground_dismiss_button_foreground_pressed">#1193CB</color>
     <color name="loadinbackground_background">#16A3DF</color>
 
   <!--

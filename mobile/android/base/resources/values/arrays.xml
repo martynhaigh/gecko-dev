@@ -129,11 +129,11 @@
         <item>always</item>
         <item>quit</item>
     </string-array>
-    <string-array name="pref_open_in_background_entries">
-        <item>@string/pref_open_in_background_always_open</item>
-        <item>@string/pref_open_in_background_show_toast</item>
+    <string-array name="pref_load_in_background_entries">
+        <item>@string/pref_load_in_background_always_open</item>
+        <item>@string/pref_load_in_background_show_toast</item>
     </string-array>
-    <string-array name="pref_open_in_background_values">
+    <string-array name="pref_load_in_background_values">
         <item>open</item>
         <item>toast</item>
     </string-array>

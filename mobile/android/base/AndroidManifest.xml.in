@@ -245,10 +245,7 @@
                  android:label="LIB Service">
         </service>
 
-        <service android:name="org.mozilla.gecko.loadinbackground.LoadInBackgroundPromptService"
-                 android:label="LIB Prompt Service">
-        </service>
-
+<!-- TODO play with the theme to get the activity to have a transparent dialog like look to it -->
         <activity android:name="org.mozilla.gecko.loadinbackground.LoadInBackground"
                   android:label="@MOZ_APP_DISPLAYNAME@"
                   android:noHistory="true"

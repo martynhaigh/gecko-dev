@@ -38,8 +38,8 @@
                     android:persistent="true" />
 
     <CheckBoxPreference android:key="android.not_a_preference.open_in_background"
-                        android:title="@string/pref_open_in_background"
-                        android:summary="@string/pref_scroll_title_bar_summary" />
+                        android:title="@string/pref_load_in_background"
+                        android:summary="@string/pref_load_in_background_summary" />
     <!--<ListPreference android:key="android.not_a_preference.open_in_background"-->
     <!--android:title="@string/pref_open_in_background"-->
     <!--android:defaultValue="open"-->
