@@ -47,38 +47,14 @@ public class LoadInBackground extends Locales.LocaleAwareActivity {
 
         // For the moment lets exit early if we're not in Nightly
         if (!AppConstants.NIGHTLY_BUILD) {
-            loadNormally();
+            loadNormally(intent);
             finish();
         }
 
-//        final Resources resources = getResources();
-
-        // The URL is usually hiding somewhere in the extra text. Extract it.
-        final String dataString = intent.getDataString();
-        if (TextUtils.isEmpty(dataString)) {
-            abortDueToNoURL();
-            return;
-        }
-
-        final String pageUrl = new WebURLFinder(dataString).bestWebURL();
-        if (TextUtils.isEmpty(pageUrl)) {
-            abortDueToNoURL();
-            return;
-        }
-
-        String subjectText = intent.getStringExtra(Intent.EXTRA_SUBJECT);
-
-        Log.d("MTEST", "LIBA: Processing pageUrl: " + pageUrl);
-        Log.d("MTEST", "LIBA: Processing dataString: " + dataString);
-        Log.d("MTEST", "LIBA: Processing subjectText: " + subjectText);
-
         //Telemetry.sendUIEvent(TelemetryContract.Event.SHOW, TelemetryContract.Method.SHARE_OVERLAY, telemetryExtras);
-
 
         prefs = GeckoSharedPrefs.forApp(this);
         boolean showOpenInBackgroundToast = prefs.getBoolean(GeckoPreferences.PREFS_OPEN_IN_BACKGROUND, false);
-        int timesOpened = prefs.getInt(PREFERENCE_NAME, 1);
-        Log.d("MTEST", "Opened in BG " + timesOpened + " times");
 
         // Don't inflate a layout - we're using this activity to simply decide if we want to show the overlay toast
         // which happens in the service, or to open fennec as normal.
@@ -86,15 +62,10 @@ public class LoadInBackground extends Locales.LocaleAwareActivity {
             intent.setClass(getApplicationContext(), LoadInBackgroundService.class);
             startService(intent);
             finish();
-        } else if (true || timesOpened == OPENS_BEFORE_PROMPT) {
-            showLoadInBackgroundEnablePrompt();
-
-
         } else {
-            loadNormally();
+            loadNormally(intent);
         }
 
-        prefs.edit().putInt(PREFERENCE_NAME, timesOpened + 1).apply();
 
 
     }
@@ -143,10 +114,9 @@ public class LoadInBackground extends Locales.LocaleAwareActivity {
         //findViewById(R.id.background_container).startAnimation(anim);
     }
 
-    private void loadNormally() {
-        Intent forwardIntent = new Intent(getIntent());
-        forwardIntent.setClass(getApplicationContext(), BrowserApp.class);
-        startActivity(forwardIntent);
+    private void loadNormally(Intent intent) {
+        intent.setClass(getApplicationContext(), BrowserApp.class);
+        startActivity(intent);
         finish();
     }
 

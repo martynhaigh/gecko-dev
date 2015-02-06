@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -36,6 +38,7 @@ import org.mozilla.gecko.gfx.PluginLayer;
 import org.mozilla.gecko.health.HealthRecorder;
 import org.mozilla.gecko.health.SessionInformation;
 import org.mozilla.gecko.health.StubbedHealthRecorder;
+import org.mozilla.gecko.loadinbackground.LoadInBackgroundService;
 import org.mozilla.gecko.menu.GeckoMenu;
 import org.mozilla.gecko.menu.GeckoMenuInflater;
 import org.mozilla.gecko.menu.MenuPanel;
@@ -552,10 +555,14 @@ public abstract class GeckoApp
      *
      * @return True if the tab UI was hidden.
      */
-    public boolean autoHideTabs() { return false; }
+    public boolean autoHideTabs() {
+        return false;
+    }
 
     @Override
-    public boolean areTabsShown() { return false; }
+    public boolean areTabsShown() {
+        return false;
+    }
 
     @Override
     public void handleMessage(final String event, final NativeJSObject message,
@@ -695,7 +702,7 @@ public abstract class GeckoApp
                 // This method is cheap, so don't spawn a new runnable.
                 final HealthRecorder rec = mHealthRecorder;
                 if (rec != null) {
-                  rec.recordGeckoStartupTime(mGeckoReadyStartupTimer.getElapsed());
+                    rec.recordGeckoStartupTime(mGeckoReadyStartupTimer.getElapsed());
                 }
             } else if ("NativeApp:IsDebuggable".equals(event)) {
                 JSONObject ret = new JSONObject();
@@ -709,12 +716,12 @@ public abstract class GeckoApp
         }
     }
 
-    void onStatePurged() { }
+    void onStatePurged() {
+    }
 
     /**
-     * @param permissions
-     *        Array of JSON objects to represent site permissions.
-     *        Example: { type: "offline-app", setting: "Store Offline Data", value: "Allow" }
+     * @param permissions Array of JSON objects to represent site permissions.
+     *                    Example: { type: "offline-app", setting: "Store Offline Data", value: "Allow" }
      */
     private void showSiteSettingsDialog(final String host, final NativeJSObject[] permissions) {
         final AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -742,15 +749,16 @@ public abstract class GeckoApp
             // setMultiChoiceItems doesn't support using an adapter, so we're creating a hack with
             // setSingleChoiceItems and changing the choiceMode below when we create the dialog
             builder.setSingleChoiceItems(new SimpleAdapter(
-                GeckoApp.this,
-                itemList,
-                R.layout.site_setting_item,
-                new String[] { "setting", "value" },
-                new int[] { R.id.setting, R.id.value }
-                ), -1, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id) { }
-                });
+                    GeckoApp.this,
+                    itemList,
+                    R.layout.site_setting_item,
+                    new String[]{"setting", "value"},
+                    new int[]{R.id.setting, R.id.value}
+            ), -1, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int id) {
+                }
+            });
 
             builder.setPositiveButton(R.string.site_settings_clear, new DialogInterface.OnClickListener() {
                 @Override
@@ -765,12 +773,12 @@ public abstract class GeckoApp
                             permissionsToClear.put(i);
 
                     GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent(
-                        "Permissions:Clear", permissionsToClear.toString()));
+                            "Permissions:Clear", permissionsToClear.toString()));
                 }
             });
         }
 
-        builder.setNegativeButton(R.string.site_settings_cancel, new DialogInterface.OnClickListener(){
+        builder.setNegativeButton(R.string.site_settings_cancel, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int id) {
                 dialog.cancel();
@@ -836,7 +844,7 @@ public abstract class GeckoApp
             @Override
             public void onBitmapFound(final Drawable d) {
                 final int toastDuration = duration.equals("long") ? ButtonToast.LENGTH_LONG : ButtonToast.LENGTH_SHORT;
-                getButtonToast().show(false, message, toastDuration ,buttonText, d, new ButtonToast.ToastListener() {
+                getButtonToast().show(false, message, toastDuration, buttonText, d, new ButtonToast.ToastListener() {
                     @Override
                     public void onButtonClicked() {
                         GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Toast:Click", buttonId));
@@ -869,13 +877,13 @@ public abstract class GeckoApp
         mFullScreenPluginContainer = new FullScreenHolder(this);
 
         FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            Gravity.CENTER);
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER);
         mFullScreenPluginContainer.addView(view, layoutParams);
 
 
-        FrameLayout decor = (FrameLayout)getWindow().getDecorView();
+        FrameLayout decor = (FrameLayout) getWindow().getDecorView();
         decor.addView(mFullScreenPluginContainer, layoutParams);
 
         mFullScreenPluginView = view;
@@ -930,7 +938,7 @@ public abstract class GeckoApp
             }
         });
 
-        FrameLayout decor = (FrameLayout)getWindow().getDecorView();
+        FrameLayout decor = (FrameLayout) getWindow().getDecorView();
         decor.removeView(mFullScreenPluginContainer);
 
         mFullScreenPluginView = null;
@@ -969,7 +977,7 @@ public abstract class GeckoApp
         try {
             if (isDataURI) {
                 int dataStart = aSrc.indexOf(",");
-                byte[] buf = Base64.decode(aSrc.substring(dataStart+1), Base64.DEFAULT);
+                byte[] buf = Base64.decode(aSrc.substring(dataStart + 1), Base64.DEFAULT);
                 image = BitmapUtils.decodeByteArray(buf);
             } else {
                 int byteRead;
@@ -981,7 +989,7 @@ public abstract class GeckoApp
                 // Cannot read from same stream twice. Also, InputStream from
                 // URL does not support reset. So converting to byte array.
 
-                while((byteRead = is.read(buf)) != -1) {
+                while ((byteRead = is.read(buf)) != -1) {
                     os.write(buf, 0, byteRead);
                 }
                 byte[] imgBuffer = os.toByteArray();
@@ -994,7 +1002,7 @@ public abstract class GeckoApp
                     Toast.makeText((Context) this, R.string.set_image_path_fail, Toast.LENGTH_SHORT).show();
                     return;
                 }
-                String path = Media.insertImage(getContentResolver(),image, null, null);
+                String path = Media.insertImage(getContentResolver(), image, null, null);
                 if (path == null) {
                     Toast.makeText((Context) this, R.string.set_image_path_fail, Toast.LENGTH_SHORT).show();
                     return;
@@ -1007,7 +1015,7 @@ public abstract class GeckoApp
                 Intent chooser = Intent.createChooser(intent, getString(R.string.set_image_chooser_title));
                 ActivityResultHandler handler = new ActivityResultHandler() {
                     @Override
-                    public void onActivityResult (int resultCode, Intent data) {
+                    public void onActivityResult(int resultCode, Intent data) {
                         getContentResolver().delete(intent.getData(), null, null);
                     }
                 };
@@ -1015,22 +1023,22 @@ public abstract class GeckoApp
             } else {
                 Toast.makeText((Context) this, R.string.set_image_fail, Toast.LENGTH_SHORT).show();
             }
-        } catch(OutOfMemoryError ome) {
+        } catch (OutOfMemoryError ome) {
             Log.e(LOGTAG, "Out of Memory when converting to byte array", ome);
-        } catch(IOException ioe) {
+        } catch (IOException ioe) {
             Log.e(LOGTAG, "I/O Exception while setting wallpaper", ioe);
         } finally {
             if (is != null) {
                 try {
                     is.close();
-                } catch(IOException ioe) {
+                } catch (IOException ioe) {
                     Log.w(LOGTAG, "I/O Exception while closing stream", ioe);
                 }
             }
             if (os != null) {
                 try {
                     os.close();
-                } catch(IOException ioe) {
+                } catch (IOException ioe) {
                     Log.w(LOGTAG, "I/O Exception while closing stream", ioe);
                 }
             }
@@ -1043,9 +1051,9 @@ public abstract class GeckoApp
         int inSampleSize = 1;
         if (height > idealHeight || width > idealWidth) {
             if (width > height) {
-                inSampleSize = Math.round((float)height / idealHeight);
+                inSampleSize = Math.round((float) height / idealHeight);
             } else {
-                inSampleSize = Math.round((float)width / idealWidth);
+                inSampleSize = Math.round((float) width / idealWidth);
             }
         }
         return inSampleSize;
@@ -1110,7 +1118,7 @@ public abstract class GeckoApp
 
     /**
      * Check and start the Java profiler if MOZ_PROFILER_STARTUP env var is specified.
-     **/
+     */
     protected static void earlyStartJavaSampler(SafeIntent intent) {
         String env = intent.getStringExtra("env0");
         for (int i = 1; env != null; i++) {
@@ -1127,10 +1135,10 @@ public abstract class GeckoApp
 
     /**
      * Called when the activity is first created.
-     *
+     * <p/>
      * Here we initialize all of our profile settings, Firefox Health Report,
      * and other one-shot constructions.
-     **/
+     */
     @Override
     public void onCreate(Bundle savedInstanceState) {
         GeckoAppShell.ensureCrashHandling();
@@ -1178,7 +1186,8 @@ public abstract class GeckoApp
         // Workaround for <http://code.google.com/p/android/issues/detail?id=20915>.
         try {
             Class.forName("android.os.AsyncTask");
-        } catch (ClassNotFoundException e) {}
+        } catch (ClassNotFoundException e) {
+        }
 
         MemoryMonitor.getInstance().init(getApplicationContext());
 
@@ -1222,7 +1231,7 @@ public abstract class GeckoApp
         } else {
 
             final String uri = getURIFromIntent(intent);
-Log.d("MTEST", "Gecko loading uri: " + uri);
+            Log.d("MTEST", "Gecko loading uri: " + uri);
             GeckoThread.setArgs(args);
             GeckoThread.setAction(action);
             GeckoThread.setUri(TextUtils.isEmpty(uri) ? null : uri);
@@ -1230,12 +1239,12 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
 
         if (!ACTION_DEBUG.equals(action) &&
                 GeckoThread.checkAndSetLaunchState(GeckoThread.LaunchState.Launching,
-                                                   GeckoThread.LaunchState.Launched)) {
+                        GeckoThread.LaunchState.Launched)) {
             GeckoThread.createAndStart();
 
         } else if (ACTION_DEBUG.equals(action) &&
                 GeckoThread.checkAndSetLaunchState(GeckoThread.LaunchState.Launching,
-                                                   GeckoThread.LaunchState.WaitForDebugger)) {
+                        GeckoThread.LaunchState.WaitForDebugger)) {
             ThreadUtils.getUiHandler().postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -1276,7 +1285,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         mShouldRestore = getSessionRestoreState(savedInstanceState);
         if (mShouldRestore && savedInstanceState != null) {
             boolean wasInBackground =
-                savedInstanceState.getBoolean(SAVED_STATE_IN_BACKGROUND, false);
+                    savedInstanceState.getBoolean(SAVED_STATE_IN_BACKGROUND, false);
 
             // Don't log OOM-kills if only one activity was destroyed. (For example
             // from "Don't keep activities" on ICS)
@@ -1331,11 +1340,11 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
                 }
 
                 mHealthRecorder = GeckoApp.this.createHealthRecorder(GeckoApp.this,
-                                                                     profilePath,
-                                                                     dispatcher,
-                                                                     osLocaleString,
-                                                                     appLocaleString,
-                                                                     previousSession);
+                        profilePath,
+                        dispatcher,
+                        osLocaleString,
+                        appLocaleString,
+                        previousSession);
 
                 final String uiLocale = appLocaleString;
                 ThreadUtils.postToUiThread(new Runnable() {
@@ -1358,13 +1367,13 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
     /**
      * At this point, the resource system and the rest of the browser are
      * aware of the locale.
-     *
+     * <p/>
      * Now we can display strings!
-     *
+     * <p/>
      * You can think of this as being something like a second phase of onCreate,
      * where you can do string-related operations. Use this in place of embedding
      * strings in view XML.
-     *
+     * <p/>
      * By contrast, onConfigurationChanged does some locale operations, but is in
      * response to device changes.
      */
@@ -1406,7 +1415,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             // Pre-ICS devices need the camera surface in a visible layout.
             if (Versions.preICS) {
                 mCameraView = new SurfaceView(this);
-                ((SurfaceView)mCameraView).getHolder().setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+                ((SurfaceView) mCameraView).getHolder().setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
             }
         }
 
@@ -1415,7 +1424,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             layerView.initializeView(EventDispatcher.getInstance());
             mLayerView = layerView;
             GeckoAppShell.sendEventToGecko(GeckoEvent.createObjectEvent(
-                GeckoEvent.ACTION_OBJECT_LAYER_CLIENT, layerView.getLayerClientObject()));
+                    GeckoEvent.ACTION_OBJECT_LAYER_CLIENT, layerView.getLayerClientObject()));
 
             // bind the GeckoEditable instance to the new LayerView
             GeckoAppShell.notifyIMEContext(GeckoEditableListener.IME_STATE_DISABLED, "", "", "");
@@ -1424,7 +1433,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
 
     /**
      * Loads the initial tab at Fennec startup.
-     *
+     * <p/>
      * If Fennec was opened with an external URL, that URL will be loaded.
      * Otherwise, unless there was a session restore, the default URL
      * (about:home) be loaded.
@@ -1460,7 +1469,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         }
 
         final boolean isExternalURL = passedUri != null &&
-                                      !AboutPages.isAboutHome(passedUri);
+                !AboutPages.isAboutHome(passedUri);
         final StartupAction startupAction;
         if (isExternalURL) {
             startupAction = StartupAction.URL;
@@ -1498,13 +1507,6 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Session:Restore", restoreMessage));
         }
 
-
-        // Process temp reading list before we load the tab from the intent
-        if (AppConstants.NIGHTLY_BUILD) {
-            Log.d("MTEST", "Checking reading list INIT");
-
-            processOpenInBackgroundUrls();
-        }
 
         // External URLs should always be loaded regardless of whether Gecko is
         // already running.
@@ -1545,33 +1547,33 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         mAppStateListeners = new LinkedList<GeckoAppShell.AppStateListener>();
 
         //register for events
-        EventDispatcher.getInstance().registerGeckoThreadListener((GeckoEventListener)this,
-            "Gecko:Ready",
-            "Gecko:DelayedStartup",
-            "Accessibility:Event",
-            "NativeApp:IsDebuggable");
+        EventDispatcher.getInstance().registerGeckoThreadListener((GeckoEventListener) this,
+                "Gecko:Ready",
+                "Gecko:DelayedStartup",
+                "Accessibility:Event",
+                "NativeApp:IsDebuggable");
 
-        EventDispatcher.getInstance().registerGeckoThreadListener((NativeEventListener)this,
-            "Accessibility:Ready",
-            "Bookmark:Insert",
-            "Contact:Add",
-            "DOMFullScreen:Start",
-            "DOMFullScreen:Stop",
-            "Image:SetAs",
-            "Locale:Set",
-            "Permissions:Data",
-            "PrivateBrowsing:Data",
-            "Sanitize:ClearHistory",
-            "Session:StatePurged",
-            "Share:Text",
-            "SystemUI:Visibility",
-            "Toast:Show",
-            "ToggleChrome:Focus",
-            "ToggleChrome:Hide",
-            "ToggleChrome:Show",
-            "Update:Check",
-            "Update:Download",
-            "Update:Install");
+        EventDispatcher.getInstance().registerGeckoThreadListener((NativeEventListener) this,
+                "Accessibility:Ready",
+                "Bookmark:Insert",
+                "Contact:Add",
+                "DOMFullScreen:Start",
+                "DOMFullScreen:Stop",
+                "Image:SetAs",
+                "Locale:Set",
+                "Permissions:Data",
+                "PrivateBrowsing:Data",
+                "Sanitize:ClearHistory",
+                "Session:StatePurged",
+                "Share:Text",
+                "SystemUI:Visibility",
+                "Toast:Show",
+                "ToggleChrome:Focus",
+                "ToggleChrome:Hide",
+                "ToggleChrome:Show",
+                "Update:Check",
+                "Update:Download",
+                "Update:Install");
 
         if (mWebappEventListener == null) {
             mWebappEventListener = new EventListener();
@@ -1587,8 +1589,8 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         mPromptService = new PromptService(this);
 
         mTextSelection = new TextSelection((TextSelectionHandle) findViewById(R.id.anchor_handle),
-                                           (TextSelectionHandle) findViewById(R.id.caret_handle),
-                                           (TextSelectionHandle) findViewById(R.id.focus_handle));
+                (TextSelectionHandle) findViewById(R.id.caret_handle),
+                (TextSelectionHandle) findViewById(R.id.focus_handle));
 
         if (ZOOMED_VIEW_ENABLED) {
             ViewStub stub = (ViewStub) findViewById(R.id.zoomed_view_stub);
@@ -1596,7 +1598,8 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         }
 
         PrefsHelper.getPref("app.update.autodownload", new PrefsHelper.PrefHandlerBase() {
-            @Override public void prefValue(String pref, String value) {
+            @Override
+            public void prefValue(String pref, String value) {
                 UpdateServiceHelper.registerForUpdates(GeckoApp.this, value);
             }
         });
@@ -1639,75 +1642,6 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             NotificationHelper.getInstance(getApplicationContext()).handleNotificationIntent(intent);
         }
 
-    }
-
-    private void processOpenInBackgroundUrls() {
-        Log.d("MTEST", "Processing processOpenInBackgroundUrls");
-        final String filename = "open_in_background_url_list.json";
-
-        // Check background load tabs
-        String readingList = null;
-        try {
-            readingList = mProfile.readFile(filename);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        Log.d("MTEST", "reading list - found " + readingList);
-
-        if (!TextUtils.isEmpty(readingList)) {
-            JSONArray jsonArray;
-            try {
-                jsonArray = new JSONArray(readingList);
-
-            } catch (JSONException e) {
-                Log.e("MTEST", "ERROR parsing reading list");
-                jsonArray = null;
-                e.printStackTrace();
-            }
-
-            if (jsonArray != null) {
-                JSONArray dataArray = new JSONArray();
-
-                Log.d("MTEST", "reading list - found " + jsonArray.length());
-
-                JSONObject jsonObject;
-
-                for (int i = 0; i < jsonArray.length(); i++) {
-                    String site;
-                    try {
-                        site = jsonArray.getString(i);
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                        continue;
-                    }
-
-                    if (!TextUtils.isEmpty(site)) {
-                        jsonObject = new JSONObject();
-                        try {
-                            jsonObject.put("url", site);
-                            jsonObject.put("isPrivate", false);
-                            jsonObject.put("desktopMode", false);
-                            dataArray.put(jsonObject);
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                        }
-                    } else {
-                        Log.d("MTEST", " - empty");
-                    }
-                }
-
-                JSONObject data = new JSONObject();
-                try {
-                    data.put("urls", dataArray);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-                GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Tabs:OpenMultiple", data.toString()));
-
-            }
-            Toast.makeText(getContext(), "Found" + jsonArray.length() + " sites", Toast.LENGTH_SHORT).show();
-            mProfile.deleteFile(filename);
-        }
     }
 
     private String restoreSessionTabs(final boolean isExternalURL) throws SessionRestoreException {
@@ -1785,7 +1719,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
      * Determine whether the session should be restored.
      *
      * @param savedInstanceState Saved instance state given to the activity
-     * @return                   Whether to restore
+     * @return Whether to restore
      */
     protected boolean getSessionRestoreState(Bundle savedInstanceState) {
         final SharedPreferences prefs = getSharedPreferences();
@@ -1798,8 +1732,8 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             prefs.edit().putInt(PREFS_VERSION_CODE, versionCode).apply();
             shouldRestore = true;
         } else if (savedInstanceState != null ||
-                   getSessionRestorePreference().equals("always") ||
-                   getRestartFromIntent()) {
+                getSessionRestorePreference().equals("always") ||
+                getRestartFromIntent()) {
             // We're coming back from a background kill by the OS, the user
             // has chosen to always restore, or we restarted.
             shouldRestore = true;
@@ -1827,14 +1761,14 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
         Log.d(LOGTAG, "Enabling Android StrictMode");
 
         StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder()
-                                  .detectAll()
-                                  .penaltyLog()
-                                  .build());
+                .detectAll()
+                .penaltyLog()
+                .build());
 
         StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder()
-                               .detectAll()
-                               .penaltyLog()
-                               .build());
+                .detectAll()
+                .penaltyLog()
+                .build());
     }
 
     @Override
@@ -1844,7 +1778,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             @Override
             public void onOrientationChanged(int orientation) {
                 if (mAppStateListeners != null) {
-                    for (GeckoAppShell.AppStateListener listener: mAppStateListeners) {
+                    for (GeckoAppShell.AppStateListener listener : mAppStateListeners) {
                         listener.onOrientationChanged();
                     }
                 }
@@ -1860,7 +1794,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             ViewGroup mCameraLayout = (ViewGroup) findViewById(R.id.camera_layout);
             // Some phones (eg. nexus S) need at least a 8x16 preview size
             mCameraLayout.addView(mCameraView,
-                                  new AbsoluteLayout.LayoutParams(8, 16, 0, 0));
+                    new AbsoluteLayout.LayoutParams(8, 16, 0, 0));
         }
     }
 
@@ -1871,15 +1805,15 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             mCameraOrientationEventListener = null;
         }
         if (mCameraView != null) {
-          ViewGroup mCameraLayout = (ViewGroup) findViewById(R.id.camera_layout);
-          mCameraLayout.removeView(mCameraView);
+            ViewGroup mCameraLayout = (ViewGroup) findViewById(R.id.camera_layout);
+            mCameraLayout.removeView(mCameraView);
         }
     }
 
     @Override
     public String getDefaultUAString() {
         return HardwareUtils.isTablet() ? AppConstants.USER_AGENT_FENNEC_TABLET :
-                                          AppConstants.USER_AGENT_FENNEC_MOBILE;
+                AppConstants.USER_AGENT_FENNEC_MOBILE;
     }
 
     private void processAlertCallback(SafeIntent intent) {
@@ -1922,18 +1856,10 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             String uri = intent.getDataString();
             Tabs.getInstance().loadUrl(uri);
         } else if (Intent.ACTION_VIEW.equals(action)) {
-
-
-            if (AppConstants.NIGHTLY_BUILD) {
-                Log.d("MTEST", "Checking reading list ON NEW INTENT");
-
-                processOpenInBackgroundUrls();
-            }
-
             String uri = intent.getDataString();
             Tabs.getInstance().loadUrl(uri, Tabs.LOADURL_NEW_TAB |
-                                            Tabs.LOADURL_USER_ENTERED |
-                                            Tabs.LOADURL_EXTERNAL);
+                    Tabs.LOADURL_USER_ENTERED |
+                    Tabs.LOADURL_EXTERNAL);
         } else if (ACTION_HOMESCREEN_SHORTCUT.equals(action)) {
             String uri = getURIFromIntent(intent);
             GeckoAppShell.sendEventToGecko(GeckoEvent.createBookmarkLoadEvent(uri));
@@ -1971,8 +1897,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
     }
 
     @Override
-    public void onResume()
-    {
+    public void onResume() {
         // After an onPause, the activity is back in the foreground.
         // Undo whatever we did in onPause.
         super.onResume();
@@ -2024,11 +1949,6 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             }
         });
 
-        if (AppConstants.NIGHTLY_BUILD) {
-            Log.d("MTEST", "Checking reading list RESUME");
-
-            processOpenInBackgroundUrls();
-        }
     }
 
     @Override
@@ -2042,8 +1962,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
     }
 
     @Override
-    public void onPause()
-    {
+    public void onPause() {
         final HealthRecorder rec = mHealthRecorder;
         final Context context = this;
 
@@ -2103,33 +2022,33 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
 
     @Override
     public void onDestroy() {
-        EventDispatcher.getInstance().unregisterGeckoThreadListener((GeckoEventListener)this,
-            "Gecko:Ready",
-            "Gecko:DelayedStartup",
-            "Accessibility:Event",
-            "NativeApp:IsDebuggable");
+        EventDispatcher.getInstance().unregisterGeckoThreadListener((GeckoEventListener) this,
+                "Gecko:Ready",
+                "Gecko:DelayedStartup",
+                "Accessibility:Event",
+                "NativeApp:IsDebuggable");
 
-        EventDispatcher.getInstance().unregisterGeckoThreadListener((NativeEventListener)this,
-            "Accessibility:Ready",
-            "Bookmark:Insert",
-            "Contact:Add",
-            "DOMFullScreen:Start",
-            "DOMFullScreen:Stop",
-            "Image:SetAs",
-            "Locale:Set",
-            "Permissions:Data",
-            "PrivateBrowsing:Data",
-            "Sanitize:ClearHistory",
-            "Session:StatePurged",
-            "Share:Text",
-            "SystemUI:Visibility",
-            "Toast:Show",
-            "ToggleChrome:Focus",
-            "ToggleChrome:Hide",
-            "ToggleChrome:Show",
-            "Update:Check",
-            "Update:Download",
-            "Update:Install");
+        EventDispatcher.getInstance().unregisterGeckoThreadListener((NativeEventListener) this,
+                "Accessibility:Ready",
+                "Bookmark:Insert",
+                "Contact:Add",
+                "DOMFullScreen:Start",
+                "DOMFullScreen:Stop",
+                "Image:SetAs",
+                "Locale:Set",
+                "Permissions:Data",
+                "PrivateBrowsing:Data",
+                "Sanitize:ClearHistory",
+                "Session:StatePurged",
+                "Share:Text",
+                "SystemUI:Visibility",
+                "Toast:Show",
+                "ToggleChrome:Focus",
+                "ToggleChrome:Hide",
+                "ToggleChrome:Show",
+                "Update:Check",
+                "Update:Download",
+                "Update:Install");
 
         if (mWebappEventListener != null) {
             mWebappEventListener.unregisterEvents();
@@ -2228,14 +2147,14 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
     }
 
     public void addEnvToIntent(Intent intent) {
-        Map<String,String> envMap = System.getenv();
-        Set<Map.Entry<String,String>> envSet = envMap.entrySet();
-        Iterator<Map.Entry<String,String>> envIter = envSet.iterator();
+        Map<String, String> envMap = System.getenv();
+        Set<Map.Entry<String, String>> envSet = envMap.entrySet();
+        Iterator<Map.Entry<String, String>> envIter = envSet.iterator();
         int c = 0;
         while (envIter.hasNext()) {
-            Map.Entry<String,String> entry = envIter.next();
+            Map.Entry<String, String> entry = envIter.next();
             intent.putExtra("env" + c, entry.getKey() + "="
-                            + entry.getValue());
+                    + entry.getValue());
             c++;
         }
     }
@@ -2411,7 +2330,9 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
     }
 
     @Override
-    public AbsoluteLayout getPluginContainer() { return mPluginContainer; }
+    public AbsoluteLayout getPluginContainer() {
+        return mPluginContainer;
+    }
 
     // Accelerometer.
     @Override
@@ -2431,18 +2352,15 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
     }
 
     @Override
-    public void onProviderDisabled(String provider)
-    {
+    public void onProviderDisabled(String provider) {
     }
 
     @Override
-    public void onProviderEnabled(String provider)
-    {
+    public void onProviderEnabled(String provider) {
     }
 
     @Override
-    public void onStatusChanged(String provider, int status, Bundle extras)
-    {
+    public void onStatusChanged(String provider, int status, Bundle extras) {
     }
 
     private static final String CPU = "cpu";
@@ -2456,14 +2374,14 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
 
             if (CPU.equals(topic)) {
-              wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, topic);
+                wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, topic);
             } else if (SCREEN.equals(topic)) {
-              wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, topic);
+                wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, topic);
             }
 
             if (wl != null) {
-              wl.acquire();
-              mWakeLocks.put(topic, wl);
+                wl.acquire();
+                mWakeLocks.put(topic, wl);
             }
         } else if (!state.equals("locked-foreground") && wl != null) {
             wl.release();
@@ -2650,7 +2568,7 @@ Log.d("MTEST", "Gecko loading uri: " + uri);
     /**
      * This exists so that a locale can be applied in two places: when saved
      * in a nested activity, and then again when we get back up to GeckoApp.
-     *
+     * <p/>
      * GeckoApp needs to do a bunch more stuff than, say, GeckoPreferences.
      */
     protected void onLocaleChanged(final String locale) {

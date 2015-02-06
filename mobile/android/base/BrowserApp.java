@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Vector;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.mozilla.gecko.AppConstants.Versions;
@@ -51,6 +52,8 @@ import org.mozilla.gecko.home.HomePager.OnUrlOpenInBackgroundListener;
 import org.mozilla.gecko.home.HomePager.OnUrlOpenListener;
 import org.mozilla.gecko.home.HomePanelsManager;
 import org.mozilla.gecko.home.SearchEngine;
+import org.mozilla.gecko.loadinbackground.LoadInBackgroundPrompt;
+import org.mozilla.gecko.loadinbackground.LoadInBackgroundService;
 import org.mozilla.gecko.menu.GeckoMenu;
 import org.mozilla.gecko.menu.GeckoMenuItem;
 import org.mozilla.gecko.mozglue.ContextUtils;
@@ -162,9 +165,17 @@ public class BrowserApp extends GeckoApp
 
     // Request ID for startActivityForResult.
     private static final int ACTIVITY_REQUEST_PREFERENCES = 1001;
+    private static final int ACTIVITY_REQUEST_OPEN_IN_BACKGROUND = 1002;
+
+
 
     @RobocopTarget
     public static final String EXTRA_SKIP_STARTPANE = "skipstartpane";
+
+    public static final String OPEN_IN_BACKGROUND_LAUNCHES = "external_opens";
+    public static final int OPEN_IN_BACKGROUND_LAUNCHES_BEFORE_PROMPT = 3;
+
+
 
     private BrowserSearch mBrowserSearch;
     private View mBrowserSearchContainer;
@@ -881,6 +892,46 @@ public class BrowserApp extends GeckoApp
         }
     }
 
+// TODO move these in the OIBPrompt class
+
+    /**
+     * Check and show the firstrun pane if the browser has never been launched and
+     * is not opening an external link from another application.
+     */
+    private boolean shouldShowOpenInBackgroundPrompt() {
+        final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
+        try {
+            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
+            boolean showOpenInBackgroundToast = prefs.getBoolean(GeckoPreferences.PREFS_OPEN_IN_BACKGROUND, false);
+            int timesPromptShown = prefs.getInt(LoadInBackgroundPrompt.OPEN_IN_BACKGROUND_PROMPT_TIMES_PROMPT_SHOWN, 0);
+
+            if (showOpenInBackgroundToast || timesPromptShown > LoadInBackgroundPrompt.MAX_TIMES_TO_SHOW) {
+                // exit early if the option is enabled or the user has seen the prompt too many times.
+                Log.d("MTEST", "CHECK: Toast activated - exit");
+                return false;
+            }
+
+            final int timesOpened = prefs.getInt(OPEN_IN_BACKGROUND_LAUNCHES, 0) + 1;
+            Log.d("MTEST", "CHECK: Times opened = " + timesOpened);
+
+            if (timesOpened < OPEN_IN_BACKGROUND_LAUNCHES_BEFORE_PROMPT) {
+                // Allow a few external links to open before we prompt the user
+                prefs.edit().putInt(OPEN_IN_BACKGROUND_LAUNCHES, timesOpened).apply();
+            } else if (timesOpened == OPEN_IN_BACKGROUND_LAUNCHES_BEFORE_PROMPT) {
+                prefs.edit().putInt(OPEN_IN_BACKGROUND_LAUNCHES, OPEN_IN_BACKGROUND_LAUNCHES_BEFORE_PROMPT + 1).apply();
+                return true;
+            }
+        } finally {
+            StrictMode.setThreadPolicy(savedPolicy);
+        }
+        return false;
+    }
+
+    private void showOpenInBackgroundPrompt() {
+        startActivityForResult(new Intent(this, LoadInBackgroundPrompt.class), ACTIVITY_REQUEST_OPEN_IN_BACKGROUND);
+    }
+
+
     private Class<?> getMediaPlayerManager() {
         if (AppConstants.MOZ_MEDIA_PLAYER) {
             try {
@@ -922,6 +973,16 @@ public class BrowserApp extends GeckoApp
     public void onAttachedToWindow() {
         // We can't show the first run experience until Gecko has finished initialization (bug 1077583).
         checkFirstrun(this, new SafeIntent(getIntent()));
+
+
+        // Process temp reading list before we load the tab from the intent
+        if (AppConstants.NIGHTLY_BUILD) {
+            if (shouldProcessOpenInBackgroundQueue()) {
+                Log.d("MTEST", "Checking reading list ONATTACHEDTOWINDOW");
+
+                processOpenInBackgroundUrls();
+            }
+        }
     }
 
     @Override
@@ -942,6 +1003,16 @@ public class BrowserApp extends GeckoApp
 
         EventDispatcher.getInstance().unregisterGeckoThreadListener((GeckoEventListener)this,
             "Prompt:ShowTop");
+
+
+        // Process temp reading list before we load the tab from the intent
+        if (AppConstants.NIGHTLY_BUILD) {
+            if (shouldProcessOpenInBackgroundQueue()) {
+                Log.d("MTEST", "Checking reading list RESUME");
+
+                processOpenInBackgroundUrls();
+            }
+        }
     }
 
     @Override
@@ -1354,35 +1425,6 @@ public class BrowserApp extends GeckoApp
     }
 
 
-
-    private void processReadingList() {
-        // Check background load tabs
-        Log.d("MTEST", "Checking reading list");
-        String readingList = null;
-        try {
-            readingList = mProfile.readFile("temp_reading_list.json");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        if(!TextUtils.isEmpty(readingList)) {
-            String[] sites = TextUtils.split(readingList, "\n");
-            Log.d("MTEST", "reading list - found " + sites.length);
-
-            final Tabs tabs = Tabs.getInstance();
-            String site;
-            for (int i = sites.length - 1; i >= 0; i--) {
-                site = sites[i];
-                if(!TextUtils.isEmpty(site)) {
-                    Log.d("MTEST", " - " + site);
-                    tabs.loadUrl(site);
-                } else {
-                    Log.d("MTEST", " - empty");
-                }
-            }
-            Toast.makeText(getContext(), "Found" + sites.length + " sites", Toast.LENGTH_SHORT).show();
-            mProfile.deleteFile("temp_reading_list.json");
-        }
-    }
 
     private void shareCurrentUrl() {
         Tab tab = Tabs.getInstance().getSelectedTab();
@@ -2420,6 +2462,26 @@ public class BrowserApp extends GeckoApp
                     }
                 });
                 break;
+            case ACTIVITY_REQUEST_OPEN_IN_BACKGROUND:
+                if (resultCode == LoadInBackgroundPrompt.LOAD_IN_BACKGROUND_TRY_IT) {
+                    Log.d("MTEST", "RESULT: TRY IT!");
+                    moveTaskToBack(true);
+                } else if (resultCode == LoadInBackgroundPrompt.LOAD_IN_BACKGROUND_CANCEL) {
+                    Log.d("MTEST", "RESULT: CANCEL!");
+
+                    final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
+                    try {
+                        final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
+                        prefs.edit().putInt(OPEN_IN_BACKGROUND_LAUNCHES, 0).apply();
+                        int OpenInBackgroundPromptTimesShown = prefs.getInt(LoadInBackgroundPrompt.OPEN_IN_BACKGROUND_PROMPT_TIMES_PROMPT_SHOWN, 0) + 1;
+                        prefs.edit().putInt(LoadInBackgroundPrompt.OPEN_IN_BACKGROUND_PROMPT_TIMES_PROMPT_SHOWN, OpenInBackgroundPromptTimesShown).apply();
+                    } finally {
+                        StrictMode.setThreadPolicy(savedPolicy);
+                    }
+                } else {
+                    Log.d("MTEST", "RESULT: OTHER");
+
+                }
             default:
                 super.onActivityResult(requestCode, resultCode, data);
         }
@@ -3323,6 +3385,7 @@ public class BrowserApp extends GeckoApp
     @Override
     protected void onNewIntent(Intent intent) {
         String action = intent.getAction();
+        Log.d("MTEST", "ON NEW INTENT " + action);
 
         final boolean isViewAction = Intent.ACTION_VIEW.equals(action);
         final boolean isBookmarkAction = GeckoApp.ACTION_HOMESCREEN_SHORTCUT.equals(action);
@@ -3337,6 +3400,22 @@ public class BrowserApp extends GeckoApp
                 (isViewAction ? TelemetryContract.Method.INTENT : TelemetryContract.Method.HOMESCREEN);
 
             Telemetry.sendUIEvent(TelemetryContract.Event.LOAD_URL, method);
+        }
+
+        if (mInitialized && isViewAction) {
+            // Process temp reading list before we load the tab from the intent
+            if (AppConstants.NIGHTLY_BUILD) {
+                // TODO split out should check and show
+                if (shouldShowOpenInBackgroundPrompt()) {
+                    showOpenInBackgroundPrompt();
+                } else {
+                    if (shouldProcessOpenInBackgroundQueue()) {
+                        Log.d("MTEST", "Checking reading list ON NEW INTENT");
+
+                        processOpenInBackgroundUrls();
+                    }
+                }
+            }
         }
 
         super.onNewIntent(intent);
@@ -3377,6 +3456,112 @@ public class BrowserApp extends GeckoApp
             StrictMode.setThreadPolicy(savedPolicy);
         }
     }
+
+
+    private boolean shouldProcessOpenInBackgroundQueue() {
+        final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
+        try {
+            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
+            boolean showOpenInBackgroundToast = prefs.getBoolean(GeckoPreferences.PREFS_OPEN_IN_BACKGROUND, false);
+
+            return showOpenInBackgroundToast;
+
+        } finally {
+            StrictMode.setThreadPolicy(savedPolicy);
+        }
+    }
+
+    private int getOpenInBackgroundUrlCount() {
+        final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
+        try {
+            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
+            return prefs.getInt(LoadInBackgroundService.OPEN_IN_BACKGROUND_COUNT, 0);
+
+
+        } finally {
+            StrictMode.setThreadPolicy(savedPolicy);
+        }
+    }
+
+    private void processOpenInBackgroundUrls() {
+        if(getOpenInBackgroundUrlCount() < 1)  {
+            return;
+        }
+        Log.d("MTEST", "Processing processOpenInBackgroundUrls");
+        final String filename = "open_in_background_url_list.json";
+
+        // Check background load tabs
+        String readingList = null;
+        try {
+            readingList = mProfile.readFile(filename);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        Log.d("MTEST", "reading list - found " + readingList);
+
+        if (!TextUtils.isEmpty(readingList)) {
+            JSONArray jsonArray;
+            try {
+                jsonArray = new JSONArray(readingList);
+
+            } catch (JSONException e) {
+                Log.e("MTEST", "ERROR parsing reading list");
+                jsonArray = null;
+                e.printStackTrace();
+            }
+
+            if (jsonArray != null) {
+                JSONArray dataArray = new JSONArray();
+
+                Log.d("MTEST", "reading list - found " + jsonArray.length());
+
+                JSONObject jsonObject;
+
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    String site;
+                    try {
+                        site = jsonArray.getString(i);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                        continue;
+                    }
+
+                    if (!TextUtils.isEmpty(site)) {
+                        jsonObject = new JSONObject();
+                        try {
+                            jsonObject.put("url", site);
+                            jsonObject.put("isPrivate", false);
+                            jsonObject.put("desktopMode", false);
+                            dataArray.put(jsonObject);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    } else {
+                        Log.d("MTEST", " - empty");
+                    }
+                }
+
+                JSONObject data = new JSONObject();
+                try {
+                    data.put("urls", dataArray);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Tabs:OpenMultiple", data.toString()));
+
+            }
+            Toast.makeText(getContext(), "Found" + jsonArray.length() + " sites", Toast.LENGTH_SHORT).show();
+            mProfile.deleteFile(filename);
+            final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
+            try {
+                final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
+                prefs.edit().putInt(LoadInBackgroundService.OPEN_IN_BACKGROUND_COUNT, 0).apply();
+            } finally {
+                StrictMode.setThreadPolicy(savedPolicy);
+            }
+        }
+    }
+
 
     @Override
     protected NotificationClient makeNotificationClient() {
