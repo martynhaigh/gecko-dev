@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Vector;
 
+import android.app.NotificationManager;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -52,6 +53,7 @@ import org.mozilla.gecko.home.HomePager.OnUrlOpenInBackgroundListener;
 import org.mozilla.gecko.home.HomePager.OnUrlOpenListener;
 import org.mozilla.gecko.home.HomePanelsManager;
 import org.mozilla.gecko.home.SearchEngine;
+import org.mozilla.gecko.loadinbackground.LoadInBackground;
 import org.mozilla.gecko.loadinbackground.LoadInBackgroundPrompt;
 import org.mozilla.gecko.loadinbackground.LoadInBackgroundService;
 import org.mozilla.gecko.menu.GeckoMenu;
@@ -3389,6 +3391,7 @@ public class BrowserApp extends GeckoApp
 
         final boolean isViewAction = Intent.ACTION_VIEW.equals(action);
         final boolean isBookmarkAction = GeckoApp.ACTION_HOMESCREEN_SHORTCUT.equals(action);
+        final boolean openLoadInBackgroundUrls = LoadInBackground.LOAD_URLS.equals(action);
 
         if (mInitialized && (isViewAction || isBookmarkAction)) {
             // Dismiss editing mode if the user is loading a URL from an external app.
@@ -3429,7 +3432,12 @@ public class BrowserApp extends GeckoApp
         if (GuestSession.NOTIFICATION_INTENT.equals(action)) {
             GuestSession.handleIntent(this, intent);
         }
-
+        if(openLoadInBackgroundUrls) {
+            NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            mNotificationManager.cancel(LoadInBackgroundService.OPEN_IN_BACKGROUND_NOTIFICATION_ID);
+            processOpenInBackgroundUrls();
+            showNormalTabs();
+        }
         if (!mInitialized || !Intent.ACTION_MAIN.equals(action)) {
             return;
         }
@@ -3455,6 +3463,8 @@ public class BrowserApp extends GeckoApp
         } finally {
             StrictMode.setThreadPolicy(savedPolicy);
         }
+
+
     }
 
 

@@ -25,6 +25,7 @@ import android.widget.Toast;
 
 public class LoadInBackground extends Locales.LocaleAwareActivity {
     private static final String LOGTAG = "LoadInBackground";
+    public static final String LOAD_URLS = "LOAD_IN_BACKGROUND_LOAD_URLS";
 
     private SharedPreferences prefs;
 

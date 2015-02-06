@@ -5,12 +5,10 @@ import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.GeckoSharedPrefs;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.mozglue.ContextUtils;
-import org.mozilla.gecko.preferences.GeckoPreferences;
 
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -19,7 +17,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.StrictMode;
 import android.support.v4.app.NotificationCompat;
-import android.support.v4.app.TaskStackBuilder;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -37,7 +34,7 @@ import java.util.regex.Pattern;
 
 public class LoadInBackgroundService extends Service {
 
-    private static final int NOTIFICATION_ID = 783;
+    public static final int OPEN_IN_BACKGROUND_NOTIFICATION_ID = 783;
     public static final String OPEN_IN_BACKGROUND_COUNT = "open_in_background_count";
     private WindowManager windowManager;
     private View layout;
@@ -238,13 +235,14 @@ public class LoadInBackgroundService extends Service {
 
         // Creates an explicit intent for an Activity in your app
         Intent resultIntent = new Intent(this, BrowserApp.class);
+        resultIntent.setAction(LoadInBackground.LOAD_URLS);
 
 
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, NOTIFICATION_ID, resultIntent, PendingIntent.FLAG_CANCEL_CURRENT);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, OPEN_IN_BACKGROUND_NOTIFICATION_ID, resultIntent, PendingIntent.FLAG_CANCEL_CURRENT);
         mBuilder.setContentIntent(pendingIntent);
         NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
-        mNotificationManager.notify(NOTIFICATION_ID, mBuilder.build());
+        mNotificationManager.notify(OPEN_IN_BACKGROUND_NOTIFICATION_ID, mBuilder.build());
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
             final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
