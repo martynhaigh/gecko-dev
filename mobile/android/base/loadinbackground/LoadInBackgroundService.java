@@ -5,6 +5,7 @@ import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.GeckoSharedPrefs;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.mozglue.ContextUtils;
+import org.mozilla.gecko.util.StringUtils;
 
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -155,7 +156,6 @@ public class LoadInBackgroundService extends Service {
 
     private void addUrlToList(Intent intentParam) {
         if (intentParam == null) {
-            Log.d("MTEST", "No intent params - quitting");
             return;
         }
         final ContextUtils.SafeIntent intent = new ContextUtils.SafeIntent(intentParam);
