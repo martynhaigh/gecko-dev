@@ -75,8 +75,8 @@ JSObject::setSingleton(js::ExclusiveContext *cx, js::HandleObject obj)
 {
     MOZ_ASSERT_IF(cx->isJSContext(), !IsInsideNursery(obj));
 
-    js::types::ObjectGroup *group = cx->getLazySingletonGroup(obj->getClass(),
-                                                              obj->getTaggedProto());
+    js::ObjectGroup *group = js::ObjectGroup::lazySingletonGroup(cx, obj->getClass(),
+                                                                 obj->getTaggedProto());
     if (!group)
         return false;
 
@@ -84,7 +84,7 @@ JSObject::setSingleton(js::ExclusiveContext *cx, js::HandleObject obj)
     return true;
 }
 
-inline js::types::ObjectGroup*
+inline js::ObjectGroup*
 JSObject::getGroup(JSContext *cx)
 {
     MOZ_ASSERT(cx->compartment() == compartment());
@@ -98,7 +98,7 @@ JSObject::getGroup(JSContext *cx)
 }
 
 inline void
-JSObject::setGroup(js::types::ObjectGroup *group)
+JSObject::setGroup(js::ObjectGroup *group)
 {
     MOZ_ASSERT(group);
     MOZ_ASSERT(!isSingleton());
@@ -157,9 +157,6 @@ inline bool
 js::GetElement(JSContext *cx, HandleObject obj, HandleObject receiver, uint32_t index,
                MutableHandleValue vp)
 {
-    if (ElementIdOp op = obj->getOps()->getElement)
-        return op(cx, obj, receiver, index, vp);
-
     RootedId id(cx);
     if (!IndexToId(cx, index, &id))
         return false;
@@ -169,7 +166,7 @@ js::GetElement(JSContext *cx, HandleObject obj, HandleObject receiver, uint32_t 
 inline bool
 js::GetElementNoGC(JSContext *cx, JSObject *obj, JSObject *receiver, uint32_t index, Value *vp)
 {
-    if (obj->getOps()->getElement)
+    if (obj->getOps()->getProperty)
         return false;
 
     if (index > JSID_INT_MAX)
@@ -180,8 +177,8 @@ js::GetElementNoGC(JSContext *cx, JSObject *obj, JSObject *receiver, uint32_t in
 inline bool
 js::DeleteProperty(JSContext *cx, HandleObject obj, HandleId id, bool *succeeded)
 {
-    types::MarkTypePropertyNonData(cx, obj, id);
-    if (DeleteGenericOp op = obj->getOps()->deleteGeneric)
+    MarkTypePropertyNonData(cx, obj, id);
+    if (DeletePropertyOp op = obj->getOps()->deleteProperty)
         return op(cx, obj, id, succeeded);
     return NativeDeleteProperty(cx, obj.as<NativeObject>(), id, succeeded);
 }
@@ -201,8 +198,8 @@ js::DeleteElement(JSContext *cx, HandleObject obj, uint32_t index, bool *succeed
 inline bool
 js::SetPropertyAttributes(JSContext *cx, HandleObject obj, HandleId id, unsigned *attrsp)
 {
-    types::MarkTypePropertyNonData(cx, obj, id);
-    GenericAttributesOp op = obj->getOps()->setGenericAttributes;
+    MarkTypePropertyNonData(cx, obj, id);
+    SetAttributesOp op = obj->getOps()->setAttributes;
     if (op)
         return op(cx, obj, id, attrsp);
     return NativeSetPropertyAttributes(cx, obj.as<NativeObject>(), id, attrsp);
@@ -761,7 +758,7 @@ NewObjectMetadata(ExclusiveContext *cxArg, JSObject **pmetadata)
         {
             // Use AutoEnterAnalysis to prohibit both any GC activity under the
             // callback, and any reentering of JS via Invoke() etc.
-            types::AutoEnterAnalysis enter(cx);
+            AutoEnterAnalysis enter(cx);
 
             if (!cx->compartment()->callObjectMetadataCallback(cx, pmetadata))
                 return false;

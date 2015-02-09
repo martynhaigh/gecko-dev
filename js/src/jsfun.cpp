@@ -49,7 +49,6 @@
 
 using namespace js;
 using namespace js::gc;
-using namespace js::types;
 using namespace js::frontend;
 
 using mozilla::ArrayLength;
@@ -873,7 +872,7 @@ CreateFunctionPrototype(JSContext *cx, JSProtoKey key)
         return nullptr;
 
     functionProto->initScript(script);
-    types::ObjectGroup* protoGroup = functionProto->getGroup(cx);
+    ObjectGroup* protoGroup = functionProto->getGroup(cx);
     if (!protoGroup)
         return nullptr;
 
@@ -1481,11 +1480,11 @@ JSFunction::createScriptForLazilyInterpretedFunction(JSContext *cx, HandleFuncti
             return true;
         }
 
-        MOZ_ASSERT(lazy->source()->hasSourceData());
+        MOZ_ASSERT(lazy->scriptSource()->hasSourceData());
 
         // Parse and compile the script from source.
         UncompressedSourceCache::AutoHoldEntry holder;
-        const char16_t *chars = lazy->source()->chars(cx, holder);
+        const char16_t *chars = lazy->scriptSource()->chars(cx, holder);
         if (!chars)
             return false;
 
@@ -2037,7 +2036,7 @@ js::CloneFunctionObjectUseSameScript(JSCompartment *compartment, HandleFunction 
 {
     return compartment == fun->compartment() &&
            !fun->isSingleton() &&
-           !types::UseSingletonForClone(fun);
+           !ObjectGroup::useSingletonForClone(fun);
 }
 
 JSFunction *

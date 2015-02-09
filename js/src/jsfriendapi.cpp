@@ -64,14 +64,6 @@ js::ForgetSourceHook(JSRuntime *rt)
     return Move(rt->sourceHook);
 }
 
-#ifdef NIGHTLY_BUILD
-JS_FRIEND_API(void)
-js::SetAssertOnScriptEntryHook(JSRuntime *rt, AssertOnScriptEntryHook hook)
-{
-    rt->assertOnScriptEntryHook_ = hook;
-}
-#endif
-
 JS_FRIEND_API(void)
 JS_SetGrayGCRootsTracer(JSRuntime *rt, JSTraceDataOp traceOp, void *data)
 {
@@ -707,7 +699,7 @@ FormatFrame(JSContext *cx, const ScriptFrameIter &iter, char *buf, int num,
     RootedFunction fun(cx, iter.maybeCallee(cx));
     RootedString funname(cx);
     if (fun)
-        funname = fun->atom();
+        funname = fun->displayAtom();
 
     RootedValue thisVal(cx);
     if (iter.hasUsableAbstractFramePtr() && iter.computeThis(cx)) {

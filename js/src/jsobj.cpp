@@ -67,7 +67,6 @@
 
 using namespace js;
 using namespace js::gc;
-using namespace js::types;
 
 using mozilla::DebugOnly;
 using mozilla::Maybe;
@@ -538,7 +537,7 @@ DefinePropertyOnObject(JSContext *cx, HandleNativeObject obj, HandleId id, const
 {
     /* 8.12.9 step 1. */
     RootedShape shape(cx);
-    MOZ_ASSERT(!obj->getOps()->lookupGeneric);
+    MOZ_ASSERT(!obj->getOps()->lookupProperty);
     if (!NativeLookupOwnProperty<CanGC>(cx, obj, id, &shape))
         return false;
 
@@ -962,7 +961,7 @@ js::StandardDefineProperty(JSContext *cx, HandleObject obj, HandleId id, const P
     if (obj->is<UnboxedPlainObject>() && !obj->as<UnboxedPlainObject>().convertToNative(cx))
         return false;
 
-    if (obj->getOps()->lookupGeneric) {
+    if (obj->getOps()->lookupProperty) {
         if (obj->is<ProxyObject>()) {
             Rooted<PropertyDescriptor> pd(cx);
             desc.populatePropertyDescriptor(obj, &pd);
@@ -1014,63 +1013,14 @@ js::DefineProperties(JSContext *cx, HandleObject obj, HandleObject props)
     if (!ReadPropertyDescriptors(cx, props, true, &ids, &descs))
         return false;
 
-    if (obj->is<ArrayObject>()) {
-        bool dummy;
-        Rooted<ArrayObject*> arr(cx, &obj->as<ArrayObject>());
-        for (size_t i = 0, len = ids.length(); i < len; i++) {
-            if (!DefinePropertyOnArray(cx, arr, ids[i], descs[i], true, &dummy))
-                return false;
-        }
-        return true;
-    }
-
-    if (IsAnyTypedArray(obj)) {
-        bool dummy;
-        for (size_t i = 0, len = ids.length(); i < len; i++) {
-            if (!DefinePropertyOnTypedArray(cx, obj, ids[i], descs[i], true, &dummy))
-                return false;
-        }
-        return true;
-    }
-
-    if (obj->is<UnboxedPlainObject>() && !obj->as<UnboxedPlainObject>().convertToNative(cx))
-        return false;
-
-    if (obj->getOps()->lookupGeneric) {
-        if (obj->is<ProxyObject>()) {
-            Rooted<PropertyDescriptor> pd(cx);
-            for (size_t i = 0, len = ids.length(); i < len; i++) {
-                descs[i].populatePropertyDescriptor(obj, &pd);
-                if (!Proxy::defineProperty(cx, obj, ids[i], &pd))
-                    return false;
-            }
-            return true;
-        }
-        bool dummy;
-        return Reject(cx, obj, JSMSG_OBJECT_NOT_EXTENSIBLE, true, &dummy);
-    }
-
     bool dummy;
     for (size_t i = 0, len = ids.length(); i < len; i++) {
-        if (!DefinePropertyOnObject(cx, obj.as<NativeObject>(), ids[i], descs[i], true, &dummy))
+        if (!StandardDefineProperty(cx, obj, ids[i], descs[i], true, &dummy))
             return false;
     }
 
     return true;
 }
-
-js::types::ObjectGroup*
-JSObject::uninlinedGetGroup(JSContext *cx)
-{
-    return getGroup(cx);
-}
-
-void
-JSObject::uninlinedSetGroup(js::types::ObjectGroup *group)
-{
-    setGroup(group);
-}
-
 
 /*** Seal and freeze *****************************************************************************/
 
@@ -1175,7 +1125,7 @@ js::SetIntegrityLevel(JSContext *cx, HandleObject obj, IntegrityLevel level)
 
     // Ordinarily ArraySetLength handles this, but we're going behind its back
     // right now, so we must do this manually.  Neither the custom property
-    // tree mutations nor the setGenericAttributes call in the above code will
+    // tree mutations nor the setPropertyAttributes call in the above code will
     // do this for us.
     //
     // ArraySetLength also implements the capacity <= length invariant for
@@ -1221,22 +1171,21 @@ js::TestIntegrityLevel(JSContext *cx, HandleObject obj, IntegrityLevel level, bo
     if (!GetPropertyKeys(cx, obj, JSITER_HIDDEN | JSITER_OWNONLY | JSITER_SYMBOLS, &props))
         return false;
 
-    // Steps 9-11. The spec does not permit stopping as soon as we find out the
-    // answer is false, so we are cheating a little here (bug 1120512).
+    // Step 11.
     RootedId id(cx);
     Rooted<PropertyDescriptor> desc(cx);
     for (size_t i = 0, len = props.length(); i < len; i++) {
         id = props[i];
 
+        // Steps 11.a-b.
         if (!GetOwnPropertyDescriptor(cx, obj, id, &desc))
             return false;
 
+        // Step 11.c.
         if (!desc.object())
             continue;
 
-        // If the property is configurable, this object is neither sealed nor
-        // frozen. If the property is a writable data property, this object is
-        // not frozen.
+        // Steps 11.c.i-ii.
         if (!desc.isPermanent() ||
             (level == IntegrityLevel::Frozen && desc.isDataDescriptor() && desc.isWritable()))
         {
@@ -1245,7 +1194,7 @@ js::TestIntegrityLevel(JSContext *cx, HandleObject obj, IntegrityLevel level, bo
         }
     }
 
-    // All properties checked out. This object is sealed/frozen.
+    // Step 12.
     *result = true;
     return true;
 }
@@ -1268,7 +1217,7 @@ NewObjectGCKind(const js::Class *clasp)
 }
 
 static inline JSObject *
-NewObject(ExclusiveContext *cx, types::ObjectGroup *groupArg, JSObject *parent, gc::AllocKind kind,
+NewObject(ExclusiveContext *cx, ObjectGroup *groupArg, JSObject *parent, gc::AllocKind kind,
           NewObjectKind newKind)
 {
     const Class *clasp = groupArg->clasp();
@@ -1367,7 +1316,7 @@ js::NewObjectWithGivenProto(ExclusiveContext *cxArg, const js::Class *clasp,
     Rooted<TaggedProto> proto(cxArg, protoArg);
     RootedObject parent(cxArg, parentArg);
 
-    types::ObjectGroup *group = cxArg->getNewGroup(clasp, proto, nullptr);
+    ObjectGroup *group = ObjectGroup::defaultNewGroup(cxArg, clasp, proto, nullptr);
     if (!group)
         return nullptr;
 
@@ -1438,7 +1387,7 @@ FindClassPrototype(ExclusiveContext *cx, MutableHandleObject protop, const Class
         if (shape->hasSlot()) {
             RootedValue v(cx, pobj->as<NativeObject>().getSlot(shape->slot()));
             if (v.isObject())
-                ctor.set(&v.toObject());
+                ctor = &v.toObject();
         }
     }
 
@@ -1549,7 +1498,7 @@ js::NewObjectWithClassProtoCommon(ExclusiveContext *cxArg,
         return nullptr;
 
     Rooted<TaggedProto> taggedProto(cxArg, TaggedProto(proto));
-    types::ObjectGroup *group = cxArg->getNewGroup(clasp, taggedProto);
+    ObjectGroup *group = ObjectGroup::defaultNewGroup(cxArg, clasp, taggedProto);
     if (!group)
         return nullptr;
 
@@ -1618,16 +1567,16 @@ js::NewObjectScriptedCall(JSContext *cx, MutableHandleObject pobj)
     jsbytecode *pc;
     RootedScript script(cx, cx->currentScript(&pc));
     gc::AllocKind allocKind = NewObjectGCKind(&PlainObject::class_);
-    NewObjectKind newKind = script
-                            ? UseSingletonForInitializer(script, pc, &PlainObject::class_)
-                            : GenericObject;
+    NewObjectKind newKind = GenericObject;
+    if (script && ObjectGroup::useSingletonForAllocationSite(script, pc, &PlainObject::class_))
+        newKind = SingletonObject;
     RootedObject obj(cx, NewBuiltinClassInstance<PlainObject>(cx, allocKind, newKind));
     if (!obj)
         return false;
 
     if (script) {
         /* Try to specialize the group of the object to the scripted call site. */
-        if (!types::SetInitializerObjectGroup(cx, script, pc, obj, newKind))
+        if (!ObjectGroup::setAllocationSiteObjectGroup(cx, script, pc, obj, newKind == SingletonObject))
             return false;
     }
 
@@ -1655,7 +1604,7 @@ CreateThisForFunctionWithGroup(JSContext *cx, HandleObjectGroup group, JSObject 
     if (group->maybeUnboxedLayout() && newKind != SingletonObject)
         return UnboxedPlainObject::create(cx, group, newKind);
 
-    if (types::TypeNewScript *newScript = group->newScript()) {
+    if (TypeNewScript *newScript = group->newScript()) {
         if (newScript->analyzed()) {
             // The definite properties analysis has been performed for this
             // group, so get the shape and finalize kind to use from the
@@ -1707,8 +1656,8 @@ js::CreateThisForFunctionWithProto(JSContext *cx, HandleObject callee, JSObject 
     RootedObject res(cx);
 
     if (proto) {
-        RootedObjectGroup group(cx, cx->getNewGroup(nullptr, TaggedProto(proto),
-                                                    &callee->as<JSFunction>()));
+        RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, nullptr, TaggedProto(proto),
+                                                                 &callee->as<JSFunction>()));
         if (!group)
             return nullptr;
 
@@ -1719,8 +1668,8 @@ js::CreateThisForFunctionWithProto(JSContext *cx, HandleObject callee, JSObject 
             if (regenerate) {
                 // The script was analyzed successfully and may have changed
                 // the new type table, so refetch the group.
-                group = cx->getNewGroup(nullptr, TaggedProto(proto),
-                                        &callee->as<JSFunction>());
+                group = ObjectGroup::defaultNewGroup(cx, nullptr, TaggedProto(proto),
+                                                     &callee->as<JSFunction>());
                 MOZ_ASSERT(group && group->newScript());
             }
         }
@@ -1735,7 +1684,7 @@ js::CreateThisForFunctionWithProto(JSContext *cx, HandleObject callee, JSObject 
         JSScript *script = callee->as<JSFunction>().getOrCreateScript(cx);
         if (!script)
             return nullptr;
-        TypeScript::SetThis(cx, script, types::Type::ObjectType(res));
+        TypeScript::SetThis(cx, script, TypeSet::ObjectType(res));
     }
 
     return res;
@@ -1761,7 +1710,7 @@ js::CreateThisForFunction(JSContext *cx, HandleObject callee, NewObjectKind newK
         NativeObject::clear(cx, nobj);
 
         JSScript *calleeScript = callee->as<JSFunction>().nonLazyScript();
-        TypeScript::SetThis(cx, calleeScript, types::Type::ObjectType(nobj));
+        TypeScript::SetThis(cx, calleeScript, TypeSet::ObjectType(nobj));
 
         return nobj;
     }
@@ -1780,34 +1729,22 @@ JSObject::nonNativeSetProperty(JSContext *cx, HandleObject obj, HandleObject rec
     }
     if (obj->is<ProxyObject>())
         return Proxy::set(cx, obj, receiver, id, strict, vp);
-    return obj->getOps()->setGeneric(cx, obj, id, vp, strict);
+    return obj->getOps()->setProperty(cx, obj, id, vp, strict);
 }
 
 /* static */ bool
 JSObject::nonNativeSetElement(JSContext *cx, HandleObject obj, HandleObject receiver,
                               uint32_t index, MutableHandleValue vp, bool strict)
 {
-    if (MOZ_UNLIKELY(obj->watched())) {
-        RootedId id(cx);
-        if (!IndexToId(cx, index, &id))
-            return false;
-
-        WatchpointMap *wpmap = cx->compartment()->watchpointMap;
-        if (wpmap && !wpmap->triggerWatchpoint(cx, obj, id, vp))
-            return false;
-    }
-    if (obj->is<ProxyObject>()) {
-        RootedId id(cx);
-        return IndexToId(cx, index, &id) &&
-               Proxy::set(cx, obj, receiver, id, strict, vp);
-    }
-    return obj->getOps()->setElement(cx, obj, index, vp, strict);
+    RootedId id(cx);
+    if (!IndexToId(cx, index, &id))
+        return false;
+    return nonNativeSetProperty(cx, obj, receiver, id, vp, strict);
 }
 
 JS_FRIEND_API(bool)
 JS_CopyPropertyFrom(JSContext *cx, HandleId id, HandleObject target,
-                    HandleObject obj,
-                    PropertyCopyBehavior copyBehavior)
+                    HandleObject obj, PropertyCopyBehavior copyBehavior)
 {
     // |obj| and |cx| are generally not same-compartment with |target| here.
     assertSameCompartment(cx, obj, id);
@@ -1992,9 +1929,9 @@ js::DeepCloneObjectLiteral(JSContext *cx, HandleNativeObject obj, NewObjectKind 
         if (!JSObject::setSingleton(cx, clone))
             return nullptr;
     } else if (obj->is<ArrayObject>()) {
-        FixArrayGroup(cx, &clone->as<ArrayObject>());
+        ObjectGroup::fixArrayGroup(cx, &clone->as<ArrayObject>());
     } else {
-        FixObjectGroup(cx, &clone->as<PlainObject>());
+        ObjectGroup::fixPlainObjectGroup(cx, &clone->as<PlainObject>());
     }
 
     if (obj->is<ArrayObject>() && obj->denseElementsAreCopyOnWrite()) {
@@ -2202,9 +2139,9 @@ js::XDRObjectLiteral(XDRState<mode> *xdr, MutableHandleNativeObject obj)
             if (!JSObject::setSingleton(cx, obj))
                 return false;
         } else if (isArray) {
-            FixArrayGroup(cx, &obj->as<ArrayObject>());
+            ObjectGroup::fixArrayGroup(cx, &obj->as<ArrayObject>());
         } else {
-            FixObjectGroup(cx, &obj->as<PlainObject>());
+            ObjectGroup::fixPlainObjectGroup(cx, &obj->as<PlainObject>());
         }
     }
 
@@ -2255,7 +2192,8 @@ js::CloneObjectLiteral(JSContext *cx, HandleObject parent, HandleObject srcObj)
         JSObject *proto = cx->global()->getOrCreateObjectPrototype(cx);
         if (!proto)
             return nullptr;
-        RootedObjectGroup group(cx, cx->getNewGroup(&PlainObject::class_, TaggedProto(proto)));
+        RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &PlainObject::class_,
+                                                                 TaggedProto(proto)));
         if (!group)
             return nullptr;
 
@@ -2760,7 +2698,7 @@ js::SetClassAndProto(JSContext *cx, HandleObject obj,
             return false;
     }
 
-    ObjectGroup *group = cx->getNewGroup(clasp, proto);
+    ObjectGroup *group = ObjectGroup::defaultNewGroup(cx, clasp, proto);
     if (!group)
         return false;
 
@@ -2925,11 +2863,11 @@ bool
 js::LookupProperty(JSContext *cx, HandleObject obj, js::HandleId id,
                    MutableHandleObject objp, MutableHandleShape propp)
 {
-    /* NB: The logic of lookupGeneric is implicitly reflected in
+    /* NB: The logic of lookupProperty is implicitly reflected in
      *     BaselineIC.cpp's |EffectlesslyLookupProperty| logic.
      *     If this changes, please remember to update the logic there as well.
      */
-    if (LookupGenericOp op = obj->getOps()->lookupGeneric)
+    if (LookupPropertyOp op = obj->getOps()->lookupProperty)
         return op(cx, obj, id, objp, propp);
     return NativeLookupProperty<CanGC>(cx, obj.as<NativeObject>(), id, objp, propp);
 }
@@ -2964,7 +2902,7 @@ js::LookupNameNoGC(JSContext *cx, PropertyName *name, JSObject *scopeChain,
     MOZ_ASSERT(!*objp && !*pobjp && !*propp);
 
     for (JSObject *scope = scopeChain; scope; scope = scope->enclosingScope()) {
-        if (scope->getOps()->lookupGeneric)
+        if (scope->getOps()->lookupProperty)
             return false;
         if (!LookupPropertyInline<NoGC>(cx, &scope->as<NativeObject>(), NameToId(name), pobjp, propp))
             return false;
@@ -3301,7 +3239,7 @@ js::DefineProperty(ExclusiveContext *cx, HandleObject obj, HandleId id, HandleVa
     MOZ_ASSERT(setter != JS_StrictPropertyStub);
     MOZ_ASSERT(!(attrs & JSPROP_PROPOP_ACCESSORS));
 
-    DefineGenericOp op = obj->getOps()->defineGeneric;
+    DefinePropertyOp op = obj->getOps()->defineProperty;
     if (op) {
         if (!cx->shouldBeJSContext())
             return false;
@@ -3326,13 +3264,10 @@ js::DefineElement(ExclusiveContext *cx, HandleObject obj, uint32_t index, Handle
     MOZ_ASSERT(getter != JS_PropertyStub);
     MOZ_ASSERT(setter != JS_StrictPropertyStub);
 
-    DefineElementOp op = obj->getOps()->defineElement;
-    if (op) {
-        if (!cx->shouldBeJSContext())
-            return false;
-        return op(cx->asJSContext(), obj, index, value, getter, setter, attrs);
-    }
-    return NativeDefineElement(cx, obj.as<NativeObject>(), index, value, getter, setter, attrs);
+    RootedId id(cx);
+    if (!IndexToId(cx, index, &id))
+        return false;
+    return DefineProperty(cx, obj, id, value, getter, setter, attrs);
 }
 
 
@@ -3350,6 +3285,30 @@ js::SetImmutablePrototype(ExclusiveContext *cx, HandleObject obj, bool *succeede
     if (!obj->setFlag(cx, BaseShape::IMMUTABLE_PROTOTYPE))
         return false;
     *succeeded = true;
+    return true;
+}
+
+bool
+js::GetPropertyDescriptor(JSContext *cx, HandleObject obj, HandleId id,
+                          MutableHandle<PropertyDescriptor> desc)
+{
+    RootedObject pobj(cx);
+
+    for (pobj = obj; pobj;) {
+        if (pobj->is<ProxyObject>())
+            return Proxy::getPropertyDescriptor(cx, pobj, id, desc);
+
+        if (!GetOwnPropertyDescriptor(cx, pobj, id, desc))
+            return false;
+
+        if (desc.object())
+            return true;
+
+        if (!GetPrototype(cx, pobj, &pobj))
+            return false;
+    }
+
+    MOZ_ASSERT(!desc.object());
     return true;
 }
 
@@ -3375,7 +3334,7 @@ js::WatchGuts(JSContext *cx, JS::HandleObject origObj, JS::HandleId id, JS::Hand
         if (!NativeObject::sparsifyDenseElements(cx, obj.as<NativeObject>()))
             return false;
 
-        types::MarkTypePropertyNonData(cx, obj, id);
+        MarkTypePropertyNonData(cx, obj, id);
     }
 
     WatchpointMap *wpmap = cx->compartment()->watchpointMap;
@@ -4131,7 +4090,7 @@ JSObject::hasIdempotentProtoChain() const
         if (resolve && resolve != js::fun_resolve && resolve != js::str_resolve)
             return false;
 
-        if (obj->getOps()->lookupProperty || obj->getOps()->lookupGeneric || obj->getOps()->lookupElement)
+        if (obj->getOps()->lookupProperty)
             return false;
 
         obj = obj->getProto();

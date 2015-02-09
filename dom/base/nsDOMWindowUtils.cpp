@@ -2195,8 +2195,7 @@ nsDOMWindowUtils::SendQueryContentEvent(uint32_t aType,
     }
   }
 
-  pt += LayoutDeviceIntPoint::FromUntyped(
-    widget->WidgetToScreenOffset() - targetWidget->WidgetToScreenOffset());
+  pt += widget->WidgetToScreenOffset() - targetWidget->WidgetToScreenOffset();
 
   WidgetQueryContentEvent queryEvent(true, aType, targetWidget);
   InitEvent(queryEvent, &pt);
@@ -3886,6 +3885,28 @@ nsDOMWindowUtils::SetAudioVolume(float aVolume)
   NS_ENSURE_STATE(window);
 
   return window->SetAudioVolume(aVolume);
+}
+
+NS_IMETHODIMP
+nsDOMWindowUtils::SetChromeMargin(int32_t aTop,
+                                  int32_t aRight,
+                                  int32_t aBottom,
+                                  int32_t aLeft)
+{
+  nsCOMPtr<nsPIDOMWindow> window = do_QueryReferent(mWindow);
+  if (window) {
+    nsCOMPtr<nsIBaseWindow> baseWindow = do_QueryInterface(window->GetDocShell());
+    if (baseWindow) {
+      nsCOMPtr<nsIWidget> widget;
+      baseWindow->GetMainWidget(getter_AddRefs(widget));
+      if (widget) {
+        nsIntMargin margins(aTop, aRight, aBottom, aLeft);
+        return widget->SetNonClientMargins(margins);
+      }
+    }
+  }
+
+  return NS_OK;
 }
 
 NS_IMETHODIMP
