@@ -1,6 +1,5 @@
 package org.mozilla.gecko.loadinbackground;
 
-import org.mozilla.gecko.BrowserApp;
 import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoSharedPrefs;
 import org.mozilla.gecko.Locales;
@@ -10,7 +9,6 @@ import org.mozilla.gecko.TelemetryContract;
 import org.mozilla.gecko.preferences.GeckoPreferences;
 
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -21,14 +19,6 @@ import android.widget.Toast;
 
 public class LoadInBackgroundPrompt extends Locales.LocaleAwareActivity {
     private static final String LOGTAG = "LoadInBackground";
-    public static final int LOAD_IN_BACKGROUND_TRY_IT = 201;
-    public static final int LOAD_IN_BACKGROUND_OPEN_NOW = 202;
-    public static final int LOAD_IN_BACKGROUND_CANCEL = 203;
-
-    public static final String OPEN_IN_BACKGROUND_PROMPT_TIMES_PROMPT_SHOWN = "open_in_background_prompt_times_prompt_shown";
-    public static final int MAX_TIMES_TO_SHOW = 3;
-
-    private SharedPreferences prefs;
 
 
     // Flag set during animation to prevent animation multiple-start.
@@ -67,10 +57,10 @@ public class LoadInBackgroundPrompt extends Locales.LocaleAwareActivity {
             public void onClick(View v) {
                 Telemetry.sendUIEvent(TelemetryContract.Event.ACTION, TelemetryContract.Method.OPEN_IN_BACKGROUND);
 
-                GeckoSharedPrefs.forApp(getBaseContext()).edit().putBoolean(GeckoPreferences.PREFS_OPEN_IN_BACKGROUND, true).apply();
+                GeckoSharedPrefs.forApp(getBaseContext()).edit().putBoolean(GeckoPreferences.PREFS_OPEN_IN_BACKGROUND_ENABLED, true).apply();
                 intent.setClass(getApplicationContext(), LoadInBackgroundService.class);
                 startService(intent);
-                setResult(LOAD_IN_BACKGROUND_TRY_IT);
+                setResult(LoadInBackgroundHelper.LOAD_IN_BACKGROUND_TRY_IT);
                 finish();
             }
         });
@@ -79,7 +69,7 @@ public class LoadInBackgroundPrompt extends Locales.LocaleAwareActivity {
             public void onClick(View v) {
                 Telemetry.sendUIEvent(TelemetryContract.Event.NOT_NOW, TelemetryContract.Method.OPEN_IN_BACKGROUND);
 
-                setResult(LOAD_IN_BACKGROUND_OPEN_NOW);
+                setResult(LoadInBackgroundHelper.LOAD_IN_BACKGROUND_OPEN_NOW);
                 finish();
             }
         });
@@ -153,7 +143,7 @@ public class LoadInBackgroundPrompt extends Locales.LocaleAwareActivity {
     public void onBackPressed() {
         slideOut();
         Telemetry.sendUIEvent(TelemetryContract.Event.CANCEL, TelemetryContract.Method.OPEN_IN_BACKGROUND);
-        setResult(LOAD_IN_BACKGROUND_CANCEL);
+        setResult(LoadInBackgroundHelper.LOAD_IN_BACKGROUND_CANCEL);
 
     }
 
@@ -164,21 +154,9 @@ public class LoadInBackgroundPrompt extends Locales.LocaleAwareActivity {
     public boolean onTouchEvent(MotionEvent event) {
         slideOut();
         Telemetry.sendUIEvent(TelemetryContract.Event.CANCEL, TelemetryContract.Method.OPEN_IN_BACKGROUND);
-        setResult(LOAD_IN_BACKGROUND_CANCEL);
+        setResult(LoadInBackgroundHelper.LOAD_IN_BACKGROUND_CANCEL);
 
         return true;
     }
 
-
-//    @Override
-//    public boolean dispatchTouchEvent(MotionEvent ev) {
-//        Rect dialogBounds = new Rect();
-//        getWindow().getDecorView().getHitRect(dialogBounds);
-//
-//        if (!dialogBounds.contains((int) ev.getX(), (int) ev.getY())) {
-//            // Tapped outside so we finish the activity
-//            this.finish();
-//        }
-//        return super.dispatchTouchEvent(ev);
-//    }
 }
