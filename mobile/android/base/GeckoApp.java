@@ -46,6 +46,7 @@ import org.mozilla.gecko.mozglue.GeckoLoader;
 import org.mozilla.gecko.preferences.ClearOnShutdownPref;
 import org.mozilla.gecko.preferences.GeckoPreferences;
 import org.mozilla.gecko.prompts.PromptService;
+import org.mozilla.gecko.tabqueue.TabQueueHelper;
 import org.mozilla.gecko.updater.UpdateServiceHelper;
 import org.mozilla.gecko.util.ActivityResultHandler;
 import org.mozilla.gecko.util.ActivityUtils;
@@ -1811,7 +1812,7 @@ public abstract class GeckoApp
 
     @Override
     protected void onNewIntent(Intent externalIntent) {
-        Log.d("MTEST", "onNewIntent");
+        Log.d("MTEST", "GeckoApp onNewIntent " + externalIntent.getAction());
         final SafeIntent intent = new SafeIntent(externalIntent);
 
         if (GeckoThread.checkLaunchState(GeckoThread.LaunchState.GeckoExiting)) {
@@ -1834,10 +1835,32 @@ public abstract class GeckoApp
             String uri = intent.getDataString();
             Tabs.getInstance().loadUrl(uri);
         } else if (Intent.ACTION_VIEW.equals(action)) {
-            String uri = intent.getDataString();
-            Tabs.getInstance().loadUrl(uri, Tabs.LOADURL_NEW_TAB |
-                                            Tabs.LOADURL_USER_ENTERED |
-                                            Tabs.LOADURL_EXTERNAL);
+            if (TabQueueHelper.shouldProcessTabQueue(this)) {
+                Log.d("MTEST", "GeckoApp onNewIntent opening tab queue");
+
+                EventDispatcher.getInstance().registerGeckoThreadListener(new NativeEventListener() {
+                    @Override
+                    public void handleMessage(String event, NativeJSObject message, EventCallback callback) {
+                        Log.d("MTEST", "GeckoApp handleMessage " + event);
+
+                        if ("Tabs:TabsOpened".equals(event)) {
+                            String uri = intent.getDataString();
+                            Log.d("MTEST", "GeckoApp Opening last " + uri);
+
+                            Tabs.getInstance().loadUrl(uri, Tabs.LOADURL_NEW_TAB |
+                                    Tabs.LOADURL_USER_ENTERED |
+                                    Tabs.LOADURL_EXTERNAL);
+                            EventDispatcher.getInstance().unregisterGeckoThreadListener(this);
+                        }
+                    }
+                }, "Tabs:TabsOpened");
+                TabQueueHelper.openQueuedUrls(this, mProfile, true);
+            } else {
+                String uri = intent.getDataString();
+                Tabs.getInstance().loadUrl(uri, Tabs.LOADURL_NEW_TAB |
+                        Tabs.LOADURL_USER_ENTERED |
+                        Tabs.LOADURL_EXTERNAL);
+            }
         } else if (ACTION_HOMESCREEN_SHORTCUT.equals(action)) {
             String uri = getURIFromIntent(intent);
             GeckoAppShell.sendEventToGecko(GeckoEvent.createBookmarkLoadEvent(uri));

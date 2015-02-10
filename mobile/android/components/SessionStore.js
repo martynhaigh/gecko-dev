@@ -159,9 +159,13 @@ SessionStore.prototype = {
         break;
       }
       case "Tabs:OpenMultiple":
-        dump("MTEST - opening multiple tabs - data =" + aData)
         let data = JSON.parse(aData);
         this._openTabs(data);
+        if(data.performCallback) {
+          Messaging.sendRequest({
+            type: "Tabs:TabsOpened"
+          });
+        }
         break;
       case "application-background":
         // We receive this notification when Android's onPause callback is
@@ -935,7 +939,6 @@ SessionStore.prototype = {
   // This function iterates through a list of urls opening a new tabs for each.
   _openTabs: function ss_openTabs(aData) {
     let window = Services.wm.getMostRecentWindow("navigator:browser");
-    dump("MTEST opening " + aData.urls.length + " tabs");
     for (let i = 0; i < aData.urls.length; i++) {
       let tabData = aData.urls[i];
       let params = {
@@ -943,7 +946,6 @@ SessionStore.prototype = {
         isPrivate: tabData.isPrivate,
         desktopMode: tabData.desktopMode,
       };
-      dump("MTEST opening " + tabData.url);
 
       let tab = window.BrowserApp.addTab(tabData.url, params);
     }

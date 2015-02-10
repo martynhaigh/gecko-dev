@@ -16,7 +16,6 @@ import android.widget.Toast;
 
 public class TabQueue extends Locales.LocaleAwareActivity {
     private static final String LOGTAG = "TabQueue";
-    public static final String LOAD_URLS = "TAB_QUEUE_LOAD_URLS";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,6 +42,7 @@ public class TabQueue extends Locales.LocaleAwareActivity {
             return;
         }
 
+        // TODO add telemetry
         //Telemetry.sendUIEvent(TelemetryContract.Event.SHOW, TelemetryContract.Method.SHARE_OVERLAY, telemetryExtras);
 
         boolean showOpenInBackgroundToast = GeckoSharedPrefs.forApp(this).getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
@@ -72,7 +72,7 @@ public class TabQueue extends Locales.LocaleAwareActivity {
      * Show a toast indicating we were started with no URL, and then stop.
      */
     private void abortDueToNoURL() {
-        Log.e(LOGTAG, "Unable to process shared intent. No URL found!");
+        Log.d(LOGTAG, "Unable to process shared intent. No URL found!");
 
         // Display toast notifying the user of failure (most likely a developer who screwed up
         // trying to send a share intent).

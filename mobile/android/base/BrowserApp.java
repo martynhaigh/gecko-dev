@@ -50,8 +50,6 @@ import org.mozilla.gecko.home.HomePager.OnUrlOpenInBackgroundListener;
 import org.mozilla.gecko.home.HomePager.OnUrlOpenListener;
 import org.mozilla.gecko.home.HomePanelsManager;
 import org.mozilla.gecko.home.SearchEngine;
-import org.mozilla.gecko.tabqueue.TabQueue;
-import org.mozilla.gecko.tabqueue.TabQueueHelper;
 import org.mozilla.gecko.menu.GeckoMenu;
 import org.mozilla.gecko.menu.GeckoMenuItem;
 import org.mozilla.gecko.mozglue.ContextUtils;
@@ -63,6 +61,7 @@ import org.mozilla.gecko.preferences.GeckoPreferences;
 import org.mozilla.gecko.prompts.Prompt;
 import org.mozilla.gecko.prompts.PromptListItem;
 import org.mozilla.gecko.sync.setup.SyncAccounts;
+import org.mozilla.gecko.tabqueue.TabQueueHelper;
 import org.mozilla.gecko.tabs.TabHistoryController;
 import org.mozilla.gecko.tabs.TabHistoryFragment;
 import org.mozilla.gecko.tabs.TabHistoryPage;
@@ -927,8 +926,8 @@ public class BrowserApp extends GeckoApp
         // Process loading queue
         if (AppConstants.NIGHTLY_BUILD) {
             if (TabQueueHelper.shouldProcessTabQueue(getApplicationContext())) {
-                Log.d("MTEST", "Checking reading list ONATTACHEDTOWINDOW");
-                TabQueueHelper.processTabQueueUrls(getApplicationContext(), mProfile);
+                Log.d("MTEST", "Checking tab queue ONATTACHEDTOWINDOW");
+                TabQueueHelper.openQueuedUrls(getApplicationContext(), mProfile, false);
             }
         }
     }
@@ -953,11 +952,11 @@ public class BrowserApp extends GeckoApp
             "Prompt:ShowTop");
 
 
-        // Process temp reading list before we load the tab from the intent
+        // Process temp tab queue before we load the tab from the intent
         if (AppConstants.NIGHTLY_BUILD) {
             if (TabQueueHelper.shouldProcessTabQueue(getApplicationContext())) {
-                Log.d("MTEST", "Checking reading list RESUME");
-                TabQueueHelper.processTabQueueUrls(getApplicationContext(), mProfile);
+                Log.d("MTEST", "Checking tab queue RESUME");
+                TabQueueHelper.openQueuedUrls(getApplicationContext(), mProfile, false);
             }
 
         }
@@ -3331,11 +3330,11 @@ public class BrowserApp extends GeckoApp
     @Override
     protected void onNewIntent(Intent intent) {
         String action = intent.getAction();
-        Log.d("MTEST", "ON NEW INTENT " + action);
+        Log.d("MTEST", "BrowserApp onNewIntent " + action);
 
         final boolean isViewAction = Intent.ACTION_VIEW.equals(action);
         final boolean isBookmarkAction = GeckoApp.ACTION_HOMESCREEN_SHORTCUT.equals(action);
-        final boolean openTabQueueUrls = TabQueue.LOAD_URLS.equals(action);
+        final boolean openTabQueueUrls = TabQueueHelper.LOAD_URLS_ACTION.equals(action);
 
         if (mInitialized && (isViewAction || isBookmarkAction)) {
             // Dismiss editing mode if the user is loading a URL from an external app.
@@ -3350,16 +3349,16 @@ public class BrowserApp extends GeckoApp
         }
 
         if (mInitialized && isViewAction) {
-            // Process reading queue
+            // Process tab queue
             if (AppConstants.NIGHTLY_BUILD) {
                 if (TabQueueHelper.shouldShowTabQueuePrompt(BrowserApp.this)) {
                     TabQueueHelper.showTabQueuePrompt(BrowserApp.this);
                 } else {
-                    if (TabQueueHelper.shouldProcessTabQueue(this)) {
-                        Log.d("MTEST", "Checking reading list ON NEW INTENT");
-
-                        TabQueueHelper.processTabQueueUrls(this, mProfile);
-                    }
+//                    if (TabQueueHelper.shouldProcessTabQueue(this)) {
+//                        Log.d("MTEST", "Checking tab queue ON NEW INTENT");
+//
+//                        TabQueueHelper.openQueuedUrls(this, mProfile);
+//                    }
                 }
             }
         }
@@ -3377,7 +3376,9 @@ public class BrowserApp extends GeckoApp
         }
 
         if(openTabQueueUrls) {
-            TabQueueHelper.processTabQueueUrls(this, mProfile);
+            Log.d("MTEST", "BrowserApp process TabQueueHelper.LOAD_URLS_ACTION ");
+
+            TabQueueHelper.openQueuedUrls(this, mProfile, false);
 
             // User has pressed the Tab Queue notification, so lets show them their tabs in the tabs panel
             showNormalTabs();

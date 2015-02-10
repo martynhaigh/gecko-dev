@@ -2,33 +2,21 @@ package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.BrowserApp;
 import org.mozilla.gecko.GeckoProfile;
-import org.mozilla.gecko.GeckoSharedPrefs;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.mozglue.ContextUtils;
 
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.IBinder;
-import android.os.StrictMode;
-import android.support.v4.app.NotificationCompat;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
-import ch.boye.httpclientandroidlib.util.TextUtils;
-import org.json.JSONArray;
-import org.json.JSONException;
 
-import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -63,8 +51,8 @@ public class TabQueueService extends Service {
 
 
         mButton.setEnabled(true);
-        mMessageView.setText("Open in background");
-        mButton.setText("Open now");
+        mMessageView.setText(getResources().getText(R.string.tab_queue_toast_message));
+        mButton.setText(getResources().getText(R.string.tab_queue_toast_action));
 
         mParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -195,58 +183,9 @@ public class TabQueueService extends Service {
         handler.post(new Runnable() {
             @Override
             public void run() {
-                appendSiteToList("open_in_background_url_list.json", intentData);
+                TabQueueHelper.queueUrl(getApplicationContext(), intentData, mProfile);
             }
         });
     }
 
-    private void appendSiteToList(String filename, String url) {
-        String readingListContent = null;
-        try {
-            readingListContent = mProfile.readFile(filename);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        boolean readingListExists = !TextUtils.isEmpty(readingListContent);
-        JSONArray jsonArray = null;
-        if (readingListExists) {
-            try {
-                jsonArray = new JSONArray(readingListContent);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-        } else {
-            jsonArray = new JSONArray();
-        }
-        jsonArray.put(url);
-
-        Log.d("MTEST", "OIB List now: " + jsonArray.toString());
-        mProfile.writeFile(filename, jsonArray.toString());
-
-        NotificationCompat.Builder mBuilder =
-                new NotificationCompat.Builder(this)
-                        .setSmallIcon(R.drawable.ic_status_logo)
-                        .setContentTitle("Tab Queue")
-                        .setContentText(jsonArray.length() + " tabs queued!");
-
-        // Creates an explicit intent for an Activity in your app
-        Intent resultIntent = new Intent(this, BrowserApp.class);
-        resultIntent.setAction(TabQueue.LOAD_URLS);
-
-
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, TabQueueHelper.TAB_QUEUE_NOTIFICATION_ID, resultIntent, PendingIntent.FLAG_CANCEL_CURRENT);
-        mBuilder.setContentIntent(pendingIntent);
-        NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-
-        mNotificationManager.notify(TabQueueHelper.TAB_QUEUE_NOTIFICATION_ID, mBuilder.build());
-        final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
-        try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
-            int openInBackgroundCount = prefs.getInt(TabQueueHelper.TAB_QUEUE_COUNT, 0);
-            prefs.edit().putInt(TabQueueHelper.TAB_QUEUE_COUNT, openInBackgroundCount + 1).apply();
-        } finally {
-            StrictMode.setThreadPolicy(savedPolicy);
-        }
-
-    }
 }
