@@ -749,6 +749,11 @@ OnSharedPreferenceChangeListener
                         i--;
                         continue;
                     }
+                } else if (AppConstants.NIGHTLY_BUILD && PREFS_OPEN_IN_BACKGROUND_ENABLED.equals(key)) {
+                    // only show open in background on nightly builds
+                    preferences.removePreference(pref);
+                    i--;
+                    continue;
                 }
 
                 // Some Preference UI elements are not actually preferences,
