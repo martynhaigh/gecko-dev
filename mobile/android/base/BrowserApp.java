@@ -931,10 +931,9 @@ public class BrowserApp extends GeckoApp
 
         // Process loading queue
         if (AppConstants.NIGHTLY_BUILD) {
-            if (shouldProcessOpenInBackgroundQueue()) {
+            if (LoadInBackgroundHelper.shouldProcessOpenInBackgroundQueue(getApplicationContext())) {
                 Log.d("MTEST", "Checking reading list ONATTACHEDTOWINDOW");
-
-                processOpenInBackgroundUrls();
+                LoadInBackgroundHelper.processOpenInBackgroundUrls(getApplicationContext(), mProfile);
             }
         }
     }
@@ -961,11 +960,11 @@ public class BrowserApp extends GeckoApp
 
         // Process temp reading list before we load the tab from the intent
         if (AppConstants.NIGHTLY_BUILD) {
-            if (shouldProcessOpenInBackgroundQueue()) {
+            if (LoadInBackgroundHelper.shouldProcessOpenInBackgroundQueue(getApplicationContext())) {
                 Log.d("MTEST", "Checking reading list RESUME");
-
-                processOpenInBackgroundUrls();
+                LoadInBackgroundHelper.processOpenInBackgroundUrls(getApplicationContext(), mProfile);
             }
+
         }
     }
 

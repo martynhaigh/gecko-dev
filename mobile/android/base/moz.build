@@ -342,6 +342,8 @@ gbjar.sources += [
     'JavaAddonManager.java',
     'LayoutInterceptor.java',
     'loadinbackground/LoadInBackground.java',
+    'loadinbackground/LoadInBackgroundHelper.java',
+    'loadinbackground/LoadInBackgroundPrompt.java',
     'loadinbackground/LoadInBackgroundService.java',
     'LocaleManager.java',
     'Locales.java',
