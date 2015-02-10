@@ -171,7 +171,7 @@ public interface TelemetryContract {
         SHARE_OVERLAY("shareoverlay"),
 
         // Actions triggered from the open in background overlay.
-        OPEN_IN_BACKGROUND("open_in_background"),
+        TAB_QUEUE("tab_queue"),
 
         // Action triggered from a suggestion provided to the user.
         SUGGESTION("suggestion"),

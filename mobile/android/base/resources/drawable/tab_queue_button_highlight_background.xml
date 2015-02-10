@@ -5,7 +5,7 @@
 
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_enabled="true"
-          android:drawable="@drawable/loadinbackground_button_highlight_enabled" />
+          android:drawable="@drawable/tab_queue_button_highlight_enabled" />
     <item android:state_pressed="true"
-          android:drawable="@drawable/loadinbackground_button_highlight_pressed" />
+          android:drawable="@drawable/tab_queue_button_highlight_pressed" />
 </selector>

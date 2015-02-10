@@ -26,7 +26,6 @@ import org.mozilla.gecko.GeckoApplication;
 import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.GeckoSharedPrefs;
-import org.mozilla.gecko.GuestSession;
 import org.mozilla.gecko.LocaleManager;
 import org.mozilla.gecko.Locales;
 import org.mozilla.gecko.PrefsHelper;
@@ -46,7 +45,6 @@ import org.mozilla.gecko.util.ThreadUtils;
 import org.mozilla.gecko.widget.FloatingHintEditText;
 
 import android.app.ActionBar;
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.Fragment;
@@ -134,8 +132,7 @@ OnSharedPreferenceChangeListener
 
     public static final String PREFS_RESTORE_SESSION = NON_PREF_PREFIX + "restoreSession3";
     public static final String PREFS_SUGGESTED_SITES = NON_PREF_PREFIX + "home_suggested_sites";
-    public static final String PREFS_OPEN_IN_BACKGROUND_ENABLED = NON_PREF_PREFIX + "open_in_background";
-
+    public static final String PREFS_TAB_QUEUE_ENABLED = NON_PREF_PREFIX + "tab_queue";
 
     // These values are chosen to be distinct from other Activity constants.
     private static final int REQUEST_CODE_PREF_SCREEN = 5;
@@ -749,7 +746,7 @@ OnSharedPreferenceChangeListener
                         i--;
                         continue;
                     }
-                } else if (AppConstants.NIGHTLY_BUILD && PREFS_OPEN_IN_BACKGROUND_ENABLED.equals(key)) {
+                } else if (!AppConstants.NIGHTLY_BUILD && PREFS_TAB_QUEUE_ENABLED.equals(key)) {
                     // only show open in background on nightly builds
                     preferences.removePreference(pref);
                     i--;

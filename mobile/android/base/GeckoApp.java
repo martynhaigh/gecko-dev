@@ -37,7 +37,6 @@ import org.mozilla.gecko.gfx.PluginLayer;
 import org.mozilla.gecko.health.HealthRecorder;
 import org.mozilla.gecko.health.SessionInformation;
 import org.mozilla.gecko.health.StubbedHealthRecorder;
-import org.mozilla.gecko.loadinbackground.LoadInBackgroundService;
 import org.mozilla.gecko.menu.GeckoMenu;
 import org.mozilla.gecko.menu.GeckoMenuInflater;
 import org.mozilla.gecko.menu.MenuPanel;

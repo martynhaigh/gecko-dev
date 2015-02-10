@@ -18,9 +18,6 @@
 <!ENTITY  reading_list_title "Reading List">
 <!ENTITY  recent_tabs_title "Recent Tabs">
 
-<!ENTITY  load_in_background "Load In Background">
-
-
 <!ENTITY  switch_to_tab "Switch to tab">
 
 <!ENTITY  crash_reporter_title "&brandShortName; Crash Reporter">
@@ -82,6 +79,7 @@
 <!ENTITY pref_category_advanced "Advanced">
 <!ENTITY pref_category_customize "Customize">
 <!ENTITY pref_category_customize_summary "Home, search, tabs, import">
+<!ENTITY pref_category_customize_alt_summary "Home, search, tabs, open later, import">
 
 <!-- Localization note (pref_category_language) : This is the preferences
      section in which the user picks the locale in which to display Firefox
@@ -180,6 +178,9 @@
 <!ENTITY pref_donottrack_title "Do not track">
 <!ENTITY pref_donottrack_summary "&brandShortName; will tell sites that you do not want to be tracked">
 
+<!ENTITY pref_tab_queue "Open later">
+<!ENTITY pref_tab_queue_summary "Prevent tabs from opening immediately, but open all queued tabs the next time &brandShortName; loads.">
+
 <!ENTITY pref_char_encoding "Character encoding">
 <!ENTITY pref_char_encoding_on "Show menu">
 <!ENTITY pref_char_encoding_off "Don\'t show menu">
@@ -197,10 +198,6 @@
 <!ENTITY pref_restore "Tabs">
 <!ENTITY pref_restore_always "Always restore">
 <!ENTITY pref_restore_quit "Don\'t restore after quitting &brandShortName;">
-<!ENTITY pref_load_in_background "Open in background">
-<!ENTITY pref_load_in_background_summary "Prevent tabs from opening immediately, but open all queued tabs the next time &brandShortName; loads.">
-<!ENTITY pref_load_in_background_show_toast "Show open in background toast">
-<!ENTITY pref_load_in_background_always_open "Always open in browser">
 <!ENTITY pref_font_size_tiny "Tiny">
 <!ENTITY pref_font_size_small "Small">
 <!ENTITY pref_font_size_medium "Medium">

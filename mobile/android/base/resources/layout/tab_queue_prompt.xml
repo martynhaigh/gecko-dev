@@ -9,14 +9,14 @@
         android:layout_gravity="bottom|center"
         android:clipChildren="false"
         android:clipToPadding="false"
-        android:id="@+id/loadinbackground_container"
+        android:id="@+id/tab_queue_container"
         >
 
     <LinearLayout android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:minHeight="@dimen/firstrun_min_height"
                   android:orientation="vertical"
-                  android:background="@color/loadinbackground_background">
+                  android:background="@color/tab_queue_background">
 
         <LinearLayout android:layout_width="match_parent"
                       android:layout_height="0dp"
@@ -63,7 +63,7 @@
                 <TextView android:layout_width="fill_parent"
                           android:layout_height="wrap_content"
                           android:text="Not now"
-                          style="@style/Widget.LoadInBackground.Button.Dismiss"
+                          style="@style/Widget.TabQueue.Button.Dismiss"
                           android:layout_gravity="center"
                           android:id="@+id/cancel_button"
                           android:layout_weight="0.5"
@@ -72,7 +72,7 @@
                 <Button android:layout_width="fill_parent"
                         android:layout_height="wrap_content"
                         android:text="Try it"
-                        style="@style/Widget.LoadInBackground.Button.Highlight"
+                        style="@style/Widget.TabQueue.Button.Highlight"
                         android:layout_gravity="center"
                         android:id="@+id/ok_button"
                         android:layout_weight="0.5"

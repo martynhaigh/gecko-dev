@@ -282,20 +282,16 @@
         <item name="android:textSize">18sp</item>
     </style>
 
-
-
-
-
-    <style name="Widget.LoadInBackground.Button.Highlight" parent="Widget.BaseButton">
-        <item name="android:layout_width">@dimen/firstrun_content_width</item>
+    <style name="Widget.TabQueue.Button.Highlight" parent="Widget.BaseButton">
+        <item name="android:layout_width">@dimen/tab_queue_content_width</item>
         <item name="android:layout_height">60dp</item>
         <item name="android:textColor">@color/android:white</item>
-        <item name="android:background">@drawable/loadinbackground_button_highlight_background</item>
+        <item name="android:background">@drawable/tab_queue_button_highlight_background</item>
         <item name="android:textSize">18sp</item>
     </style>
 
-    <style name="Widget.LoadInBackground.Button.Dismiss" parent="Widget.LoadInBackground.Button.Highlight">
-        <item name="android:textColor">@drawable/loadinbackground_dismiss_button_foreground</item>
+    <style name="Widget.TabQueue.Button.Dismiss" parent="Widget.TabQueue.Button.Highlight">
+        <item name="android:textColor">@drawable/tab_queue_dismiss_button_foreground</item>
         <item name="android:background">@color/android:white</item>
     </style>
 

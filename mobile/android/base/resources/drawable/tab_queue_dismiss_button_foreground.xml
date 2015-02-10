@@ -5,7 +5,7 @@
 
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_enabled="true"
-          android:color="@color/loadinbackground_dismiss_button_foreground" />
+          android:color="@color/tab_queue_dismiss_button_foreground" />
     <item android:state_pressed="true"
-          android:color="@color/loadinbackground_dismiss_button_foreground_pressed" />
+          android:color="@color/tab_queue_dismiss_button_foreground_pressed" />
 </selector>

@@ -51,11 +51,11 @@
 
   <!-- Load In Background colours -->
 
-    <color name="loadinbackground_button_highlight">#E66000</color>
-    <color name="loadinbackground_button_highlight_pressed">#DC5600</color>
-    <color name="loadinbackground_dismiss_button_foreground">#16A3DF</color>
-    <color name="loadinbackground_dismiss_button_foreground_pressed">#1193CB</color>
-    <color name="loadinbackground_background">#16A3DF</color>
+    <color name="tab_queue_button_highlight">#E66000</color>
+    <color name="tab_queue_button_highlight_pressed">#DC5600</color>
+    <color name="tab_queue_dismiss_button_foreground">#16A3DF</color>
+    <color name="tab_queue_dismiss_button_foreground_pressed">#1193CB</color>
+    <color name="tab_queue_background">#16A3DF</color>
 
   <!--
       Application theme colors

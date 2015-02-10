@@ -7,7 +7,6 @@ package org.mozilla.gecko;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URLEncoder;
 import java.util.EnumSet;
@@ -16,8 +15,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Vector;
 
-import android.app.NotificationManager;
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.mozilla.gecko.AppConstants.Versions;
@@ -53,10 +50,8 @@ import org.mozilla.gecko.home.HomePager.OnUrlOpenInBackgroundListener;
 import org.mozilla.gecko.home.HomePager.OnUrlOpenListener;
 import org.mozilla.gecko.home.HomePanelsManager;
 import org.mozilla.gecko.home.SearchEngine;
-import org.mozilla.gecko.loadinbackground.LoadInBackground;
-import org.mozilla.gecko.loadinbackground.LoadInBackgroundHelper;
-import org.mozilla.gecko.loadinbackground.LoadInBackgroundPrompt;
-import org.mozilla.gecko.loadinbackground.LoadInBackgroundService;
+import org.mozilla.gecko.tabqueue.TabQueue;
+import org.mozilla.gecko.tabqueue.TabQueueHelper;
 import org.mozilla.gecko.menu.GeckoMenu;
 import org.mozilla.gecko.menu.GeckoMenuItem;
 import org.mozilla.gecko.mozglue.ContextUtils;
@@ -931,9 +926,9 @@ public class BrowserApp extends GeckoApp
 
         // Process loading queue
         if (AppConstants.NIGHTLY_BUILD) {
-            if (LoadInBackgroundHelper.shouldProcessOpenInBackgroundQueue(getApplicationContext())) {
+            if (TabQueueHelper.shouldProcessTabQueue(getApplicationContext())) {
                 Log.d("MTEST", "Checking reading list ONATTACHEDTOWINDOW");
-                LoadInBackgroundHelper.processOpenInBackgroundUrls(getApplicationContext(), mProfile);
+                TabQueueHelper.processTabQueueUrls(getApplicationContext(), mProfile);
             }
         }
     }
@@ -960,9 +955,9 @@ public class BrowserApp extends GeckoApp
 
         // Process temp reading list before we load the tab from the intent
         if (AppConstants.NIGHTLY_BUILD) {
-            if (LoadInBackgroundHelper.shouldProcessOpenInBackgroundQueue(getApplicationContext())) {
+            if (TabQueueHelper.shouldProcessTabQueue(getApplicationContext())) {
                 Log.d("MTEST", "Checking reading list RESUME");
-                LoadInBackgroundHelper.processOpenInBackgroundUrls(getApplicationContext(), mProfile);
+                TabQueueHelper.processTabQueueUrls(getApplicationContext(), mProfile);
             }
 
         }
@@ -2413,19 +2408,19 @@ public class BrowserApp extends GeckoApp
                     }
                 });
                 break;
-            case LoadInBackgroundHelper.ACTIVITY_REQUEST_OPEN_IN_BACKGROUND:
-                if (resultCode == LoadInBackgroundHelper.LOAD_IN_BACKGROUND_TRY_IT) {
+            case TabQueueHelper.ACTIVITY_REQUEST_TAB_QUEUE:
+                if (resultCode == TabQueueHelper.TAB_QUEUE_TRY_IT) {
                     Log.d("MTEST", "RESULT: TRY IT!");
                     moveTaskToBack(true);
-                } else if (resultCode == LoadInBackgroundHelper.LOAD_IN_BACKGROUND_CANCEL) {
+                } else if (resultCode == TabQueueHelper.TAB_QUEUE_CANCEL) {
                     Log.d("MTEST", "RESULT: CANCEL!");
 
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
                         final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
-                        prefs.edit().putInt(LoadInBackgroundHelper.OPEN_IN_BACKGROUND_LAUNCHES, 0).apply();
-                        int OpenInBackgroundPromptTimesShown = prefs.getInt(LoadInBackgroundHelper.OPEN_IN_BACKGROUND_PROMPT_TIMES_PROMPT_SHOWN, 0) + 1;
-                        prefs.edit().putInt(LoadInBackgroundHelper.OPEN_IN_BACKGROUND_PROMPT_TIMES_PROMPT_SHOWN, OpenInBackgroundPromptTimesShown).apply();
+                        prefs.edit().putInt(TabQueueHelper.TAB_QUEUE_LAUNCHES, 0).apply();
+                        int OpenInBackgroundPromptTimesShown = prefs.getInt(TabQueueHelper.TAB_QUEUE_PROMPT_TIMES_PROMPT_SHOWN, 0) + 1;
+                        prefs.edit().putInt(TabQueueHelper.TAB_QUEUE_PROMPT_TIMES_PROMPT_SHOWN, OpenInBackgroundPromptTimesShown).apply();
                     } finally {
                         StrictMode.setThreadPolicy(savedPolicy);
                     }
@@ -3340,7 +3335,7 @@ public class BrowserApp extends GeckoApp
 
         final boolean isViewAction = Intent.ACTION_VIEW.equals(action);
         final boolean isBookmarkAction = GeckoApp.ACTION_HOMESCREEN_SHORTCUT.equals(action);
-        final boolean openLoadInBackgroundUrls = LoadInBackground.LOAD_URLS.equals(action);
+        final boolean openTabQueueUrls = TabQueue.LOAD_URLS.equals(action);
 
         if (mInitialized && (isViewAction || isBookmarkAction)) {
             // Dismiss editing mode if the user is loading a URL from an external app.
@@ -3357,13 +3352,13 @@ public class BrowserApp extends GeckoApp
         if (mInitialized && isViewAction) {
             // Process reading queue
             if (AppConstants.NIGHTLY_BUILD) {
-                if (LoadInBackgroundHelper.shouldShowOpenInBackgroundPrompt(BrowserApp.this)) {
-                    LoadInBackgroundHelper.showOpenInBackgroundPrompt(BrowserApp.this);
+                if (TabQueueHelper.shouldShowTabQueuePrompt(BrowserApp.this)) {
+                    TabQueueHelper.showTabQueuePrompt(BrowserApp.this);
                 } else {
-                    if (LoadInBackgroundHelper.shouldProcessOpenInBackgroundQueue(this)) {
+                    if (TabQueueHelper.shouldProcessTabQueue(this)) {
                         Log.d("MTEST", "Checking reading list ON NEW INTENT");
 
-                        LoadInBackgroundHelper.processOpenInBackgroundUrls(this, mProfile);
+                        TabQueueHelper.processTabQueueUrls(this, mProfile);
                     }
                 }
             }
@@ -3381,8 +3376,8 @@ public class BrowserApp extends GeckoApp
             GuestSession.handleIntent(this, intent);
         }
 
-        if(openLoadInBackgroundUrls) {
-            LoadInBackgroundHelper.processOpenInBackgroundUrls(this, mProfile);
+        if(openTabQueueUrls) {
+            TabQueueHelper.processTabQueueUrls(this, mProfile);
 
             // User has pressed the Tab Queue notification, so lets show them their tabs in the tabs panel
             showNormalTabs();

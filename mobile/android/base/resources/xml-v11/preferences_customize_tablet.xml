@@ -37,15 +37,9 @@
                     android:entryValues="@array/pref_restore_values"
                     android:persistent="true" />
 
-    <CheckBoxPreference android:key="android.not_a_preference.load_in_background"
-                        android:title="@string/pref_load_in_background"
-                        android:summary="@string/pref_load_in_background_summary" />
-    <!--<ListPreference android:key="android.not_a_preference.load_in_background"-->
-    <!--android:title="@string/pref_load_in_background"-->
-    <!--android:defaultValue="open"-->
-    <!--android:entries="@array/pref_load_in_background_entries"-->
-    <!--android:entryValues="@array/pref_load_in_background_values"-->
-    <!--android:persistent="true" />-->
+    <CheckBoxPreference android:key="android.not_a_preference.tab_queue"
+                        android:title="@string/pref_tab_queue"
+                        android:summary="@string/pref_tab_queue_summary" />
 
     <org.mozilla.gecko.preferences.AndroidImportPreference
             android:key="android.not_a_preference.import_android"

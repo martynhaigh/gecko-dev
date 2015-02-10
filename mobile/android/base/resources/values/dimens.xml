@@ -65,6 +65,9 @@
     <dimen name="firstrun_content_width">300dp</dimen>
     <dimen name="firstrun_min_height">180dp</dimen>
 
+    <dimen name="tab_queue_content_width">300dp</dimen>
+    <dimen name="tab_queue_min_height">180dp</dimen>
+
     <!-- Site security icon -->
     <!-- If one of these values changes, they all should. -->
     <dimen name="site_security_bottom_margin">.5dp</dimen>
