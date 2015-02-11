@@ -76,7 +76,7 @@ let gTests = [{
     dialog.document.documentElement.cancelDialog();
 
     let closingEvent = yield closingPromise;
-    ise(closingEvent.detail.button, "cancel", "closing event should indicate button was 'accept'");
+    ise(closingEvent.detail.button, "cancel", "closing event should indicate button was 'cancel'");
 
     yield deferredClose.promise;
     ise(rv.acceptCount, 0, "return value should NOT have been updated");
@@ -119,6 +119,22 @@ let gTests = [{
   },
 },
 {
+  desc: "Check that 'back' navigation will close the dialog",
+  run: function* () {
+    let rv = { acceptCount: 0 };
+    let deferredClose = Promise.defer();
+    let dialogPromise = openAndLoadSubDialog(gDialogURL, null, rv,
+                                             (aEvent) => dialogClosingCallback(deferredClose, aEvent));
+    let dialog = yield dialogPromise;
+
+    info("cancelling the dialog");
+    content.gSubDialog._frame.goBack();
+
+    yield deferredClose.promise;
+    ise(rv.acceptCount, 0, "return value should NOT have been updated");
+  },
+},
+{
   desc: "Hitting escape in the dialog",
   run: function* () {
     let rv = { acceptCount: 0 };
@@ -141,8 +157,8 @@ let gTests = [{
                                              (aEvent) => dialogClosingCallback(deferredClose, aEvent));
     let dialog = yield dialogPromise;
 
-    ise(content.gSubDialog._frame.style.width, "32em", "Width should be set on the frame from the dialog");
-    ise(content.gSubDialog._frame.style.height, "40em", "Height should be set on the frame from the dialog");
+    ise(content.gSubDialog._frame.style.width, "528px", "Width should be set on the frame from the dialog");
+    ise(content.gSubDialog._frame.style.height, "280px", "Height should be set on the frame from the dialog");
 
     content.gSubDialog.close();
     yield deferredClose.promise;
