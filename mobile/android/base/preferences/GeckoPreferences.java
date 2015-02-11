@@ -134,6 +134,7 @@ OnSharedPreferenceChangeListener
 
     public static final String PREFS_RESTORE_SESSION = NON_PREF_PREFIX + "restoreSession3";
     public static final String PREFS_SUGGESTED_SITES = NON_PREF_PREFIX + "home_suggested_sites";
+    public static final String PREFS_TAB_QUEUE_ENABLED = NON_PREF_PREFIX + "tab_queue";
 
     // These values are chosen to be distinct from other Activity constants.
     private static final int REQUEST_CODE_PREF_SCREEN = 5;
@@ -660,6 +661,9 @@ OnSharedPreferenceChangeListener
                 } else if (pref instanceof PanelsPreferenceCategory) {
                     mPanelsPreferenceCategory = (PanelsPreferenceCategory) pref;
                 }
+                if(AppConstants.NIGHTLY_BUILD && pref.getSummary().equals(getString(R.string.pref_category_customize_summary))) {
+                    pref.setSummary(getString(R.string.pref_category_customize_alt_summary));
+                }
                 setupPreferences((PreferenceGroup) pref, prefs);
             } else {
                 pref.setOnPreferenceChangeListener(this);
@@ -747,6 +751,11 @@ OnSharedPreferenceChangeListener
                         i--;
                         continue;
                     }
+                } else if (!AppConstants.NIGHTLY_BUILD && PREFS_TAB_QUEUE_ENABLED.equals(key)) {
+                    // only show tab queue pref on nightly builds
+                    preferences.removePreference(pref);
+                    i--;
+                    continue;
                 }
 
                 // Some Preference UI elements are not actually preferences,
