@@ -1,18 +1,30 @@
+/* -*- Mode: Java; c-basic-offset: 4; tab-width: 4; indent-tabs-mode: nil; -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.AppConstants;
 import org.mozilla.gecko.BrowserApp;
+import org.mozilla.gecko.GeckoApplication;
 import org.mozilla.gecko.GeckoSharedPrefs;
 import org.mozilla.gecko.Locales;
 import org.mozilla.gecko.R;
+import org.mozilla.gecko.Telemetry;
+import org.mozilla.gecko.TelemetryContract;
 import org.mozilla.gecko.preferences.GeckoPreferences;
 import org.mozilla.gecko.sync.setup.activities.WebURLFinder;
 
+import android.app.ActivityManager;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
+
+import java.util.List;
 
 public class TabQueue extends Locales.LocaleAwareActivity {
     private static final String LOGTAG = "TabQueue";
@@ -42,9 +54,6 @@ public class TabQueue extends Locales.LocaleAwareActivity {
             return;
         }
 
-        // TODO add telemetry
-        //Telemetry.sendUIEvent(TelemetryContract.Event.SHOW, TelemetryContract.Method.SHARE_OVERLAY, telemetryExtras);
-
         boolean showOpenInBackgroundToast = GeckoSharedPrefs.forApp(this).getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
 
         // Don't inflate a layout - we're using this activity to simply decide if we want to show the overlay toast
@@ -57,12 +66,16 @@ public class TabQueue extends Locales.LocaleAwareActivity {
     }
 
     private void showToast(Intent intent) {
+        Telemetry.sendUIEvent(TelemetryContract.Event.LAUNCH, TelemetryContract.Method.TAB_QUEUE);
+
         intent.setClass(getApplicationContext(), TabQueueService.class);
         startService(intent);
         finish();
     }
 
     private void loadNormally(Intent intent) {
+        Telemetry.sendUIEvent(TelemetryContract.Event.LOAD_URL, TelemetryContract.Method.TAB_QUEUE);
+
         intent.setClass(getApplicationContext(), BrowserApp.class);
         startActivity(intent);
         finish();

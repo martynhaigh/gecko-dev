@@ -1,3 +1,8 @@
+/* -*- Mode: Java; c-basic-offset: 4; tab-width: 4; indent-tabs-mode: nil; -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.GeckoAppShell;
@@ -18,7 +23,7 @@ import android.view.animation.AnimationUtils;
 import android.widget.Toast;
 
 public class TabQueuePrompt extends Locales.LocaleAwareActivity {
-    private static final String LOGTAG = "TabQueue";
+    private static final String LOGTAG = "TabQueuePrompt";
 
     // Flag set during animation to prevent animation multiple-start.
     private boolean isAnimating;
@@ -40,12 +45,6 @@ public class TabQueuePrompt extends Locales.LocaleAwareActivity {
 
     private void showTabQueueEnablePrompt() {
 
-        //Remove title bar
-        //this.requestWindowFeature(Window.FEATURE_NO_TITLE);
-
-        //Remove notification bar
-        //this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
         setContentView(R.layout.tab_queue_prompt);
 
         findViewById(R.id.ok_button).setOnClickListener(new View.OnClickListener() {
@@ -53,10 +52,8 @@ public class TabQueuePrompt extends Locales.LocaleAwareActivity {
             public void onClick(View v) {
                 Telemetry.sendUIEvent(TelemetryContract.Event.ACTION, TelemetryContract.Method.TAB_QUEUE);
 
-                GeckoSharedPrefs.forApp(getBaseContext()).edit().putBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, true).apply();
-                intent.setClass(getApplicationContext(), TabQueueService.class);
-                startService(intent);
-                setResult(TabQueueHelper.TAB_QUEUE_TRY_IT);
+
+                setResult(TabQueueHelper.TAB_QUEUE_TRY_IT, intent);
                 finish();
             }
         });
@@ -73,11 +70,6 @@ public class TabQueuePrompt extends Locales.LocaleAwareActivity {
         // Start the slide-up animation.
         Animation anim = AnimationUtils.loadAnimation(this, R.anim.overlay_slide_up);
         findViewById(R.id.tab_queue_container).startAnimation(anim);
-
-
-        // Start the slide-up animation.
-        // anim = AnimationUtils.loadAnimation(this, R.anim.abc_fade_in);
-        //findViewById(R.id.background_container).startAnimation(anim);
     }
 
 
@@ -87,19 +79,6 @@ public class TabQueuePrompt extends Locales.LocaleAwareActivity {
 
         // Don't perform an activity-dismiss animation.
         overridePendingTransition(0, 0);
-    }
-
-    /**
-     * Show a toast indicating we were started with no URL, and then stop.
-     */
-    private void abortDueToNoURL() {
-        Log.e(LOGTAG, "Unable to process shared intent. No URL found!");
-
-        // Display toast notifying the user of failure (most likely a developer who screwed up
-        // trying to send a share intent).
-        Toast toast = Toast.makeText(this, getResources().getText(R.string.overlay_share_no_url), Toast.LENGTH_SHORT);
-        toast.show();
-        finish();
     }
 
     /**
@@ -140,7 +119,6 @@ public class TabQueuePrompt extends Locales.LocaleAwareActivity {
         slideOut();
         Telemetry.sendUIEvent(TelemetryContract.Event.CANCEL, TelemetryContract.Method.TAB_QUEUE);
         setResult(TabQueueHelper.TAB_QUEUE_CANCEL);
-
     }
 
     /**

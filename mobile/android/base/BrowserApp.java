@@ -62,6 +62,7 @@ import org.mozilla.gecko.prompts.Prompt;
 import org.mozilla.gecko.prompts.PromptListItem;
 import org.mozilla.gecko.sync.setup.SyncAccounts;
 import org.mozilla.gecko.tabqueue.TabQueueHelper;
+import org.mozilla.gecko.tabqueue.TabQueueService;
 import org.mozilla.gecko.tabs.TabHistoryController;
 import org.mozilla.gecko.tabs.TabHistoryFragment;
 import org.mozilla.gecko.tabs.TabHistoryPage;
@@ -925,7 +926,7 @@ public class BrowserApp extends GeckoApp
 
         // Process loading queue
         if (AppConstants.NIGHTLY_BUILD) {
-            if (TabQueueHelper.shouldProcessTabQueue(getApplicationContext())) {
+            if (TabQueueHelper.shouldOpenTabQueueUrls(getApplicationContext())) {
                 Log.d("MTEST", "Checking tab queue ONATTACHEDTOWINDOW");
                 TabQueueHelper.openQueuedUrls(getApplicationContext(), mProfile, false);
             }
@@ -950,16 +951,16 @@ public class BrowserApp extends GeckoApp
 
         EventDispatcher.getInstance().unregisterGeckoThreadListener((GeckoEventListener)this,
             "Prompt:ShowTop");
-
-
-        // Process temp tab queue before we load the tab from the intent
-        if (AppConstants.NIGHTLY_BUILD) {
-            if (TabQueueHelper.shouldProcessTabQueue(getApplicationContext())) {
-                Log.d("MTEST", "Checking tab queue RESUME");
-                TabQueueHelper.openQueuedUrls(getApplicationContext(), mProfile, false);
-            }
-
-        }
+//
+//
+//        // Process temp tab queue before we load the tab from the intent
+//        if (AppConstants.NIGHTLY_BUILD) {
+//            if (TabQueueHelper.shouldOpenTabQueueUrls(getApplicationContext())) {
+//                Log.d("MTEST", "Checking tab queue RESUME");
+//                TabQueueHelper.openQueuedUrls(getApplicationContext(), mProfile, false, "RESUME");
+//            }
+//
+//        }
     }
 
     @Override
@@ -2410,16 +2411,35 @@ public class BrowserApp extends GeckoApp
             case TabQueueHelper.ACTIVITY_REQUEST_TAB_QUEUE:
                 if (resultCode == TabQueueHelper.TAB_QUEUE_TRY_IT) {
                     Log.d("MTEST", "RESULT: TRY IT!");
+
+                    final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
+                    try {
+                        final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
+                        prefs.edit().putBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, true).apply();
+
+                        // by making this one more than EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT we ensure the prompt will never show again
+                        prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_LAUNCHES, TabQueueHelper.EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT + 1).apply();
+
+                    } finally {
+                        StrictMode.setThreadPolicy(savedPolicy);
+                    }
+
+                    data.setClass(getApplicationContext(), TabQueueService.class);
+                    startService(data);
+
                     moveTaskToBack(true);
                 } else if (resultCode == TabQueueHelper.TAB_QUEUE_CANCEL) {
                     Log.d("MTEST", "RESULT: CANCEL!");
 
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
-                        final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
-                        prefs.edit().putInt(TabQueueHelper.TAB_QUEUE_LAUNCHES, 0).apply();
-                        int OpenInBackgroundPromptTimesShown = prefs.getInt(TabQueueHelper.TAB_QUEUE_PROMPT_TIMES_PROMPT_SHOWN, 0) + 1;
-                        prefs.edit().putInt(TabQueueHelper.TAB_QUEUE_PROMPT_TIMES_PROMPT_SHOWN, OpenInBackgroundPromptTimesShown).apply();
+                        final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
+                        prefs.edit().remove(TabQueueHelper.PREF_TAB_QUEUE_LAUNCHES).apply();
+
+                        int timesPromptShown = prefs.getInt(TabQueueHelper.PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, 0) + 1;
+                        prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, timesPromptShown).apply();
+                        Log.d("MTEST", "Prompt shown " + timesPromptShown + " times");
+
                     } finally {
                         StrictMode.setThreadPolicy(savedPolicy);
                     }
@@ -3348,18 +3368,10 @@ public class BrowserApp extends GeckoApp
             Telemetry.sendUIEvent(TelemetryContract.Event.LOAD_URL, method);
         }
 
-        if (mInitialized && isViewAction) {
-            // Process tab queue
-            if (AppConstants.NIGHTLY_BUILD) {
-                if (TabQueueHelper.shouldShowTabQueuePrompt(BrowserApp.this)) {
-                    TabQueueHelper.showTabQueuePrompt(BrowserApp.this);
-                } else {
-//                    if (TabQueueHelper.shouldProcessTabQueue(this)) {
-//                        Log.d("MTEST", "Checking tab queue ON NEW INTENT");
-//
-//                        TabQueueHelper.openQueuedUrls(this, mProfile);
-//                    }
-                }
+        // We only want to show the prompt if the browser has been opened from an external url
+        if (AppConstants.NIGHTLY_BUILD && mInitialized && isViewAction) {
+            if (TabQueueHelper.shouldShowTabQueuePrompt(BrowserApp.this)) {
+                TabQueueHelper.showTabQueuePrompt(BrowserApp.this);
             }
         }
 
@@ -3375,12 +3387,9 @@ public class BrowserApp extends GeckoApp
             GuestSession.handleIntent(this, intent);
         }
 
-        if(openTabQueueUrls) {
-            Log.d("MTEST", "BrowserApp process TabQueueHelper.LOAD_URLS_ACTION ");
-
+        // If the user has clicked the tab queue notification the load the tabs and open the tab tray
+        if(AppConstants.NIGHTLY_BUILD && mInitialized && openTabQueueUrls) {
             TabQueueHelper.openQueuedUrls(this, mProfile, false);
-
-            // User has pressed the Tab Queue notification, so lets show them their tabs in the tabs panel
             showNormalTabs();
         }
 

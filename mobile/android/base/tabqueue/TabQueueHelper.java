@@ -1,3 +1,8 @@
+/* -*- Mode: Java; c-basic-offset: 4; tab-width: 4; indent-tabs-mode: nil; -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.BrowserApp;
@@ -18,66 +23,66 @@ import android.os.StrictMode;
 import android.support.v4.app.NotificationCompat;
 import android.text.TextUtils;
 import android.util.Log;
-import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
 
-/**
- * Created by martyn on 09/02/15.
- */
 public class TabQueueHelper {
 
+    // result codes for returning from the prompt
     public static final int TAB_QUEUE_TRY_IT = 201;
     public static final int TAB_QUEUE_OPEN_NOW = 202;
     public static final int TAB_QUEUE_CANCEL = 203;
 
-    public static final String TAB_QUEUE_PROMPT_TIMES_PROMPT_SHOWN = "tab_queue_prompt_times_prompt_shown";
-    public static final int MAX_TIMES_TO_SHOW = 3;
-
-    public static final String TAB_QUEUE_LAUNCHES = "external_opens";
-    public static final int TAB_QUEUE_LAUNCHES_BEFORE_PROMPT = 3;
+    public static final int MAX_TIMES_TO_SHOW_PROMPT = 3;
+    public static final int EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT = 3;
 
     public static final int ACTIVITY_REQUEST_TAB_QUEUE = 1002;
 
-    public static final String TAB_QUEUE_FILE_NAME = "tab_queue_url_list.json";
-    public static final int TAB_QUEUE_NOTIFICATION_ID = 783;
-    public static final String TAB_QUEUE_COUNT = "tab_queue_count";
-    public static final int LENGTH_SHORT = 3000;
-    public static final String LOAD_URLS_ACTION = "TAB_QUEUE_LOAD_URLS";
+    public static final String FILE_NAME = "tab_queue_url_list.json";
+    public static final int TOAST_TIMEOUT = 3000;
+    public static final String LOAD_URLS_ACTION = "TAB_QUEUE_LOAD_URLS_ACTION";
 
+    public static final int TAB_QUEUE_NOTIFICATION_ID = 783;
+
+    public static final String PREF_TAB_QUEUE_LAUNCHES = "tab_queue_launches";
+    public static final String PREF_TAB_QUEUE_COUNT = "tab_queue_count";
+    public static final String PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN = "tab_queue_times_prompt_shown";
 
     /**
-     * Check and show the tab queue prompt if the user has launched TAB_QUEUE_LAUNCHES_BEFORE_PROMPT external links
+     * Check if we should show the tab queue prompt
      */
     public static boolean shouldShowTabQueuePrompt(Context context) {
+
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
             final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
-            boolean showToast = prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
-            int timesPromptShown = prefs.getInt(TAB_QUEUE_PROMPT_TIMES_PROMPT_SHOWN, 0);
 
-            if (showToast || timesPromptShown > MAX_TIMES_TO_SHOW) {
-                // exit early if the option is enabled or the user has seen the prompt too many times.
-                Log.d("MTEST", "CHECK: Toast activated - exit");
+            boolean tabQueueEnabled = prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
+            int timesPromptShown = prefs.getInt(PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, 0);
+
+            // exit early if the feature is enabled or the user has seen the
+            // prompt more than MAX_TIMES_TO_SHOW_PROMPT times.
+            if (tabQueueEnabled || timesPromptShown >= MAX_TIMES_TO_SHOW_PROMPT) {
                 return false;
             }
 
-            final int timesOpened = prefs.getInt(TAB_QUEUE_LAUNCHES, 0) + 1;
-            Log.d("MTEST", "CHECK: Times opened = " + timesOpened);
+            final int timesOpened = prefs.getInt(PREF_TAB_QUEUE_LAUNCHES, 0) + 1;
 
-            if (timesOpened < TAB_QUEUE_LAUNCHES_BEFORE_PROMPT) {
+            if (timesOpened < EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT) {
                 // Allow a few external links to open before we prompt the user
-                prefs.edit().putInt(TAB_QUEUE_LAUNCHES, timesOpened).apply();
-            } else if (timesOpened == TAB_QUEUE_LAUNCHES_BEFORE_PROMPT) {
-                prefs.edit().putInt(TAB_QUEUE_LAUNCHES, TAB_QUEUE_LAUNCHES_BEFORE_PROMPT + 1).apply();
+                prefs.edit().putInt(PREF_TAB_QUEUE_LAUNCHES, timesOpened).apply();
+                return false;
+            } else if (timesOpened == EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT) {
+                // Show the prompt
                 return true;
             }
         } finally {
             StrictMode.setThreadPolicy(savedPolicy);
         }
+
         return false;
     }
 
@@ -85,11 +90,15 @@ public class TabQueueHelper {
         activity.startActivityForResult(new Intent(activity, TabQueuePrompt.class), ACTIVITY_REQUEST_TAB_QUEUE);
     }
 
-    static public boolean shouldProcessTabQueue(Context context) {
+    static public boolean shouldOpenTabQueueUrls(Context context) {
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
             final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
-            return prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
+
+            boolean tabQueueEnabled = prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
+            int tabsQueued = prefs.getInt(PREF_TAB_QUEUE_COUNT, 0);
+
+            return tabQueueEnabled && tabsQueued > 0;
         } finally {
             StrictMode.setThreadPolicy(savedPolicy);
         }
@@ -98,70 +107,78 @@ public class TabQueueHelper {
     static public int getTabQueueLength(Context context) {
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
-            return prefs.getInt(TAB_QUEUE_COUNT, 0);
+            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
+
+            return prefs.getInt(PREF_TAB_QUEUE_COUNT, 0);
         } finally {
             StrictMode.setThreadPolicy(savedPolicy);
         }
     }
 
-    static public void queueUrl(Context context, String url, GeckoProfile profile) {
-        Log.d("MTEST", "queueUrl");
-
+    /**
+     * Add a url to the tab queue, create a notification
+     * @param context
+     * @param profile
+     * @param url URL to add
+     */
+    static public void queueUrl(Context context, GeckoProfile profile, String url) {
         String readingListContent = null;
         try {
-            readingListContent = profile.readFile(TAB_QUEUE_FILE_NAME);
+            readingListContent = profile.readFile(FILE_NAME);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        boolean readingListExists = !ch.boye.httpclientandroidlib.util.TextUtils.isEmpty(readingListContent);
-        JSONArray jsonArray = null;
-        if (readingListExists) {
+
+        JSONArray jsonArray = new JSONArray();
+        if (!TextUtils.isEmpty(readingListContent)) {
             try {
                 jsonArray = new JSONArray(readingListContent);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
-        } else {
-            jsonArray = new JSONArray();
         }
-        Log.d("MTEST", "Adding: " + url);
-        Log.d("MTEST", "Sites Queued: " + jsonArray.length() + " -> " + (1 + jsonArray.length()));
 
         jsonArray.put(url);
 
-        Log.d("MTEST", jsonArray.toString());
+        profile.writeFile(FILE_NAME, jsonArray.toString());
 
-        profile.writeFile(TAB_QUEUE_FILE_NAME, jsonArray.toString());
+        // create / replace the notification
+        Intent resultIntent = new Intent(context, BrowserApp.class);
+        resultIntent.setAction(TabQueueHelper.LOAD_URLS_ACTION);
 
+        PendingIntent pendingIntent = PendingIntent.getActivity(context, TabQueueHelper.TAB_QUEUE_NOTIFICATION_ID, resultIntent, PendingIntent.FLAG_CANCEL_CURRENT);
 
-        // create the notification
         NotificationCompat.Builder mBuilder =
                 new NotificationCompat.Builder(context)
                         .setSmallIcon(R.drawable.ic_status_logo)
                         .setContentTitle(context.getResources().getQuantityString(R.plurals.tab_queue_notification_title, jsonArray.length()))
                         .setContentText(context.getResources().getQuantityString(R.plurals.tab_queue_notification_message, jsonArray.length(), jsonArray.length()));
 
-        Intent resultIntent = new Intent(context, BrowserApp.class);
-        resultIntent.setAction(TabQueueHelper.LOAD_URLS_ACTION);
-
-        PendingIntent pendingIntent = PendingIntent.getActivity(context, TabQueueHelper.TAB_QUEUE_NOTIFICATION_ID, resultIntent, PendingIntent.FLAG_CANCEL_CURRENT);
         mBuilder.setContentIntent(pendingIntent);
-        NotificationManager mNotificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
 
+        NotificationManager mNotificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         mNotificationManager.notify(TabQueueHelper.TAB_QUEUE_NOTIFICATION_ID, mBuilder.build());
 
-        // Store the number of URLs queued
+        // Store the number of URLs queued so that we don't have to read the FILE_NAME to see if we have
+        // any urls to open
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
-            int openInBackgroundCount = prefs.getInt(TabQueueHelper.TAB_QUEUE_COUNT, 0);
-            prefs.edit().putInt(TabQueueHelper.TAB_QUEUE_COUNT, openInBackgroundCount + 1).apply();
+            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
+
+            int openInBackgroundCount = prefs.getInt(TabQueueHelper.PREF_TAB_QUEUE_COUNT, 0);
+            prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_COUNT, openInBackgroundCount + 1).apply();
         } finally {
             StrictMode.setThreadPolicy(savedPolicy);
         }
     }
 
+    /**
+     * Opens the file with filename of {@link TabQueueHelper#FILE_NAME} and constructs a JSON object to send to
+     * the JS which will open the tabs and optionally send a callback notification.
+     * @param context
+     * @param profile
+     * @param performCallback Specify is the JS will perform a callback on the "Tabs:TabsOpened" event after opening the passed in tabs
+     */
     static public void openQueuedUrls(Context context, GeckoProfile profile, boolean performCallback) {
         //remove the notification
         NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -174,17 +191,16 @@ public class TabQueueHelper {
 
         String readingList = null;
         try {
-            readingList = profile.readFile(TAB_QUEUE_FILE_NAME);
+            readingList = profile.readFile(FILE_NAME);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        Log.d("MTEST", "Opening URLs.  List content: " + readingList);
 
         if (!TextUtils.isEmpty(readingList)) {
             JSONArray jsonArray;
+
             try {
                 jsonArray = new JSONArray(readingList);
-
             } catch (JSONException e) {
                 jsonArray = null;
                 e.printStackTrace();
@@ -202,10 +218,11 @@ public class TabQueueHelper {
                         e.printStackTrace();
                         continue;
                     }
-                    Log.d("MTEST", "opening " + site);
 
                     if (!TextUtils.isEmpty(site)) {
                         jsonObject = new JSONObject();
+
+                        // construct the object as expected by the JS
                         try {
                             jsonObject.put("url", site);
                             jsonObject.put("isPrivate", false);
@@ -226,15 +243,16 @@ public class TabQueueHelper {
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
+
                 GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Tabs:OpenMultiple", data.toString()));
             }
 
-            profile.deleteFile(TAB_QUEUE_FILE_NAME);
+            profile.deleteFile(FILE_NAME);
 
             final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
             try {
-                final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
-                prefs.edit().remove(TAB_QUEUE_COUNT).apply();
+                final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
+                prefs.edit().remove(PREF_TAB_QUEUE_COUNT).apply();
             } finally {
                 StrictMode.setThreadPolicy(savedPolicy);
             }

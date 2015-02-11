@@ -19,8 +19,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -1812,7 +1810,6 @@ public abstract class GeckoApp
 
     @Override
     protected void onNewIntent(Intent externalIntent) {
-        Log.d("MTEST", "GeckoApp onNewIntent " + externalIntent.getAction());
         final SafeIntent intent = new SafeIntent(externalIntent);
 
         if (GeckoThread.checkLaunchState(GeckoThread.LaunchState.GeckoExiting)) {
@@ -1835,22 +1832,19 @@ public abstract class GeckoApp
             String uri = intent.getDataString();
             Tabs.getInstance().loadUrl(uri);
         } else if (Intent.ACTION_VIEW.equals(action)) {
-            if (TabQueueHelper.shouldProcessTabQueue(this)) {
-                Log.d("MTEST", "GeckoApp onNewIntent opening tab queue");
-
+            // We need to ensure that if we receive a VIEW action and there are tabs queued then the queued tabs are below
+            // the tab loaded from the intent. We process the tab queue first and request a callback from the JS - the
+            // listener will open the url from the intent as normal when the tab queue has been processed.
+            if (AppConstants.NIGHTLY_BUILD && TabQueueHelper.shouldOpenTabQueueUrls(this)) {
                 EventDispatcher.getInstance().registerGeckoThreadListener(new NativeEventListener() {
                     @Override
                     public void handleMessage(String event, NativeJSObject message, EventCallback callback) {
-                        Log.d("MTEST", "GeckoApp handleMessage " + event);
-
                         if ("Tabs:TabsOpened".equals(event)) {
                             String uri = intent.getDataString();
-                            Log.d("MTEST", "GeckoApp Opening last " + uri);
-
                             Tabs.getInstance().loadUrl(uri, Tabs.LOADURL_NEW_TAB |
                                     Tabs.LOADURL_USER_ENTERED |
                                     Tabs.LOADURL_EXTERNAL);
-                            EventDispatcher.getInstance().unregisterGeckoThreadListener(this);
+                            EventDispatcher.getInstance().unregisterGeckoThreadListener(this, "Tabs:TabsOpened");
                         }
                     }
                 }, "Tabs:TabsOpened");

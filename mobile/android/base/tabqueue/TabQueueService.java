@@ -1,3 +1,8 @@
+/* -*- Mode: Java; c-basic-offset: 4; tab-width: 4; indent-tabs-mode: nil; -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.BrowserApp;
@@ -20,12 +25,15 @@ import android.widget.TextView;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+// On launch of an external url this service displays a view overtop of the currently running activity with an action
+// to open the url in fennec immediately.  If the user takes no action or the service receives another intent, the
+// url is added to a file which is then read in fennec on next launch.
 public class TabQueueService extends Service {
 
     private WindowManager windowManager;
     private View layout;
     private TextView mMessageView;
-    private Button mButton;
+    private Button openNowButton;
     private GeckoProfile mProfile;
     private final Handler mHideHandler = new Handler();
     private WindowManager.LayoutParams mParams;
@@ -43,16 +51,16 @@ public class TabQueueService extends Service {
         super.onCreate();
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
         LayoutInflater layoutInflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
         layout = layoutInflater.inflate(R.layout.button_toast, null);
 
         mMessageView = (TextView) layout.findViewById(R.id.toast_message);
-        mButton = (Button) layout.findViewById(R.id.toast_button);
-
-
-        mButton.setEnabled(true);
         mMessageView.setText(getResources().getText(R.string.tab_queue_toast_message));
-        mButton.setText(getResources().getText(R.string.tab_queue_toast_action));
+
+        openNowButton = (Button) layout.findViewById(R.id.toast_button);
+        openNowButton.setEnabled(true);
+        openNowButton.setText(getResources().getText(R.string.tab_queue_toast_action));
 
         mParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -67,6 +75,7 @@ public class TabQueueService extends Service {
     }
 
     private abstract class HideRunnable implements Runnable {
+        // if true then remove the view when run
         private boolean mShouldHide = true;
 
         public void shouldHide(boolean hide) {
@@ -85,6 +94,8 @@ public class TabQueueService extends Service {
 
     @Override
     public int onStartCommand(final Intent intent, int flags, int startId) {
+
+        // if there's already a runnable then run it but keep the view attached to the window
         if (mHideRunnable != null) {
             mHideHandler.removeCallbacks(mHideRunnable);
             mHideRunnable.shouldHide(false);
@@ -101,7 +112,7 @@ public class TabQueueService extends Service {
             }
         };
 
-        mButton.setOnClickListener(new View.OnClickListener() {
+        openNowButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 mHideHandler.removeCallbacks(mHideRunnable);
@@ -115,7 +126,7 @@ public class TabQueueService extends Service {
             }
         });
 
-        mHideHandler.postDelayed(mHideRunnable, TabQueueHelper.LENGTH_SHORT);
+        mHideHandler.postDelayed(mHideRunnable, TabQueueHelper.TOAST_TIMEOUT);
 
         return super.onStartCommand(intent, flags, startId);
     }
@@ -183,7 +194,7 @@ public class TabQueueService extends Service {
         handler.post(new Runnable() {
             @Override
             public void run() {
-                TabQueueHelper.queueUrl(getApplicationContext(), intentData, mProfile);
+                TabQueueHelper.queueUrl(getApplicationContext(), mProfile, intentData);
             }
         });
     }
