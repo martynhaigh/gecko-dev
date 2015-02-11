@@ -407,7 +407,6 @@
   </activity>
 #endif
 
-
         <activity android:name="org.mozilla.gecko.preferences.GeckoPreferences"
                   android:theme="@style/Gecko.Preferences"
                   android:configChanges="orientation|screenSize|locale|layoutDirection"

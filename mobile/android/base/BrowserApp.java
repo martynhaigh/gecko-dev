@@ -3412,8 +3412,6 @@ public class BrowserApp extends GeckoApp
         }
     }
 
-
-
     @Override
     protected NotificationClient makeNotificationClient() {
         // The service is local to Fennec, so we can use it to keep
