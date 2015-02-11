@@ -4,8 +4,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#ifndef jsproxy_h
-#define jsproxy_h
+#ifndef js_Proxy_h
+#define js_Proxy_h
 
 #include "mozilla/Maybe.h"
 
@@ -541,19 +541,27 @@ SetReservedOrProxyPrivateSlot(JSObject *obj, size_t slot, const Value &value)
 class MOZ_STACK_CLASS ProxyOptions {
   protected:
     /* protected constructor for subclass */
-    explicit ProxyOptions(bool singletonArg)
+    explicit ProxyOptions(bool singletonArg, bool lazyProtoArg = false)
       : singleton_(singletonArg),
+        lazyProto_(lazyProtoArg),
         clasp_(ProxyClassPtr)
     {}
 
   public:
     ProxyOptions() : singleton_(false),
+                     lazyProto_(false),
                      clasp_(ProxyClassPtr)
     {}
 
     bool singleton() const { return singleton_; }
     ProxyOptions &setSingleton(bool flag) {
         singleton_ = flag;
+        return *this;
+    }
+
+    bool lazyProto() const { return lazyProto_; }
+    ProxyOptions &setLazyProto(bool flag) {
+        lazyProto_ = flag;
         return *this;
     }
 
@@ -567,6 +575,7 @@ class MOZ_STACK_CLASS ProxyOptions {
 
   private:
     bool singleton_;
+    bool lazyProto_;
     const Class *clasp_;
 };
 
@@ -670,4 +679,4 @@ inline void assertEnteredPolicy(JSContext *cx, JSObject *obj, jsid id,
 extern JS_FRIEND_API(JSObject *)
 js_InitProxyClass(JSContext *cx, JS::HandleObject obj);
 
-#endif /* jsproxy_h */
+#endif /* js_Proxy_h */

@@ -3964,7 +3964,7 @@ nsContentUtils::GetListenerManagerForNode(nsINode *aNode)
 
   EventListenerManagerMapEntry *entry =
     static_cast<EventListenerManagerMapEntry *>
-      (PL_DHashTableAdd(&sEventListenerManagersHash, aNode, fallible));
+               (PL_DHashTableAdd(&sEventListenerManagersHash, aNode));
 
   if (!entry) {
     return nullptr;
@@ -4277,7 +4277,7 @@ nsContentUtils::ParseFragmentXML(const nsAString& aSourceBuffer,
     // sXMLFragmentSink now owns the sink
   }
   nsCOMPtr<nsIContentSink> contentsink = do_QueryInterface(sXMLFragmentSink);
-  NS_ABORT_IF_FALSE(contentsink, "Sink doesn't QI to nsIContentSink!");
+  MOZ_ASSERT(contentsink, "Sink doesn't QI to nsIContentSink!");
   sXMLFragmentParser->SetContentSink(contentsink);
 
   sXMLFragmentSink->SetTargetDocument(aDocument);

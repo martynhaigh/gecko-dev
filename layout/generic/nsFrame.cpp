@@ -1909,18 +1909,8 @@ CheckForApzAwareEventHandlers(nsDisplayListBuilder* aBuilder, nsIFrame* aFrame)
     return;
   }
   EventListenerManager* elm = nsContentUtils::GetExistingListenerManagerForNode(content);
-  if (!elm) {
-    return;
-  }
-  if (elm->HasListenersFor(nsGkAtoms::ontouchstart) ||
-      elm->HasListenersFor(nsGkAtoms::ontouchmove)) {
-    aBuilder->SetAncestorHasTouchEventHandler(true);
-  }
-  if (elm->HasListenersFor(nsGkAtoms::onwheel) ||
-      elm->HasListenersFor(nsGkAtoms::onDOMMouseScroll) ||
-      elm->HasListenersFor(nsHtml5Atoms::onmousewheel))
-  {
-    aBuilder->SetAncestorHasScrollEventHandler(true);
+  if (nsLayoutUtils::HasApzAwareListeners(elm)) {
+    aBuilder->SetAncestorHasApzAwareEventHandler(true);
   }
 }
 
@@ -5345,8 +5335,8 @@ nsIFrame::GetPositionIgnoringScrolling()
 nsRect
 nsIFrame::GetOverflowRect(nsOverflowType aType) const
 {
-  NS_ABORT_IF_FALSE(aType == eVisualOverflow || aType == eScrollableOverflow,
-                    "unexpected type");
+  MOZ_ASSERT(aType == eVisualOverflow || aType == eScrollableOverflow,
+             "unexpected type");
 
   // Note that in some cases the overflow area might not have been
   // updated (yet) to reflect any outline set on the frame or the area
