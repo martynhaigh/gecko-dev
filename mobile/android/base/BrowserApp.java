@@ -927,7 +927,6 @@ public class BrowserApp extends GeckoApp
         // Process loading queue
         if (AppConstants.NIGHTLY_BUILD) {
             if (TabQueueHelper.shouldOpenTabQueueUrls(getApplicationContext())) {
-                Log.d("MTEST", "Checking tab queue ONATTACHEDTOWINDOW");
                 TabQueueHelper.openQueuedUrls(getApplicationContext(), mProfile, false);
             }
         }
@@ -951,16 +950,6 @@ public class BrowserApp extends GeckoApp
 
         EventDispatcher.getInstance().unregisterGeckoThreadListener((GeckoEventListener)this,
             "Prompt:ShowTop");
-//
-//
-//        // Process temp tab queue before we load the tab from the intent
-//        if (AppConstants.NIGHTLY_BUILD) {
-//            if (TabQueueHelper.shouldOpenTabQueueUrls(getApplicationContext())) {
-//                Log.d("MTEST", "Checking tab queue RESUME");
-//                TabQueueHelper.openQueuedUrls(getApplicationContext(), mProfile, false, "RESUME");
-//            }
-//
-//        }
     }
 
     @Override
@@ -2410,8 +2399,6 @@ public class BrowserApp extends GeckoApp
                 break;
             case TabQueueHelper.ACTIVITY_REQUEST_TAB_QUEUE:
                 if (resultCode == TabQueueHelper.TAB_QUEUE_TRY_IT) {
-                    Log.d("MTEST", "RESULT: TRY IT!");
-
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
                         final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
@@ -2429,8 +2416,6 @@ public class BrowserApp extends GeckoApp
 
                     moveTaskToBack(true);
                 } else if (resultCode == TabQueueHelper.TAB_QUEUE_CANCEL) {
-                    Log.d("MTEST", "RESULT: CANCEL!");
-
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
                         final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
@@ -2438,13 +2423,21 @@ public class BrowserApp extends GeckoApp
 
                         int timesPromptShown = prefs.getInt(TabQueueHelper.PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, 0) + 1;
                         prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, timesPromptShown).apply();
-                        Log.d("MTEST", "Prompt shown " + timesPromptShown + " times");
 
                     } finally {
                         StrictMode.setThreadPolicy(savedPolicy);
                     }
-                } else {
-                    Log.d("MTEST", "RESULT: OTHER");
+                } else if (resultCode == TabQueueHelper.TAB_QUEUE_NOT_NOW) {
+                    // Lets make sure the user never sees the prompt again
+                    final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
+                    try {
+                        final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
+
+                        prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_LAUNCHES, TabQueueHelper.EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT + 1).apply();
+                        prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, TabQueueHelper.MAX_TIMES_TO_SHOW_PROMPT + 1).apply();
+                    } finally {
+                        StrictMode.setThreadPolicy(savedPolicy);
+                    }
                 }
                 break;
             default:
@@ -3350,7 +3343,6 @@ public class BrowserApp extends GeckoApp
     @Override
     protected void onNewIntent(Intent intent) {
         String action = intent.getAction();
-        Log.d("MTEST", "BrowserApp onNewIntent " + action);
 
         final boolean isViewAction = Intent.ACTION_VIEW.equals(action);
         final boolean isBookmarkAction = GeckoApp.ACTION_HOMESCREEN_SHORTCUT.equals(action);

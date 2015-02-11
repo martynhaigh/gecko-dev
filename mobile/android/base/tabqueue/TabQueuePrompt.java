@@ -6,21 +6,17 @@
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.GeckoAppShell;
-import org.mozilla.gecko.GeckoSharedPrefs;
 import org.mozilla.gecko.Locales;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.Telemetry;
 import org.mozilla.gecko.TelemetryContract;
-import org.mozilla.gecko.preferences.GeckoPreferences;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
-import android.widget.Toast;
 
 public class TabQueuePrompt extends Locales.LocaleAwareActivity {
     private static final String LOGTAG = "TabQueuePrompt";
@@ -62,7 +58,7 @@ public class TabQueuePrompt extends Locales.LocaleAwareActivity {
             public void onClick(View v) {
                 Telemetry.sendUIEvent(TelemetryContract.Event.NOT_NOW, TelemetryContract.Method.TAB_QUEUE);
 
-                setResult(TabQueueHelper.TAB_QUEUE_OPEN_NOW);
+                setResult(TabQueueHelper.TAB_QUEUE_NOT_NOW);
                 finish();
             }
         });

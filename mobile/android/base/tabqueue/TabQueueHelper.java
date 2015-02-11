@@ -22,7 +22,6 @@ import android.content.SharedPreferences;
 import android.os.StrictMode;
 import android.support.v4.app.NotificationCompat;
 import android.text.TextUtils;
-import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -33,7 +32,7 @@ public class TabQueueHelper {
 
     // result codes for returning from the prompt
     public static final int TAB_QUEUE_TRY_IT = 201;
-    public static final int TAB_QUEUE_OPEN_NOW = 202;
+    public static final int TAB_QUEUE_NOT_NOW = 202;
     public static final int TAB_QUEUE_CANCEL = 203;
 
     public static final int MAX_TIMES_TO_SHOW_PROMPT = 3;
@@ -117,9 +116,10 @@ public class TabQueueHelper {
 
     /**
      * Add a url to the tab queue, create a notification
+     *
      * @param context
      * @param profile
-     * @param url URL to add
+     * @param url     URL to add
      */
     static public void queueUrl(Context context, GeckoProfile profile, String url) {
         String readingListContent = null;
@@ -175,6 +175,7 @@ public class TabQueueHelper {
     /**
      * Opens the file with filename of {@link TabQueueHelper#FILE_NAME} and constructs a JSON object to send to
      * the JS which will open the tabs and optionally send a callback notification.
+     *
      * @param context
      * @param profile
      * @param performCallback Specify is the JS will perform a callback on the "Tabs:TabsOpened" event after opening the passed in tabs
@@ -185,7 +186,7 @@ public class TabQueueHelper {
         notificationManager.cancel(TAB_QUEUE_NOTIFICATION_ID);
 
         // exit early if we don't have any tabs queued
-        if(getTabQueueLength(context) < 1)  {
+        if (getTabQueueLength(context) < 1) {
             return;
         }
 
