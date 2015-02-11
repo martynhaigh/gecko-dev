@@ -87,8 +87,6 @@ public final class GeckoProfile {
     private volatile LockState mLocked = LockState.UNDEFINED;
     private volatile boolean mInGuestMode;
 
-
-
     // Constants to cache whether or not a profile is "locked".
     private enum LockState {
         LOCKED,
