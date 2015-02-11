@@ -38,9 +38,6 @@ public interface TelemetryContract {
         // Editing an item.
         EDIT("edit.1"),
 
-        // don't try an option.
-        NOT_NOW("notnow.1"),
-
         // Launching (opening) an external application.
         // Note: Only used in JavaScript for now, but here for completeness.
         LAUNCH("launch.1"),
@@ -51,6 +48,9 @@ public interface TelemetryContract {
         LOCALE_BROWSER_RESET("locale.browser.reset.1"),
         LOCALE_BROWSER_SELECTED("locale.browser.selected.1"),
         LOCALE_BROWSER_UNSELECTED("locale.browser.unselected.1"),
+
+        // don't try an option.
+        NOT_NOW("notnow.1"),
 
         // Set default panel.
         PANEL_SET_DEFAULT("setdefault.1"),

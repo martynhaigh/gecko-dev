@@ -618,53 +618,14 @@ public final class GeckoProfile {
         return null;
     }
 
-    public void appendToFile(String filename, String data)  {
-
-        Log.d("MTEST", "appendToFile: trying to write file");
-
-
-        File logFile = new File(getDir(), filename);
-        if (!logFile.exists()) {
-            Log.d("MTEST", "appendToFile: file doesn't exist");
-
-            try {
-                logFile.createNewFile();
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                Log.d("MTEST", "appendToFile: error creating file");
-
-                e.printStackTrace();
-            }
-        }
-        try {
-            //BufferedWriter for performance, true to set append to file flag
-            BufferedWriter buf = new BufferedWriter(new FileWriter(logFile, true));
-            buf.append(data);
-            buf.close();
-        } catch (IOException e) {
-            Log.d("MTEST", "appendToFile: error writing to file");
-
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-    }
-
     public void writeFile(String filename, String data)  {
-
-        Log.d("MTEST", "writeFile: trying to write file");
-
-
         File logFile = new File(getDir(), filename);
         if (!logFile.exists()) {
-            Log.d("MTEST", "writeFile: file doesn't exist");
 
             try {
                 logFile.createNewFile();
             } catch (IOException e) {
-                // TODO Auto-generated catch block
-                Log.d("MTEST", "writeFile: error creating file");
-
-                e.printStackTrace();
+                Log.e(LOGTAG, "Unable to create file", e);
             }
         }
         try {
@@ -673,10 +634,7 @@ public final class GeckoProfile {
             buf.write(data);
             buf.close();
         } catch (IOException e) {
-            Log.d("MTEST", " writeFile: error writing to file");
-
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+            Log.e(LOGTAG, "Unable to write to file", e);
         }
     }
 

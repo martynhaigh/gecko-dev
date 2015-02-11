@@ -393,7 +393,7 @@ public abstract class GeckoApp
                 onPreparePanel(featureId, mMenuPanel, mMenu);
             }
 
-            return mMenuPanel;
+            return mMenuPanel; 
         }
 
         return super.onCreatePanelView(featureId);
@@ -506,8 +506,7 @@ public abstract class GeckoApp
             mMenuPanel.addView((GeckoMenu) mMenu);
         }
     }
-
-    
+ 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         // Handle hardware menu key presses separately so that we can show a custom menu in some cases.
@@ -1059,7 +1058,7 @@ public abstract class GeckoApp
         layerView.addLayer(layer);
         layerView.requestRender();
     }
-
+    
     public void requestRender() {
         mLayerView.requestRender();
     }
@@ -1218,7 +1217,7 @@ public abstract class GeckoApp
 
         } else {
             final String uri = getURIFromIntent(intent);
-            Log.d("MTEST", "Gecko loading uri: " + uri);
+
             GeckoThread.setArgs(args);
             GeckoThread.setAction(action);
             GeckoThread.setUri(TextUtils.isEmpty(uri) ? null : uri);

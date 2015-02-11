@@ -165,5 +165,4 @@ public class GeckoApplication extends Application
     public void prepareLightweightTheme() {
         mLightweightTheme = new LightweightTheme(this);
     }
-
 }

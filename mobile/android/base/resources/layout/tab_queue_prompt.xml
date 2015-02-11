@@ -9,12 +9,11 @@
         android:layout_gravity="bottom|center"
         android:clipChildren="false"
         android:clipToPadding="false"
-        android:id="@+id/tab_queue_container"
-        >
+        android:id="@+id/tab_queue_container">
 
     <LinearLayout android:layout_width="match_parent"
                   android:layout_height="wrap_content"
-                  android:minHeight="@dimen/firstrun_min_height"
+                  android:minHeight="@dimen/tab_queue_min_height"
                   android:orientation="vertical"
                   android:background="@color/tab_queue_background">
 
@@ -32,7 +31,6 @@
 
         </LinearLayout>
 
-
         <LinearLayout android:layout_width="match_parent"
                       android:layout_height="0dp"
                       android:layout_weight="29"
@@ -40,26 +38,27 @@
                       android:gravity="center_horizontal"
                       android:background="@android:color/white">
 
-            <TextView android:layout_width="@dimen/firstrun_content_width"
+            <TextView android:layout_width="@dimen/tab_queue_content_width"
                       android:layout_height="wrap_content"
                       android:gravity="center_horizontal"
                       android:paddingTop="30dp"
-                      android:textAppearance="@style/TextAppearance.FirstrunLight.Main"
-                      android:text="Want to open this later?"/>
+                      android:textAppearance="@style/TextAppearance.TabQueueLight.Main"
+                      android:text="@string/tab_queue_prompt_title"/>
 
-            <TextView android:layout_width="@dimen/firstrun_content_width"
+            <TextView android:layout_width="@dimen/tab_queue_content_width"
                       android:layout_height="wrap_content"
                       android:paddingTop="20dp"
                       android:paddingBottom="30dp"
                       android:gravity="center"
-                      android:textAppearance="@style/TextAppearance.FirstrunRegular.Body"
-                      android:text="We'll load on to these links and load them when you're ready."/>
+                      android:textAppearance="@style/TextAppearance.TabQueueRegular.Body"
+                      android:text="@string/tab_queue_prompt_text"/>
 
             <LinearLayout
                     android:orientation="horizontal"
                     android:layout_width="fill_parent"
                     android:layout_height="wrap_content"
                     >
+
                 <TextView android:layout_width="fill_parent"
                           android:layout_height="wrap_content"
                           android:text="Not now"
@@ -67,8 +66,8 @@
                           android:layout_gravity="center"
                           android:id="@+id/cancel_button"
                           android:layout_weight="0.5"
-                          android:layout_margin="15dp"
-                        />
+                          android:layout_margin="15dp"/>
+
                 <Button android:layout_width="fill_parent"
                         android:layout_height="wrap_content"
                         android:text="Try it"
@@ -76,14 +75,12 @@
                         android:layout_gravity="center"
                         android:id="@+id/ok_button"
                         android:layout_weight="0.5"
-                        android:layout_margin="15dp"
-                        />
+                        android:layout_margin="15dp"/>
+
             </LinearLayout>
 
         </LinearLayout>
+
     </LinearLayout>
 
-
 </RelativeLayout>
-
-

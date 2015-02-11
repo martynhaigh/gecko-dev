@@ -186,6 +186,8 @@
 <!ENTITY tab_queue_notification_title_plural "Tabs Queued">
 <!ENTITY tab_queue_notification_message_singular "\u0025d tab queued">
 <!ENTITY tab_queue_notification_message_plural "\u0025d tabs queued">
+<!ENTITY tab_queue_prompt_title "Want to open this later?">
+<!ENTITY tab_queue_prompt_text "We'll load on to these links and load them when you're ready.">
 
 <!ENTITY pref_char_encoding "Character encoding">
 <!ENTITY pref_char_encoding_on "Show menu">
