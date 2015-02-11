@@ -1058,11 +1058,11 @@ public abstract class GeckoApp
         layerView.addLayer(layer);
         layerView.requestRender();
     }
-    
+
     public void requestRender() {
         mLayerView.requestRender();
     }
-
+    
     public void hidePlugins(Tab tab) {
         for (Layer layer : tab.getPluginLayers()) {
             if (layer instanceof PluginLayer) {
