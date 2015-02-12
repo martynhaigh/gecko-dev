@@ -58,7 +58,9 @@
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <uses-permission android:name="android.permission.WRITE_CONTACTS"/>
     <uses-permission android:name="android.permission.GET_ACCOUNTS"/>
+#endif
 
+#ifdef MOZ_ANDROID_TAB_QUEUE
     <!-- Tab Queue -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 #endif
@@ -168,9 +170,9 @@
                 <action android:name="org.mozilla.gecko.UPDATE"/>
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-#ifndef NIGHTLY_BUILD
-            <!-- if we're on a nightly build then we want to remove these intent 
-                 filters as the tab queue activity will handle them -->
+#ifndef MOZ_ANDROID_TAB_QUEUE
+            <!-- The main reason for the Tab Queue build flag is to not mess with the VIEW intent filter
+                 before the rest of the plumbing is in place -->
 
             <!-- Default browser intents -->
             <intent-filter>
@@ -245,9 +247,9 @@
             </intent-filter>
         </activity-alias>
 
-#ifdef NIGHTLY_BUILD
-        <!-- In Nightly builds we introduce the Tab Queue feature which takes over
-             the receiving of View intents from BrowserApp -->
+#ifdef MOZ_ANDROID_TAB_QUEUE
+        <!-- The main reason for the Tab Queue build flag is to not mess with the VIEW intent filter
+             before the rest of the plumbing is in place -->
 
         <service android:name="org.mozilla.gecko.tabqueue.TabQueueService"
                  android:label="Tab Queue Service">
@@ -278,7 +280,7 @@
                 <data android:mimeType="text/plain"/>
                 <data android:mimeType="application/xhtml+xml"/>
             </intent-filter>
-        </activity>        
+        </activity>
 #endif
 
         <activity android:name="org.mozilla.gecko.StartPane"

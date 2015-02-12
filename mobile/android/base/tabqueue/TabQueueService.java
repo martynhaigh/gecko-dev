@@ -6,7 +6,6 @@
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.BrowserApp;
-import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.mozglue.ContextUtils;
 
@@ -22,9 +21,6 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 // On launch of an external url this service displays a view overtop of the currently running activity with an action
 // to open the url in fennec immediately.  If the user takes no action or the service receives another intent, the
 // url is added to a file which is then read in fennec on next launch.
@@ -34,7 +30,6 @@ public class TabQueueService extends Service {
     private View layout;
     private TextView mMessageView;
     private Button openNowButton;
-    private GeckoProfile mProfile;
     private final Handler mHideHandler = new Handler();
     private WindowManager.LayoutParams mParams;
     private HideRunnable mHideRunnable;
@@ -75,7 +70,7 @@ public class TabQueueService extends Service {
     }
 
     private abstract class HideRunnable implements Runnable {
-        // if true then remove the view when run
+        // If true then remove the toast from the view hierarchy when run.
         private boolean mShouldHide = true;
 
         public void shouldHide(boolean hide) {
@@ -95,8 +90,8 @@ public class TabQueueService extends Service {
     @Override
     public int onStartCommand(final Intent intent, int flags, int startId) {
 
-        // if there's already a runnable then run it but keep the view attached to the window
         if (mHideRunnable != null) {
+            // If there's already a runnable then run it but keep the view attached to the window.
             mHideHandler.removeCallbacks(mHideRunnable);
             mHideRunnable.shouldHide(false);
             mHideRunnable.run();
@@ -135,13 +130,6 @@ public class TabQueueService extends Service {
         windowManager.removeView(layout);
     }
 
-    public synchronized GeckoProfile getProfile() {
-        if (mProfile == null) {
-            mProfile = GeckoProfile.get(this);
-        }
-        return mProfile;
-    }
-
     private void addUrlToList(Intent intentParam) {
         if (intentParam == null) {
             return;
@@ -150,46 +138,7 @@ public class TabQueueService extends Service {
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
-        getProfile();
+        // TODO Add url to list here.
 
-        if (mProfile == null) {
-            String profileName = null;
-            String profilePath = null;
-            if (args != null) {
-                Pattern p;
-                Matcher m;
-                if (args.contains("-P")) {
-                    p = Pattern.compile("(?:-P\\s*)(\\w*)(\\s*)");
-                    m = p.matcher(args);
-                    if (m.find()) {
-                        profileName = m.group(1);
-                    }
-                }
-
-                if (args.contains("-profile")) {
-                    p = Pattern.compile("(?:-profile\\s*)(\\S*)(\\s*)");
-                    m = p.matcher(args);
-                    if (m.find()) {
-                        profilePath = m.group(1);
-                    }
-                    if (profileName == null) {
-                        profileName = GeckoProfile.DEFAULT_PROFILE;
-                    }
-                    GeckoProfile.sIsUsingCustomProfile = true;
-                }
-
-                if (profileName != null || profilePath != null) {
-                    mProfile = GeckoProfile.get(this, profileName, profilePath);
-                }
-            }
-        }
-        Handler handler = new Handler();
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                // TODO Add url to list
-            }
-        });
     }
-
 }
