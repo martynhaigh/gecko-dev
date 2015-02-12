@@ -31,7 +31,7 @@
                     android:persistent="true" />
 
     <CheckBoxPreference android:key="android.not_a_preference.tab_queue"
-                        android:title="@string/pref_tab_queue"
+                        android:title="@string/pref_tab_queue_title"
                         android:summary="@string/pref_tab_queue_summary" />
 
     <org.mozilla.gecko.preferences.AndroidImportPreference
