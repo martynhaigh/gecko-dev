@@ -921,7 +921,7 @@
     </style>
 
     <!-- Completely hide the activity - this is used for the tab queue -->
-    <style name="Transparent">
+    <style name="TabQueueActivity">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>

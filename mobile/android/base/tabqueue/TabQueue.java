@@ -35,8 +35,9 @@ public class TabQueue extends Locales.LocaleAwareActivity {
 
         Intent intent = getIntent();
 
-        // For the moment lets exit early if we're not in Nightly
-        if (!AppConstants.NIGHTLY_BUILD) {
+        // For the moment lets exit early and start fennec as normal if we're not in nightly with
+        // the tab queue build flag.
+        if (!(AppConstants.MOZ_ANDROID_TAB_QUEUE && AppConstants.NIGHTLY_BUILD)) {
             loadNormally(intent);
             finish();
         }
@@ -82,15 +83,10 @@ public class TabQueue extends Locales.LocaleAwareActivity {
     }
 
     /**
-     * Show a toast indicating we were started with no URL, and then stop.
+     * Abort as we were started with no URL.
      */
     private void abortDueToNoURL() {
-        Log.d(LOGTAG, "Unable to process shared intent. No URL found!");
-
-        // Display toast notifying the user of failure (most likely a developer who screwed up
-        // trying to send a share intent).
-        Toast toast = Toast.makeText(this, getResources().getText(R.string.overlay_share_no_url), Toast.LENGTH_SHORT);
-        toast.show();
+        Log.d(LOGTAG, "Unable to process tab queue insertion. No URL found!");
         finish();
     }
 }

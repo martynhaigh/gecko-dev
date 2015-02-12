@@ -75,7 +75,7 @@ public class TabQueueService extends Service {
     }
 
     private abstract class HideRunnable implements Runnable {
-        // if true then remove the view when run
+        // If true then remove the toast from the view hierarchy when run.
         private boolean mShouldHide = true;
 
         public void shouldHide(boolean hide) {
@@ -190,13 +190,7 @@ public class TabQueueService extends Service {
                 }
             }
         }
-        Handler handler = new Handler();
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                TabQueueHelper.queueUrl(getApplicationContext(), mProfile, intentData);
-            }
-        });
-    }
 
+        TabQueueHelper.queueUrl(getApplicationContext(), mProfile, intentData);
+    }
 }
