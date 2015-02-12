@@ -173,7 +173,7 @@ public class AppConstants {
     false;
 //#endif
 
-    public static final boolean MOZ_TAB_QUEUE_ENABLED =
+    public static final boolean MOZ_ANDROID_TAB_QUEUE =
 //#ifdef MOZ_ANDROID_TAB_QUEUE
     true;
 //#else
