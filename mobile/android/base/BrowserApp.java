@@ -2401,7 +2401,7 @@ public class BrowserApp extends GeckoApp
                 if (resultCode == TabQueueHelper.TAB_QUEUE_TRY_IT) {
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
-                        final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
+                        final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
                         prefs.edit().putBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, true).apply();
 
                         // by making this one more than EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT we ensure the prompt will never show again
@@ -2418,7 +2418,7 @@ public class BrowserApp extends GeckoApp
                 } else if (resultCode == TabQueueHelper.TAB_QUEUE_CANCEL) {
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
-                        final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
+                        final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
                         prefs.edit().remove(TabQueueHelper.PREF_TAB_QUEUE_LAUNCHES).apply();
 
                         int timesPromptShown = prefs.getInt(TabQueueHelper.PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, 0) + 1;
@@ -2431,7 +2431,7 @@ public class BrowserApp extends GeckoApp
                     // Lets make sure the user never sees the prompt again
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
-                        final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
+                        final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
 
                         prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_LAUNCHES, TabQueueHelper.EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT + 1).apply();
                         prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, TabQueueHelper.MAX_TIMES_TO_SHOW_PROMPT + 1).apply();

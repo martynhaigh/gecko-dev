@@ -55,7 +55,7 @@ public class TabQueue extends Locales.LocaleAwareActivity {
             return;
         }
 
-        boolean showOpenInBackgroundToast = GeckoSharedPrefs.forApp(this).getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
+        boolean showOpenInBackgroundToast = GeckoSharedPrefs.forProfile(this).getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
 
         // Don't inflate a layout - we're using this activity to simply decide if we want to show the overlay toast
         // which happens in the service, or to open fennec as normal.

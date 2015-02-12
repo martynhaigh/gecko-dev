@@ -57,7 +57,7 @@ public class TabQueueHelper {
 
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
+            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
 
             boolean tabQueueEnabled = prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
             int timesPromptShown = prefs.getInt(PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, 0);
@@ -92,7 +92,7 @@ public class TabQueueHelper {
     static public boolean shouldOpenTabQueueUrls(Context context) {
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
+            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
 
             boolean tabQueueEnabled = prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
             int tabsQueued = prefs.getInt(PREF_TAB_QUEUE_COUNT, 0);
@@ -106,7 +106,7 @@ public class TabQueueHelper {
     static public int getTabQueueLength(Context context) {
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
+            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
 
             return prefs.getInt(PREF_TAB_QUEUE_COUNT, 0);
         } finally {
@@ -163,7 +163,7 @@ public class TabQueueHelper {
         // any urls to open
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
+            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
 
             int openInBackgroundCount = prefs.getInt(TabQueueHelper.PREF_TAB_QUEUE_COUNT, 0);
             prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_COUNT, openInBackgroundCount + 1).apply();
@@ -252,7 +252,7 @@ public class TabQueueHelper {
 
             final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
             try {
-                final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
+                final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
                 prefs.edit().remove(PREF_TAB_QUEUE_COUNT).apply();
             } finally {
                 StrictMode.setThreadPolicy(savedPolicy);
