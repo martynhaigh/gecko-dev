@@ -259,7 +259,7 @@
                   android:label="@MOZ_APP_DISPLAYNAME@"
                   android:noHistory="true"
                   android:excludeFromRecents="true"
-                  android:theme="@style/Transparent">
+                  android:theme="@style/TabQueueActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

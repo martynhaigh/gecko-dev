@@ -115,7 +115,7 @@ public class TabQueueService extends Service {
 
                 Intent forwardIntent = new Intent(intent);
                 forwardIntent.setClass(getApplicationContext(), BrowserApp.class);
-                forwardIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                forwardIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(forwardIntent);
                 hide();
             }
