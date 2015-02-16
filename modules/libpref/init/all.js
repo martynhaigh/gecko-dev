@@ -307,6 +307,7 @@ pref("media.webm.intel_decoder.enabled", false);
 #endif
 #ifdef MOZ_GSTREAMER
 pref("media.gstreamer.enabled", true);
+pref("media.gstreamer.enable-blacklist", true);
 #endif
 #ifdef MOZ_APPLEMEDIA
 pref("media.apple.mp3.enabled", true);
@@ -4465,6 +4466,12 @@ pref("dom.mozSettings.SettingsService.verbose.enabled", false);
 // readwrite.
 pref("dom.mozSettings.allowForceReadOnly", false);
 
+// The interval at which to check for slow running addons
+pref("browser.addon-watch.interval", 120000);
+pref("browser.addon-watch.ignore", "[\"mochikit@mozilla.org\",\"special-powers@mozilla.org\"]");
+// the percentage of time addons are allowed to use without being labeled slow
+pref("browser.addon-watch.percentage-limit", 1);
+
 // RequestSync API is disabled by default.
 pref("dom.requestSync.enabled", false);
 
@@ -4563,4 +4570,9 @@ pref("reader.toolbar.vertical", true);
 // features, loading Gecko Media Plugins unsandboxed.  However, EME CDMs will not be
 // loaded without sandboxing even if this pref is changed.
 pref("media.gmp.insecure.allow", false);
+#endif
+
+// Secure Element API
+#ifdef MOZ_SECUREELEMENT
+pref("dom.secureelement.enabled", false);
 #endif
