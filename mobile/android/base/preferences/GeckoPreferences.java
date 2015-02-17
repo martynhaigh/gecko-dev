@@ -134,7 +134,8 @@ OnSharedPreferenceChangeListener
 
     public static final String PREFS_RESTORE_SESSION = NON_PREF_PREFIX + "restoreSession3";
     public static final String PREFS_SUGGESTED_SITES = NON_PREF_PREFIX + "home_suggested_sites";
-    public static final String PREFS_TAB_QUEUE_ENABLED = NON_PREF_PREFIX + "tab_queue";
+    public static final String PREFS_TAB_QUEUE = "app.feature.tab_queue";
+    public static final String PREFS_CUSTOMIZE_SCREEN = "preferences.customize_screen";
 
     // These values are chosen to be distinct from other Activity constants.
     private static final int REQUEST_CODE_PREF_SCREEN = 5;
@@ -661,7 +662,7 @@ OnSharedPreferenceChangeListener
                 } else if (pref instanceof PanelsPreferenceCategory) {
                     mPanelsPreferenceCategory = (PanelsPreferenceCategory) pref;
                 }
-                if(!(AppConstants.MOZ_ANDROID_TAB_QUEUE && AppConstants.NIGHTLY_BUILD) && pref.getSummary().equals(getString(R.string.pref_category_customize_summary))) {
+                if((AppConstants.MOZ_ANDROID_TAB_QUEUE && AppConstants.NIGHTLY_BUILD) && (pref.hasKey() && PREFS_CUSTOMIZE_SCREEN.equals(pref.getKey()))) {
                     // Only change the customize pref screen summary on nightly builds with the tab queue build flag.
                     pref.setSummary(getString(R.string.pref_category_customize_alt_summary));
                 }
@@ -752,7 +753,7 @@ OnSharedPreferenceChangeListener
                         i--;
                         continue;
                     }
-                } else if (!(AppConstants.MOZ_ANDROID_TAB_QUEUE && AppConstants.NIGHTLY_BUILD) && PREFS_TAB_QUEUE_ENABLED.equals(key)) {
+                } else if (!(AppConstants.MOZ_ANDROID_TAB_QUEUE && AppConstants.NIGHTLY_BUILD) && PREFS_TAB_QUEUE.equals(key)) {
                     // Only show tab queue pref on nightly builds with the tab queue build flag.
                     preferences.removePreference(pref);
                     i--;
