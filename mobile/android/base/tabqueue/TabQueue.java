@@ -16,7 +16,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 public class TabQueue extends Locales.LocaleAwareActivity {
-    private static final String LOGTAG = "TabQueue";
+    private static final String LOGTAG = "Gecko" + TabQueue.class.getSimpleName();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

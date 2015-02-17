@@ -11,6 +11,7 @@ import org.mozilla.gecko.mozglue.ContextUtils;
 
 import android.app.Service;
 import android.content.Intent;
+import android.content.res.Resources;
 import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.IBinder;
@@ -21,18 +22,18 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
-// On launch of an external url this service displays a view overtop of the currently running activity with an action
-// to open the url in fennec immediately.  If the user takes no action or the service receives another intent, the
-// url is added to a file which is then read in fennec on next launch.
+ /** On launch of an external url this service displays a view overtop of the currently running activity with an action
+ *   to open the url in fennec immediately.  If the user takes no action or the service receives another intent, the
+ *   url is added to a file which is then read in fennec on next launch.
+ */
 public class TabQueueService extends Service {
 
     private WindowManager windowManager;
     private View layout;
-    private TextView mMessageView;
     private Button openNowButton;
-    private final Handler mHideHandler = new Handler();
-    private WindowManager.LayoutParams mParams;
-    private HideRunnable mHideRunnable;
+    private final Handler handler = new Handler();
+    private WindowManager.LayoutParams layoutParams;
+    private HideRunnable hideRunnable;
 
 
     @Override
@@ -50,23 +51,25 @@ public class TabQueueService extends Service {
         LayoutInflater layoutInflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
         layout = layoutInflater.inflate(R.layout.button_toast, null);
 
-        mMessageView = (TextView) layout.findViewById(R.id.toast_message);
-        mMessageView.setText(getResources().getText(R.string.tab_queue_toast_message));
+        final Resources resources = getResources();
+
+        TextView messageView = (TextView) layout.findViewById(R.id.toast_message);
+        messageView.setText(resources.getText(R.string.tab_queue_toast_message));
 
         openNowButton = (Button) layout.findViewById(R.id.toast_button);
         openNowButton.setEnabled(true);
-        openNowButton.setText(getResources().getText(R.string.tab_queue_toast_action));
+        openNowButton.setText(resources.getText(R.string.tab_queue_toast_action));
 
-        mParams = new WindowManager.LayoutParams(
+        layoutParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_PHONE,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
 
-        mParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        mParams.x = 0;
-        mParams.y = 0;
+        layoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        layoutParams.x = 0;
+        layoutParams.y = 0;
     }
 
     private abstract class HideRunnable implements Runnable {
@@ -90,28 +93,28 @@ public class TabQueueService extends Service {
     @Override
     public int onStartCommand(final Intent intent, int flags, int startId) {
 
-        if (mHideRunnable != null) {
+        if (hideRunnable != null) {
             // If there's already a runnable then run it but keep the view attached to the window.
-            mHideHandler.removeCallbacks(mHideRunnable);
-            mHideRunnable.shouldHide(false);
-            mHideRunnable.run();
+            handler.removeCallbacks(hideRunnable);
+            hideRunnable.shouldHide(false);
+            hideRunnable.run();
         } else {
-            windowManager.addView(layout, mParams);
+            windowManager.addView(layout, layoutParams);
         }
 
-        mHideRunnable = new HideRunnable() {
+        hideRunnable = new HideRunnable() {
             @Override
             public void execute() {
                 addUrlToList(intent);
-                mHideRunnable = null;
+                hideRunnable = null;
             }
         };
 
         openNowButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mHideHandler.removeCallbacks(mHideRunnable);
-                mHideRunnable = null;
+                handler.removeCallbacks(hideRunnable);
+                hideRunnable = null;
 
                 Intent forwardIntent = new Intent(intent);
                 forwardIntent.setClass(getApplicationContext(), BrowserApp.class);
@@ -121,7 +124,7 @@ public class TabQueueService extends Service {
             }
         });
 
-        mHideHandler.postDelayed(mHideRunnable, TabQueueHelper.TOAST_TIMEOUT);
+        handler.postDelayed(hideRunnable, TabQueueHelper.TOAST_TIMEOUT);
 
         return super.onStartCommand(intent, flags, startId);
     }
