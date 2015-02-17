@@ -127,6 +127,10 @@ let gTests = [{
                                              (aEvent) => dialogClosingCallback(deferredClose, aEvent));
     let dialog = yield dialogPromise;
 
+    // XXX Without the call to promiseDialogClosing the test causes
+    //     intermittent failures in browser_change_app_handler.js.
+    let unusedClosingPromise = promiseDialogClosing(dialog);
+
     info("cancelling the dialog");
     content.gSubDialog._frame.goBack();
 

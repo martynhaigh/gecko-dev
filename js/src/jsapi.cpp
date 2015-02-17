@@ -168,12 +168,11 @@ JS_GetEmptyString(JSRuntime *rt)
 JS_PUBLIC_API(bool)
 JS_GetCompartmentStats(JSRuntime *rt, CompartmentStatsVector &stats)
 {
-    if (!stats.resizeUninitialized(rt->numCompartments))
-        return false;
-
-    size_t pos = 0;
     for (CompartmentsIter c(rt, WithAtoms); !c.done(); c.next()) {
-        CompartmentTimeStats *stat = &stats[pos];
+        if (!stats.growBy(1))
+            return false;
+
+        CompartmentTimeStats *stat = &stats.back();
         stat->time = c.get()->totalTime;
         stat->compartment = c.get();
         stat->addonId = c.get()->addonId;
@@ -184,7 +183,6 @@ JS_GetCompartmentStats(JSRuntime *rt, CompartmentStatsVector &stats)
         } else {
             strcpy(stat->compartmentName, "<unknown>");
         }
-        pos++;
     }
     return true;
 }
@@ -1871,7 +1869,7 @@ JS_NewObject(JSContext *cx, const JSClass *jsclasp, HandleObject parent)
     MOZ_ASSERT(clasp != &JSFunction::class_);
     MOZ_ASSERT(!(clasp->flags & JSCLASS_IS_GLOBAL));
 
-    JSObject *obj = NewObjectWithClassProto(cx, clasp, nullptr, parent);
+    JSObject *obj = NewObjectWithClassProto(cx, clasp, NullPtr(), parent);
     MOZ_ASSERT_IF(obj, obj->getParent());
     return obj;
 }
@@ -2494,7 +2492,7 @@ JS_DefineObject(JSContext *cx, HandleObject obj, const char *name, const JSClass
     if (!clasp)
         clasp = &PlainObject::class_;    /* default class is Object */
 
-    RootedObject nobj(cx, NewObjectWithClassProto(cx, clasp, nullptr, obj));
+    RootedObject nobj(cx, NewObjectWithClassProto(cx, clasp, NullPtr(), obj));
     if (!nobj)
         return nullptr;
 

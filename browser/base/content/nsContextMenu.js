@@ -478,6 +478,8 @@ nsContextMenu.prototype = {
     var statsShowing = this.onVideo && this.target.mozMediaStatisticsShowing;
     this.showItem("context-video-showstats", this.onVideo && this.target.controls && !statsShowing);
     this.showItem("context-video-hidestats", this.onVideo && this.target.controls && statsShowing);
+    this.showItem("context-media-eme-learnmore", this.onDRMMedia);
+    this.showItem("context-media-eme-separator", this.onDRMMedia);
 
     // Disable them when there isn't a valid media source loaded.
     if (onMedia) {
@@ -499,7 +501,7 @@ nsContextMenu.prototype = {
       this.setItemAttr("context-media-showcontrols", "disabled", hasError);
       this.setItemAttr("context-media-hidecontrols", "disabled", hasError);
       if (this.onVideo) {
-        let canSaveSnapshot = this.target.readyState >= this.target.HAVE_CURRENT_DATA;
+        let canSaveSnapshot = !this.onDRMMedia && this.target.readyState >= this.target.HAVE_CURRENT_DATA;
         this.setItemAttr("context-video-saveimage",  "disabled", !canSaveSnapshot);
         this.setItemAttr("context-video-fullscreen", "disabled", hasError);
         this.setItemAttr("context-video-showstats", "disabled", hasError);
@@ -562,6 +564,7 @@ nsContextMenu.prototype = {
     this.onCanvas          = false;
     this.onVideo           = false;
     this.onAudio           = false;
+    this.onDRMMedia        = false;
     this.onTextInput       = false;
     this.onNumeric         = false;
     this.onKeywordField    = false;
@@ -640,6 +643,9 @@ nsContextMenu.prototype = {
         if (this.isMediaURLReusable(mediaURL)) {
           this.mediaURL = mediaURL;
         }
+        if (this.target.isEncrypted) {
+          this.onDRMMedia = true;
+        }
         // Firefox always creates a HTMLVideoElement when loading an ogg file
         // directly. If the media is actually audio, be smarter and provide a
         // context menu with audio operations.
@@ -655,6 +661,9 @@ nsContextMenu.prototype = {
         let mediaURL = this.target.currentSrc || this.target.src;
         if (this.isMediaURLReusable(mediaURL)) {
           this.mediaURL = mediaURL;
+        }
+        if (this.target.isEncrypted) {
+          this.onDRMMedia = true;
         }
       }
       else if (editFlags & (SpellCheckHelper.INPUT | SpellCheckHelper.TEXTAREA)) {
@@ -856,9 +865,9 @@ nsContextMenu.prototype = {
   },
 
   _openLinkInParameters : function (doc, extra) {
-    let params = { charset: doc.characterSet };
-    if (!BrowserUtils.linkHasNoReferrer(this.link))
-      params.referrerURI = document.documentURIObject;
+    let params = { charset: doc.characterSet,
+                   referrerURI: doc.documentURIObject,
+                   noReferrer: BrowserUtils.linkHasNoReferrer(this.link) };
     for (let p in extra)
       params[p] = extra[p];
     return params;
@@ -1198,7 +1207,7 @@ nsContextMenu.prototype = {
         let channel = aRequest.QueryInterface(Ci.nsIChannel);
         this.extListener =
           extHelperAppSvc.doContent(channel.contentType, aRequest, 
-                                    doc.defaultView, true, window);
+                                    null, true, window);
         this.extListener.onStartRequest(aRequest, aContext);
       }, 
 
@@ -1207,7 +1216,8 @@ nsContextMenu.prototype = {
         if (aStatusCode == NS_ERROR_SAVE_LINK_AS_TIMEOUT) {
           // do it the old fashioned way, which will pick the best filename
           // it can without waiting.
-          saveURL(linkURL, linkText, dialogTitle, bypassCache, false, doc.documentURIObject, doc);
+          saveURL(linkURL, linkText, dialogTitle, bypassCache, false,
+                  BrowserUtils.makeURIFromCPOW(doc.documentURIObject), doc);
         }
         if (this.extListener)
           this.extListener.onStopRequest(aRequest, aContext, aStatusCode);
@@ -1252,13 +1262,13 @@ nsContextMenu.prototype = {
     var ioService = Cc["@mozilla.org/network/io-service;1"].
                     getService(Ci.nsIIOService);
     var channel = ioService.newChannelFromURI2(makeURI(linkURL),
-                                               doc,
-                                               null, // aLoadingPrincipal
+                                               null, // aLoadingNode
+                                               this.principal, // aLoadingPrincipal
                                                null, // aTriggeringPrincipal
                                                Ci.nsILoadInfo.SEC_NORMAL,
                                                Ci.nsIContentPolicy.TYPE_OTHER);
     if (channel instanceof Ci.nsIPrivateBrowsingChannel) {
-      let docIsPrivate = PrivateBrowsingUtils.isWindowPrivate(doc.defaultView);
+      let docIsPrivate = PrivateBrowsingUtils.isBrowserPrivate(gBrowser.selectedBrowser);
       channel.setPrivate(docIsPrivate);
     }
     channel.notificationCallbacks = new callbacks();
@@ -1274,7 +1284,7 @@ nsContextMenu.prototype = {
     channel.loadFlags |= flags;
 
     if (channel instanceof Ci.nsIHttpChannel) {
-      channel.referrer = doc.documentURIObject;
+      channel.referrer = BrowserUtils.makeURIFromCPOW(doc.documentURIObject);
       if (channel instanceof Ci.nsIHttpChannelInternal)
         channel.forceAllowThirdPartyCookie = true;
     }
@@ -1316,12 +1326,12 @@ nsContextMenu.prototype = {
     if (this.onCanvas) {
       // Bypass cache, since it's a data: URL.
       saveImageURL(this.target.toDataURL(), "canvas.png", "SaveImageTitle",
-                   true, false, doc.documentURIObject, doc);
+                   true, false, BrowserUtils.makeURIFromCPOW(doc.documentURIObject), doc);
     }
     else if (this.onImage) {
       urlSecurityCheck(this.mediaURL, this.principal);
       saveImageURL(this.mediaURL, null, "SaveImageTitle", false,
-                   false, doc.documentURIObject, doc);
+                   false, BrowserUtils.makeURIFromCPOW(doc.documentURIObject), doc);
     }
     else if (this.onVideo || this.onAudio) {
       urlSecurityCheck(this.mediaURL, this.principal);
@@ -1695,6 +1705,17 @@ nsContextMenu.prototype = {
     var clipboard = Cc["@mozilla.org/widget/clipboardhelper;1"].
                     getService(Ci.nsIClipboardHelper);
     clipboard.copyString(this.mediaURL, document);
+  },
+
+  drmLearnMore: function(aEvent) {
+    let drmInfoURL = Services.urlFormatter.formatURLPref("app.support.baseURL") + "drm-content";
+    let dest = whereToOpenLink(aEvent);
+    // Don't ever want this to open in the same tab as it'll unload the
+    // DRM'd video, which is going to be a bad idea in most cases.
+    if (dest == "current") {
+      dest = "tab";
+    }
+    openUILinkIn(drmInfoURL, dest);
   },
 
   get imageURL() {

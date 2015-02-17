@@ -166,7 +166,8 @@ js::OnUnknownMethod(JSContext *cx, HandleObject obj, Value idval_, MutableHandle
         return false;
 
     if (value.isObject()) {
-        NativeObject *obj = NewNativeObjectWithClassProto(cx, &js_NoSuchMethodClass, nullptr, nullptr);
+        NativeObject *obj = NewNativeObjectWithClassProto(cx, &js_NoSuchMethodClass, NullPtr(),
+                                                          NullPtr());
         if (!obj)
             return false;
 
@@ -198,6 +199,8 @@ NoSuchMethod(JSContext *cx, unsigned argc, Value *vp)
     args[1].setObject(*argsobj);
     bool ok = Invoke(cx, args);
     vp[0] = args.rval();
+
+    cx->compartment()->addTelemetry(JSCompartment::DeprecatedNoSuchMethod);
     return ok;
 }
 
@@ -3069,7 +3072,7 @@ CASE(JSOP_NEWINIT)
     if (i == JSProto_Array) {
         if (ObjectGroup::useSingletonForAllocationSite(script, REGS.pc, &ArrayObject::class_))
             newKind = SingletonObject;
-        obj = NewDenseEmptyArray(cx, nullptr, newKind);
+        obj = NewDenseEmptyArray(cx, NullPtr(), newKind);
     } else {
         gc::AllocKind allocKind = GuessObjectGCKind(0);
         if (ObjectGroup::useSingletonForAllocationSite(script, REGS.pc, &PlainObject::class_))
@@ -3093,7 +3096,7 @@ CASE(JSOP_NEWARRAY)
     NewObjectKind newKind = GenericObject;
     if (ObjectGroup::useSingletonForAllocationSite(script, REGS.pc, &ArrayObject::class_))
         newKind = SingletonObject;
-    obj = NewDenseFullyAllocatedArray(cx, count, nullptr, newKind);
+    obj = NewDenseFullyAllocatedArray(cx, count, NullPtr(), newKind);
     if (!obj || !ObjectGroup::setAllocationSiteObjectGroup(cx, script, REGS.pc, obj,
                                                            newKind == SingletonObject))
     {

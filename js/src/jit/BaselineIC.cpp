@@ -191,7 +191,7 @@ ICStub::trace(JSTracer *trc)
     switch (kind()) {
       case ICStub::Call_Scripted: {
         ICCall_Scripted *callStub = toCall_Scripted();
-        MarkScript(trc, &callStub->calleeScript(), "baseline-callscripted-callee");
+        MarkObject(trc, &callStub->callee(), "baseline-callscripted-callee");
         if (callStub->templateObject())
             MarkObject(trc, &callStub->templateObject(), "baseline-callscripted-template");
         break;
@@ -4099,6 +4099,10 @@ ICGetElemNativeCompiler::emitCallScripted(MacroAssembler &masm, Register objReg)
     // Enter stub frame.
     enterStubFrame(masm, regs.getAny());
 
+    // Align the stack such that the JitFrameLayout is aligned on
+    // JitStackAlignment.
+    masm.alignJitStackBasedOnNArgs(0);
+
     // Push |this| for getter (target object).
     {
         ValueOperand val = regs.takeAnyValue();
@@ -7372,6 +7376,10 @@ ICGetProp_CallScripted::Compiler::generateStubCode(MacroAssembler &masm)
     masm.loadPtr(Address(callee, JSFunction::offsetOfNativeOrScript()), code);
     masm.loadBaselineOrIonRaw(code, code, &failureLeaveStubFrame);
 
+    // Align the stack such that the JitFrameLayout is aligned on
+    // JitStackAlignment.
+    masm.alignJitStackBasedOnNArgs(0);
+
     // Getter is called with 0 arguments, just |obj| as thisv.
     // Note that we use Push, not push, so that callJit will align the stack
     // properly on ARM.
@@ -8866,14 +8874,17 @@ ICSetProp_CallScripted::Compiler::generateStubCode(MacroAssembler &masm)
     masm.loadPtr(Address(callee, JSFunction::offsetOfNativeOrScript()), code);
     masm.loadBaselineOrIonRaw(code, code, &failureLeaveStubFrame);
 
+    // Align the stack such that the JitFrameLayout is aligned on
+    // JitStackAlignment.
+    masm.alignJitStackBasedOnNArgs(1);
+
     // Setter is called with the new value as the only argument, and |obj| as thisv.
     // Note that we use Push, not push, so that callJit will align the stack
     // properly on ARM.
 
     // To Push R1, read it off of the stowed values on stack.
-    // Stack: [ ..., R0, R1, ..STUBFRAME-HEADER.. ]
-    masm.movePtr(BaselineStackReg, scratch);
-    masm.PushValue(Address(scratch, STUB_FRAME_SIZE));
+    // Stack: [ ..., R0, R1, ..STUBFRAME-HEADER.., padding? ]
+    masm.PushValue(Address(BaselineFrameReg, STUB_FRAME_SIZE));
     masm.Push(R0);
     EmitCreateStubFrameDescriptor(masm, scratch);
     masm.Push(Imm32(1));  // ActualArgc is 1
@@ -9008,7 +9019,7 @@ ICSetProp_CallNative::Compiler::generateStubCode(MacroAssembler &masm)
 
 static bool
 TryAttachFunApplyStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsbytecode *pc,
-                      HandleValue thisv, uint32_t argc, Value *argv)
+                      HandleValue thisv, uint32_t argc, Value *argv, bool *attached)
 {
     if (argc != 2)
         return true;
@@ -9031,6 +9042,7 @@ TryAttachFunApplyStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script,
                 return false;
 
             stub->addNewStub(newStub);
+            *attached = true;
             return true;
         }
 
@@ -9048,6 +9060,7 @@ TryAttachFunApplyStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script,
                 return false;
 
             stub->addNewStub(newStub);
+            *attached = true;
             return true;
         }
     }
@@ -9103,7 +9116,7 @@ GetTemplateObjectForNative(JSContext *cx, HandleScript script, jsbytecode *pc,
             count = args.length();
         else if (args.length() == 1 && args[0].isInt32() && args[0].toInt32() >= 0)
             count = args[0].toInt32();
-        res.set(NewDenseUnallocatedArray(cx, count, nullptr, TenuredObject));
+        res.set(NewDenseUnallocatedArray(cx, count, NullPtr(), TenuredObject));
         if (!res)
             return false;
 
@@ -9115,7 +9128,7 @@ GetTemplateObjectForNative(JSContext *cx, HandleScript script, jsbytecode *pc,
     }
 
     if (native == intrinsic_NewDenseArray) {
-        res.set(NewDenseUnallocatedArray(cx, 0, nullptr, TenuredObject));
+        res.set(NewDenseUnallocatedArray(cx, 0, NullPtr(), TenuredObject));
         if (!res)
             return false;
 
@@ -9130,7 +9143,8 @@ GetTemplateObjectForNative(JSContext *cx, HandleScript script, jsbytecode *pc,
         if (args.thisv().isObject() && args.thisv().toObject().is<ArrayObject>() &&
             !args.thisv().toObject().isSingleton())
         {
-            res.set(NewDenseEmptyArray(cx, args.thisv().toObject().getProto(), TenuredObject));
+            RootedObject proto(cx, args.thisv().toObject().getProto());
+            res.set(NewDenseEmptyArray(cx, proto, TenuredObject));
             if (!res)
                 return false;
             res->setGroup(args.thisv().toObject().group());
@@ -9139,7 +9153,7 @@ GetTemplateObjectForNative(JSContext *cx, HandleScript script, jsbytecode *pc,
     }
 
     if (native == js::str_split && args.length() == 1 && args[0].isString()) {
-        res.set(NewDenseUnallocatedArray(cx, 0, nullptr, TenuredObject));
+        res.set(NewDenseUnallocatedArray(cx, 0, NullPtr(), TenuredObject));
         if (!res)
             return false;
 
@@ -9231,7 +9245,7 @@ IsOptimizableCallStringSplit(Value callee, Value thisv, int argc, Value *args)
 static bool
 TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsbytecode *pc,
                   JSOp op, uint32_t argc, Value *vp, bool constructing, bool isSpread,
-                  bool createSingleton)
+                  bool createSingleton, bool *handled)
 {
     if (createSingleton || op == JSOP_EVAL || op == JSOP_STRICTEVAL)
         return true;
@@ -9279,6 +9293,7 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
                     return false;
 
                 stub->addNewStub(newStub);
+                *handled = true;
                 return true;
             }
         }
@@ -9297,9 +9312,12 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
         if (constructing && !fun->isInterpretedConstructor())
             return true;
 
-        RootedScript calleeScript(cx, fun->nonLazyScript());
-        if (!calleeScript->hasBaselineScript() && !calleeScript->hasIonScript())
+        if (!fun->hasJITCode()) {
+            // Don't treat this as an unoptimizable case, as we'll add a stub
+            // when the callee becomes hot.
+            *handled = true;
             return true;
+        }
 
         // Check if this stub chain has already generalized scripted calls.
         if (stub->scriptedStubsAreGeneralized()) {
@@ -9311,7 +9329,6 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
             // Create a Call_AnyScripted stub.
             JitSpew(JitSpew_BaselineIC, "  Generating Call_AnyScripted stub (cons=%s, spread=%s)",
                     constructing ? "yes" : "no", isSpread ? "yes" : "no");
-
             ICCallScriptedCompiler compiler(cx, stub->fallbackMonitorStub()->firstMonitorStub(),
                                             constructing, isSpread, script->pcToOffset(pc));
             ICStub *newStub = compiler.getStub(compiler.getStubSpace(script));
@@ -9323,6 +9340,7 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
 
             // Add new generalized stub.
             stub->addNewStub(newStub);
+            *handled = true;
             return true;
         }
 
@@ -9335,27 +9353,42 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
         // as a constructor, for later use during Ion compilation.
         RootedObject templateObject(cx);
         if (constructing) {
+            // If we are calling a constructor for which the new script
+            // properties analysis has not been performed yet, don't attach a
+            // stub. After the analysis is performed, CreateThisForFunction may
+            // start returning objects with a different type, and the Ion
+            // compiler will get confused.
+
+            // Only attach a stub if the function already has a prototype and
+            // we can look it up without causing side effects.
+            RootedValue protov(cx);
+            if (!GetPropertyPure(cx, fun, NameToId(cx->names().prototype), protov.address())) {
+                JitSpew(JitSpew_BaselineIC, "  Can't purely lookup function prototype");
+                return true;
+            }
+
+            if (protov.isObject()) {
+                TaggedProto proto(&protov.toObject());
+                ObjectGroup *group = ObjectGroup::defaultNewGroup(cx, nullptr, proto, fun);
+                if (!group)
+                    return false;
+
+                if (group->newScript() && !group->newScript()->analyzed()) {
+                    JitSpew(JitSpew_BaselineIC, "  Function newScript has not been analyzed");
+
+                    // This is temporary until the analysis is perfomed, so
+                    // don't treat this as unoptimizable.
+                    *handled = true;
+                    return true;
+                }
+            }
+
             JSObject *thisObject = CreateThisForFunction(cx, fun, MaybeSingletonObject);
             if (!thisObject)
                 return false;
 
-            if (thisObject->is<PlainObject>() || thisObject->is<UnboxedPlainObject>()) {
+            if (thisObject->is<PlainObject>() || thisObject->is<UnboxedPlainObject>())
                 templateObject = thisObject;
-
-                // If we are calling a constructor for which the new script
-                // properties analysis has not been performed yet, don't attach a
-                // stub. After the analysis is performed, CreateThisForFunction may
-                // start returning objects with a different type, and the Ion
-                // compiler might get confused.
-                TypeNewScript *newScript = templateObject->group()->newScript();
-                if (newScript && !newScript->analyzed()) {
-                    // Clear the object just created from the preliminary objects
-                    // on the TypeNewScript, as it will not be used or filled in by
-                    // running code.
-                    newScript->unregisterNewObject(&templateObject->as<PlainObject>());
-                    return true;
-                }
-            }
         }
 
         JitSpew(JitSpew_BaselineIC,
@@ -9363,13 +9396,14 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
                 fun.get(), fun->nonLazyScript()->filename(), fun->nonLazyScript()->lineno(),
                 constructing ? "yes" : "no", isSpread ? "yes" : "no");
         ICCallScriptedCompiler compiler(cx, stub->fallbackMonitorStub()->firstMonitorStub(),
-                                        calleeScript, templateObject,
+                                        fun, templateObject,
                                         constructing, isSpread, script->pcToOffset(pc));
         ICStub *newStub = compiler.getStub(compiler.getStubSpace(script));
         if (!newStub)
             return false;
 
         stub->addNewStub(newStub);
+        *handled = true;
         return true;
     }
 
@@ -9380,7 +9414,7 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
         // Check for JSOP_FUNAPPLY
         if (op == JSOP_FUNAPPLY) {
             if (fun->native() == js_fun_apply)
-                return TryAttachFunApplyStub(cx, stub, script, pc, thisv, argc, vp + 2);
+                return TryAttachFunApplyStub(cx, stub, script, pc, thisv, argc, vp + 2, handled);
 
             // Don't try to attach a "regular" optimized call stubs for FUNAPPLY ops,
             // since MagicArguments may escape through them.
@@ -9388,10 +9422,9 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
         }
 
         if (op == JSOP_FUNCALL && fun->native() == js_fun_call) {
-            bool attached;
-            if (!TryAttachFunCallStub(cx, stub, script, pc, thisv, &attached))
+            if (!TryAttachFunCallStub(cx, stub, script, pc, thisv, handled))
                 return false;
-            if (attached)
+            if (*handled)
                 return true;
         }
 
@@ -9412,6 +9445,7 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
                 return false;
 
             stub->addNewStub(newStub);
+            *handled = true;
             return true;
         }
 
@@ -9432,6 +9466,7 @@ TryAttachCallStub(JSContext *cx, ICCall_Fallback *stub, HandleScript script, jsb
             return false;
 
         stub->addNewStub(newStub);
+        *handled = true;
         return true;
     }
 
@@ -9449,7 +9484,7 @@ CopyArray(JSContext *cx, HandleArrayObject obj, MutableHandleValue result)
     if (!group)
         return false;
 
-    RootedArrayObject newObj(cx, NewDenseFullyAllocatedArray(cx, length, nullptr, TenuredObject));
+    RootedArrayObject newObj(cx, NewDenseFullyAllocatedArray(cx, length, NullPtr(), TenuredObject));
     if (!newObj)
         return false;
 
@@ -9462,7 +9497,8 @@ CopyArray(JSContext *cx, HandleArrayObject obj, MutableHandleValue result)
 
 static bool
 TryAttachStringSplit(JSContext *cx, ICCall_Fallback *stub, HandleScript script,
-                     uint32_t argc, Value *vp, jsbytecode *pc, HandleValue res)
+                     uint32_t argc, Value *vp, jsbytecode *pc, HandleValue res,
+                     bool *attached)
 {
     if (stub->numOptimizedStubs() != 0)
         return true;
@@ -9494,6 +9530,7 @@ TryAttachStringSplit(JSContext *cx, ICCall_Fallback *stub, HandleScript script,
         return false;
 
     stub->addNewStub(newStub);
+    *attached = true;
     return true;
 }
 
@@ -9531,8 +9568,12 @@ DoCallFallback(JSContext *cx, BaselineFrame *frame, ICCall_Fallback *stub_, uint
     bool createSingleton = ObjectGroup::useSingletonForNewObject(cx, script, pc);
 
     // Try attaching a call stub.
-    if (!TryAttachCallStub(cx, stub, script, pc, op, argc, vp, constructing, false, createSingleton))
+    bool handled = false;
+    if (!TryAttachCallStub(cx, stub, script, pc, op, argc, vp, constructing, false,
+                           createSingleton, &handled))
+    {
         return false;
+    }
 
     if (op == JSOP_NEW) {
         if (!InvokeConstructor(cx, callee, argc, args, res))
@@ -9569,9 +9610,11 @@ DoCallFallback(JSContext *cx, BaselineFrame *frame, ICCall_Fallback *stub_, uint
 
     // If 'callee' is a potential Call_StringSplit, try to attach an
     // optimized StringSplit stub.
-    if (!TryAttachStringSplit(cx, stub, script, argc, vp, pc, res))
+    if (!TryAttachStringSplit(cx, stub, script, argc, vp, pc, res, &handled))
         return false;
 
+    if (!handled)
+        stub->noteUnoptimizableCall();
     return true;
 }
 
@@ -9597,8 +9640,10 @@ DoSpreadCallFallback(JSContext *cx, BaselineFrame *frame, ICCall_Fallback *stub_
     bool constructing = (op == JSOP_SPREADNEW);
 
     // Try attaching a call stub.
+    bool handled = false;
     if (op != JSOP_SPREADEVAL && op != JSOP_STRICTSPREADEVAL &&
-        !TryAttachCallStub(cx, stub, script, pc, op, 1, vp, constructing, true, false))
+        !TryAttachCallStub(cx, stub, script, pc, op, 1, vp, constructing, true, false,
+                           &handled))
     {
         return false;
     }
@@ -9618,11 +9663,14 @@ DoSpreadCallFallback(JSContext *cx, BaselineFrame *frame, ICCall_Fallback *stub_
     if (!stub->addMonitorStubForValue(cx, script, res))
         return false;
 
+    if (!handled)
+        stub->noteUnoptimizableCall();
     return true;
 }
 
 void
-ICCallStubCompiler::pushCallArguments(MacroAssembler &masm, GeneralRegisterSet regs, Register argcReg)
+ICCallStubCompiler::pushCallArguments(MacroAssembler &masm, GeneralRegisterSet regs,
+                                      Register argcReg, bool isJitCall)
 {
     MOZ_ASSERT(!regs.has(argcReg));
 
@@ -9638,6 +9686,11 @@ ICCallStubCompiler::pushCallArguments(MacroAssembler &masm, GeneralRegisterSet r
     // Skip 4 pointers pushed on top of the arguments: the frame descriptor,
     // return address, old frame pointer and stub reg.
     masm.addPtr(Imm32(STUB_FRAME_SIZE), argPtr);
+
+    // Align the stack such that the JitFrameLayout is aligned on the
+    // JitStackAlignment.
+    if (isJitCall)
+        masm.alignJitStackBasedOnNArgs(argcReg);
 
     // Push all values, starting at the last one.
     Label loop, done;
@@ -9670,7 +9723,7 @@ ICCallStubCompiler::guardSpreadCall(MacroAssembler &masm, Register argcReg, Labe
 
 void
 ICCallStubCompiler::pushSpreadCallArguments(MacroAssembler &masm, GeneralRegisterSet regs,
-                                            Register argcReg)
+                                            Register argcReg, bool isJitCall)
 {
     // Push arguments
     Register startReg = regs.takeAny();
@@ -9681,6 +9734,11 @@ ICCallStubCompiler::pushSpreadCallArguments(MacroAssembler &masm, GeneralRegiste
     static_assert(sizeof(Value) == 8, "Value must be 8 bytes");
     masm.lshiftPtr(Imm32(3), endReg);
     masm.addPtr(startReg, endReg);
+
+    // Align the stack such that the JitFrameLayout is aligned on the
+    // JitStackAlignment.
+    if (isJitCall)
+        masm.alignJitStackBasedOnNArgs(argcReg);
 
     // Copying pre-decrements endReg by 8 until startReg is reached
     Label copyDone;
@@ -9824,6 +9882,7 @@ ICCallStubCompiler::pushCallerArguments(MacroAssembler &masm, GeneralRegisterSet
     masm.loadPtr(Address(BaselineFrameReg, 0), startReg);
     masm.loadPtr(Address(startReg, BaselineFrame::offsetOfNumActualArgs()), endReg);
     masm.addPtr(Imm32(BaselineFrame::offsetOfArg(0)), startReg);
+    masm.alignJitStackBasedOnNArgs(endReg);
     masm.lshiftPtr(Imm32(ValueShift), endReg);
     masm.addPtr(startReg, endReg);
 
@@ -9850,6 +9909,7 @@ ICCallStubCompiler::pushArrayArguments(MacroAssembler &masm, Address arrayVal,
     masm.extractObject(arrayVal, startReg);
     masm.loadPtr(Address(startReg, NativeObject::offsetOfElements()), startReg);
     masm.load32(Address(startReg, ObjectElements::offsetOfInitializedLength()), endReg);
+    masm.alignJitStackBasedOnNArgs(endReg);
     masm.lshiftPtr(Imm32(ValueShift), endReg);
     masm.addPtr(startReg, endReg);
 
@@ -9914,7 +9974,7 @@ ICCall_Fallback::Compiler::generateStubCode(MacroAssembler &masm)
 
     regs.take(R0.scratchReg()); // argc.
 
-    pushCallArguments(masm, regs, R0.scratchReg());
+    pushCallArguments(masm, regs, R0.scratchReg(), /* isJitCall = */ false);
 
     masm.push(BaselineStackReg);
     masm.push(R0.scratchReg());
@@ -10019,25 +10079,30 @@ ICCallScriptedCompiler::generateStubCode(MacroAssembler &masm)
 
     // Ensure callee is a function.
     Register callee = masm.extractObject(R1, ExtractTemp0);
-    masm.branchTestObjClass(Assembler::NotEqual, callee, regs.getAny(), &JSFunction::class_,
-                            &failure);
 
     // If calling a specific script, check if the script matches.  Otherwise, ensure that
     // callee function is scripted.  Leave calleeScript in |callee| reg.
-    if (calleeScript_) {
+    if (callee_) {
         MOZ_ASSERT(kind == ICStub::Call_Scripted);
 
-        // Callee is a function.  Check if script matches.
-        masm.loadPtr(Address(callee, JSFunction::offsetOfNativeOrScript()), callee);
-        Address expectedScript(BaselineStubReg, ICCall_Scripted::offsetOfCalleeScript());
-        masm.branchPtr(Assembler::NotEqual, expectedScript, callee, &failure);
+        // Check if the object matches this callee.
+        Address expectedCallee(BaselineStubReg, ICCall_Scripted::offsetOfCallee());
+        masm.branchPtr(Assembler::NotEqual, expectedCallee, callee, &failure);
+
+        // Guard against relazification.
+        masm.branchIfFunctionHasNoScript(callee, &failure);
     } else {
+        // Ensure the object is a function.
+        masm.branchTestObjClass(Assembler::NotEqual, callee, regs.getAny(), &JSFunction::class_,
+                                &failure);
         if (isConstructing_)
             masm.branchIfNotInterpretedConstructor(callee, regs.getAny(), &failure);
         else
             masm.branchIfFunctionHasNoScript(callee, &failure);
-        masm.loadPtr(Address(callee, JSFunction::offsetOfNativeOrScript()), callee);
     }
+
+    // Load the JSScript.
+    masm.loadPtr(Address(callee, JSFunction::offsetOfNativeOrScript()), callee);
 
     // Load the start of the target JitCode.
     Register code;
@@ -10144,9 +10209,9 @@ ICCallScriptedCompiler::generateStubCode(MacroAssembler &masm)
     // right-to-left so duplicate them on the stack in reverse order.
     // |this| and callee are pushed last.
     if (isSpread_)
-        pushSpreadCallArguments(masm, regs, argcReg);
+        pushSpreadCallArguments(masm, regs, argcReg, /* isJitCall = */ true);
     else
-        pushCallArguments(masm, regs, argcReg);
+        pushCallArguments(masm, regs, argcReg, /* isJitCall = */ true);
 
     // The callee is on top of the stack. Pop and unbox it.
     ValueOperand val = regs.takeAnyValue();
@@ -10187,27 +10252,40 @@ ICCallScriptedCompiler::generateStubCode(MacroAssembler &masm)
         Label skipThisReplace;
         masm.branchTestObject(Assembler::Equal, JSReturnOperand, &skipThisReplace);
 
-        Register scratchReg = JSReturnOperand.scratchReg();
-
-        // Current stack: [ ARGVALS..., ThisVal, ActualArgc, Callee, Descriptor ]
+        // Current stack: [ Padding?, ARGVALS..., ThisVal, ActualArgc, Callee, Descriptor ]
         // However, we can't use this ThisVal, because it hasn't been traced.  We need to use
         // The ThisVal higher up the stack:
         // Current stack: [ ThisVal, ARGVALS..., ...STUB FRAME...,
-        //                  ARGVALS..., ThisVal, ActualArgc, Callee, Descriptor ]
-        masm.loadPtr(Address(BaselineStackReg, 2*sizeof(size_t)), scratchReg);
+        //                  Padding?, ARGVALS..., ThisVal, ActualArgc, Callee, Descriptor ]
 
-        // scratchReg now contains actualArgCount.  Double it to account for skipping past two
-        // pushed copies of argument values for non-spread, increment it to account for skipping
-        // actual argument values and array object for spread.  Additionally, we need to add:
-        // STUB_FRAME_SIZE + sizeof(ThisVal) + sizeof(size_t) + sizeof(void *) + sizoef(size_t)
-        // for: stub frame, this value, actual argc, callee, and descriptor
-        if (isSpread_)
-            masm.add32(Imm32(1), scratchReg);
-        else
-            masm.lshiftPtr(Imm32(1), scratchReg);
-        BaseValueIndex reloadThisSlot(BaselineStackReg, scratchReg,
-                                      STUB_FRAME_SIZE + sizeof(Value) + 3 * sizeof(size_t));
-        masm.loadValue(reloadThisSlot, JSReturnOperand);
+        // Restore the BaselineFrameReg based on the frame descriptor.
+        //
+        // BaselineFrameReg = BaselineStackReg
+        //                  + sizeof(Descriptor) + sizeof(Callee) + sizeof(ActualArgc)
+        //                  + stubFrameSize(Descriptor)
+        //                  - sizeof(BaselineStubReg) - sizeof(BaselineFrameReg)
+        Address descriptorAddr(BaselineStackReg, 0);
+        masm.loadPtr(descriptorAddr, BaselineFrameReg);
+        masm.rshiftPtr(Imm32(FRAMESIZE_SHIFT), BaselineFrameReg);
+        masm.addPtr(Imm32((3 - 2) * sizeof(size_t)), BaselineFrameReg);
+        masm.addPtr(BaselineStackReg, BaselineFrameReg);
+
+        // Load the number of arguments present before the stub frame.
+        Register argcReg = JSReturnOperand.scratchReg();
+        if (isSpread_) {
+            // Account for the Array object.
+            masm.move32(Imm32(1), argcReg);
+        } else {
+            Address argcAddr(BaselineStackReg, 2 * sizeof(size_t));
+            masm.loadPtr(argcAddr, argcReg);
+        }
+
+        // Current stack: [ ThisVal, ARGVALS..., ...STUB FRAME..., <-- BaselineFrameReg
+        //                  Padding?, ARGVALS..., ThisVal, ActualArgc, Callee, Descriptor ]
+        //
+        // &ThisVal = BaselineFrameReg + argc * sizeof(Value) + STUB_FRAME_SIZE
+        BaseValueIndex thisSlotAddr(BaselineFrameReg, argcReg, STUB_FRAME_SIZE);
+        masm.loadValue(thisSlotAddr, JSReturnOperand);
 #ifdef DEBUG
         masm.branchTestObject(Assembler::Equal, JSReturnOperand, &skipThisReplace);
         masm.assumeUnreachable("Return of constructing call should be an object.");
@@ -10407,9 +10485,9 @@ ICCall_Native::Compiler::generateStubCode(MacroAssembler &masm)
     // right-to-left so duplicate them on the stack in reverse order.
     // |this| and callee are pushed last.
     if (isSpread_)
-        pushSpreadCallArguments(masm, regs, argcReg);
+        pushSpreadCallArguments(masm, regs, argcReg, /* isJitCall = */ false);
     else
-        pushCallArguments(masm, regs, argcReg);
+        pushCallArguments(masm, regs, argcReg, /* isJitCall = */ false);
 
     if (isConstructing_) {
         // Stack looks like: [ ..., Arg0Val, ThisVal, CalleeVal ]
@@ -10504,7 +10582,7 @@ ICCall_ClassHook::Compiler::generateStubCode(MacroAssembler &masm)
     enterStubFrame(masm, regs.getAny());
 
     regs.add(scratch);
-    pushCallArguments(masm, regs, argcReg);
+    pushCallArguments(masm, regs, argcReg, /* isJitCall = */ false);
     regs.take(scratch);
 
     if (isConstructing_) {
@@ -10809,25 +10887,34 @@ ICCall_ScriptedFunCall::Compiler::generateStubCode(MacroAssembler &masm)
     if (canUseTailCallReg)
         regs.add(BaselineTailCallReg);
 
+    // Decrement argc if argc > 0. If argc == 0, push |undefined| as |this|.
+    Label zeroArgs, done;
+    masm.branchTest32(Assembler::Zero, argcReg, argcReg, &zeroArgs);
+
+    // Avoid the copy of the callee (function.call).
+    masm.sub32(Imm32(1), argcReg);
+
     // Values are on the stack left-to-right. Calling convention wants them
     // right-to-left so duplicate them on the stack in reverse order.
-    pushCallArguments(masm, regs, argcReg);
-
-    // Discard callee (function.call).
-    masm.addPtr(Imm32(sizeof(Value)), StackPointer);
+    pushCallArguments(masm, regs, argcReg, /* isJitCall = */ true);
 
     // Pop scripted callee (the original |this|).
     ValueOperand val = regs.takeAnyValue();
     masm.popValue(val);
 
-    // Decrement argc if argc > 0. If argc == 0, push |undefined| as |this|.
-    Label zeroArgs, done;
-    masm.branchTest32(Assembler::Zero, argcReg, argcReg, &zeroArgs);
-    masm.sub32(Imm32(1), argcReg);
     masm.jump(&done);
-
     masm.bind(&zeroArgs);
+
+    // Copy scripted callee (the original |this|).
+    Address thisSlotFromStubFrame(BaselineFrameReg, STUB_FRAME_SIZE);
+    masm.loadValue(thisSlotFromStubFrame, val);
+
+    // Align the stack.
+    masm.alignJitStackBasedOnNArgs(0);
+
+    // Store the new |this|.
     masm.pushValue(UndefinedValue());
+
     masm.bind(&done);
 
     // Unbox scripted callee.
@@ -11973,10 +12060,10 @@ ICSetProp_CallNative::Clone(JSContext *cx, ICStubSpace *space, ICStub *,
 }
 
 ICCall_Scripted::ICCall_Scripted(JitCode *stubCode, ICStub *firstMonitorStub,
-                                 HandleScript calleeScript, HandleObject templateObject,
+                                 HandleFunction callee, HandleObject templateObject,
                                  uint32_t pcOffset)
   : ICMonitoredStub(ICStub::Call_Scripted, stubCode, firstMonitorStub),
-    calleeScript_(calleeScript),
+    callee_(callee),
     templateObject_(templateObject),
     pcOffset_(pcOffset)
 { }
@@ -11985,9 +12072,9 @@ ICCall_Scripted::ICCall_Scripted(JitCode *stubCode, ICStub *firstMonitorStub,
 ICCall_Scripted::Clone(JSContext *cx, ICStubSpace *space, ICStub *firstMonitorStub,
                        ICCall_Scripted &other)
 {
-    RootedScript calleeScript(cx, other.calleeScript_);
+    RootedFunction callee(cx, other.callee_);
     RootedObject templateObject(cx, other.templateObject_);
-    return New(space, other.jitCode(), firstMonitorStub, calleeScript, templateObject,
+    return New(space, other.jitCode(), firstMonitorStub, callee, templateObject,
                other.pcOffset_);
 }
 
@@ -12174,7 +12261,7 @@ static bool DoRestFallback(JSContext *cx, ICRest_Fallback *stub,
     unsigned numRest = numActuals > numFormals ? numActuals - numFormals : 0;
     Value *rest = frame->argv() + numFormals;
 
-    ArrayObject *obj = NewDenseCopiedArray(cx, numRest, rest, nullptr);
+    ArrayObject *obj = NewDenseCopiedArray(cx, numRest, rest, NullPtr());
     if (!obj)
         return false;
     ObjectGroup::fixRestArgumentsGroup(cx, obj);

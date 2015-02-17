@@ -559,6 +559,12 @@ js::proxy_DefineProperty(JSContext *cx, HandleObject obj, HandleId id, HandleVal
 }
 
 bool
+js::proxy_HasProperty(JSContext *cx, JS::HandleObject obj, JS::HandleId id, bool *foundp)
+{
+    return Proxy::has(cx, obj, id, foundp);
+}
+
+bool
 js::proxy_GetProperty(JSContext *cx, HandleObject obj, HandleObject receiver, HandleId id,
                       MutableHandleValue vp)
 {
@@ -566,10 +572,10 @@ js::proxy_GetProperty(JSContext *cx, HandleObject obj, HandleObject receiver, Ha
 }
 
 bool
-js::proxy_SetProperty(JSContext *cx, HandleObject obj, HandleId id,
+js::proxy_SetProperty(JSContext *cx, HandleObject obj, HandleObject receiver, HandleId id,
                       MutableHandleValue vp, bool strict)
 {
-    return Proxy::set(cx, obj, obj, id, strict, vp);
+    return Proxy::set(cx, obj, receiver, id, strict, vp);
 }
 
 bool
@@ -577,17 +583,6 @@ js::proxy_GetOwnPropertyDescriptor(JSContext *cx, HandleObject obj, HandleId id,
                                    MutableHandle<JSPropertyDescriptor> desc)
 {
     return Proxy::getOwnPropertyDescriptor(cx, obj, id, desc);
-}
-
-bool
-js::proxy_SetPropertyAttributes(JSContext *cx, HandleObject obj, HandleId id, unsigned *attrsp)
-{
-    /* Lookup the current property descriptor so we have setter/getter/value. */
-    Rooted<PropertyDescriptor> desc(cx);
-    if (!Proxy::getOwnPropertyDescriptor(cx, obj, id, &desc))
-        return false;
-    desc.setAttributes(*attrsp);
-    return Proxy::defineProperty(cx, obj, id, &desc);
 }
 
 bool

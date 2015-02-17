@@ -774,7 +774,9 @@ struct JSRuntime : public JS::shadow::Runtime,
         return numExclusiveThreads > 0;
     }
 
-    /* How many compartments there are across all zones. */
+    // How many compartments there are across all zones. This number includes
+    // ExclusiveContext compartments, so it isn't necessarily equal to the
+    // number of compartments visited by CompartmentsIter.
     size_t              numCompartments;
 
     /* Locale-specific callbacks for string conversion. */
@@ -805,11 +807,6 @@ struct JSRuntime : public JS::shadow::Runtime,
     js::LifoAlloc tempLifoAlloc;
 
   private:
-    /*
-     * Both of these allocators are used for regular expression code which is shared at the
-     * thread-data level.
-     */
-    js::jit::ExecutableAllocator *execAlloc_;
     js::jit::JitRuntime *jitRuntime_;
 
     /*
@@ -824,20 +821,9 @@ struct JSRuntime : public JS::shadow::Runtime,
     /* Space for interpreter frames. */
     js::InterpreterStack interpreterStack_;
 
-    js::jit::ExecutableAllocator *createExecutableAllocator(JSContext *cx);
     js::jit::JitRuntime *createJitRuntime(JSContext *cx);
 
   public:
-    js::jit::ExecutableAllocator *getExecAlloc(JSContext *cx) {
-        return execAlloc_ ? execAlloc_ : createExecutableAllocator(cx);
-    }
-    js::jit::ExecutableAllocator &execAlloc() {
-        MOZ_ASSERT(execAlloc_);
-        return *execAlloc_;
-    }
-    js::jit::ExecutableAllocator *maybeExecAlloc() {
-        return execAlloc_;
-    }
     js::jit::JitRuntime *getJitRuntime(JSContext *cx) {
         return jitRuntime_ ? jitRuntime_ : createJitRuntime(cx);
     }

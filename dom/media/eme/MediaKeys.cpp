@@ -27,6 +27,7 @@
 #include "nsContentCID.h"
 #include "nsServiceManagerUtils.h"
 #include "mozIGeckoMediaPluginService.h"
+#include "mozilla/dom/MediaKeySystemAccess.h"
 
 namespace mozilla {
 
@@ -58,6 +59,7 @@ RejectPromises(const uint32_t& aKey,
                void* aClosure)
 {
   aPromise->MaybeReject(NS_ERROR_DOM_INVALID_STATE_ERR);
+  ((MediaKeys*)aClosure)->Release();
   return PL_DHASH_NEXT;
 }
 
@@ -82,7 +84,6 @@ CloseSessions(const nsAString& aKey,
               void* aClosure)
 {
   aSession->OnClosed();
-  ((MediaKeys*)aClosure)->Release();
   return PL_DHASH_NEXT;
 }
 
@@ -365,6 +366,9 @@ MediaKeys::OnCDMCreated(PromiseId aId, const nsACString& aNodeId)
   if (mCreatePromiseId == aId) {
     Release();
   }
+
+  MediaKeySystemAccess::NotifyObservers(mKeySystem,
+                                        MediaKeySystemStatus::Cdm_created);
 }
 
 already_AddRefed<MediaKeySession>

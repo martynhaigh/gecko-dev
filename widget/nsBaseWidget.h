@@ -36,7 +36,9 @@ class CompositorChild;
 class CompositorParent;
 class APZCTreeManager;
 class GeckoContentController;
+class APZEventState;
 struct ScrollableLayerGuid;
+struct SetTargetAPZCCallback;
 }
 
 class CompositorVsyncDispatcher;
@@ -90,6 +92,8 @@ protected:
   typedef mozilla::layers::APZCTreeManager APZCTreeManager;
   typedef mozilla::layers::GeckoContentController GeckoContentController;
   typedef mozilla::layers::ScrollableLayerGuid ScrollableLayerGuid;
+  typedef mozilla::layers::APZEventState APZEventState;
+  typedef mozilla::layers::SetTargetAPZCCallback SetTargetAPZCCallback;
   typedef mozilla::ScreenRotation ScreenRotation;
 
   virtual ~nsBaseWidget();
@@ -337,15 +341,15 @@ protected:
                                             const nsAString& aUnmodifiedCharacters) MOZ_OVERRIDE
   { return NS_ERROR_UNEXPECTED; }
 
-  virtual nsresult SynthesizeNativeMouseEvent(nsIntPoint aPoint,
+  virtual nsresult SynthesizeNativeMouseEvent(mozilla::LayoutDeviceIntPoint aPoint,
                                               uint32_t aNativeMessage,
                                               uint32_t aModifierFlags) MOZ_OVERRIDE
   { return NS_ERROR_UNEXPECTED; }
 
-  virtual nsresult SynthesizeNativeMouseMove(nsIntPoint aPoint) MOZ_OVERRIDE
+  virtual nsresult SynthesizeNativeMouseMove(mozilla::LayoutDeviceIntPoint aPoint) MOZ_OVERRIDE
   { return NS_ERROR_UNEXPECTED; }
 
-  virtual nsresult SynthesizeNativeMouseScrollEvent(nsIntPoint aPoint,
+  virtual nsresult SynthesizeNativeMouseScrollEvent(mozilla::LayoutDeviceIntPoint aPoint,
                                                     uint32_t aNativeMessage,
                                                     double aDeltaX,
                                                     double aDeltaY,
@@ -416,6 +420,8 @@ protected:
    */
   virtual void WindowUsesOMTC() {}
 
+  nsIDocument* GetDocument() const;
+
 protected:
   /**
    * Starts the OMTC compositor destruction sequence.
@@ -436,6 +442,8 @@ protected:
   nsRefPtr<CompositorParent> mCompositorParent;
   nsRefPtr<mozilla::CompositorVsyncDispatcher> mCompositorVsyncDispatcher;
   nsRefPtr<APZCTreeManager> mAPZC;
+  nsRefPtr<APZEventState> mAPZEventState;
+  nsRefPtr<SetTargetAPZCCallback> mSetTargetAPZCCallback;
   nsRefPtr<WidgetShutdownObserver> mShutdownObserver;
   nsRefPtr<TextEventDispatcher> mTextEventDispatcher;
   nsCursor          mCursor;
