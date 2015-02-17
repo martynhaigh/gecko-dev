@@ -256,18 +256,6 @@ ShapeTable::search(jsid id, bool adding)
     MOZ_CRASH("Shape::search failed to find an expected entry.");
 }
 
-void
-ShapeTable::fixupAfterMovingGC()
-{
-    uint32_t size = capacity();
-    for (HashNumber i = 0; i < size; i++) {
-        Entry &entry = getEntry(i);
-        Shape *shape = entry.shape();
-        if (shape && IsForwarded(shape))
-            entry.setPreservingCollision(Forwarded(shape));
-    }
-}
-
 bool
 ShapeTable::change(int log2Delta, ExclusiveContext *cx)
 {
@@ -613,21 +601,17 @@ NativeObject::addPropertyInternal(ExclusiveContext *cx,
     return nullptr;
 }
 
-JSObject *
-js::NewReshapedObject(JSContext *cx, HandleObjectGroup group, JSObject *parent,
-                      gc::AllocKind allocKind, HandleShape shape, NewObjectKind newKind)
+Shape *
+js::ReshapeForParentAndAllocKind(JSContext *cx, Shape *shape, TaggedProto proto, JSObject *parent,
+                                 gc::AllocKind allocKind)
 {
-    RootedPlainObject res(cx, NewObjectWithGroup<PlainObject>(cx, group, parent, allocKind, newKind));
-    if (!res)
-        return nullptr;
+    // Compute the number of fixed slots with the new allocation kind.
+    size_t nfixed = gc::GetGCKindSlots(allocKind, shape->getObjectClass());
 
-    if (shape->isEmptyShape())
-        return res;
-
-    /* Get all the ids in the object, in order. */
+    // Get all the ids in the shape, in order.
     js::AutoIdVector ids(cx);
     {
-        for (unsigned i = 0; i <= shape->slot(); i++) {
+        for (unsigned i = 0; i < shape->slotSpan(); i++) {
             if (!ids.append(JSID_VOID))
                 return nullptr;
         }
@@ -638,17 +622,13 @@ js::NewReshapedObject(JSContext *cx, HandleObjectGroup group, JSObject *parent,
         }
     }
 
-    /* Construct the new shape, without updating type information. */
+    // Construct the new shape, without updating type information.
     RootedId id(cx);
-    RootedShape newShape(cx, EmptyShape::getInitialShape(cx, res->getClass(),
-                                                         res->getTaggedProto(),
-                                                         res->getParent(),
-                                                         res->getMetadata(),
-                                                         res->numFixedSlots(),
-                                                         shape->getObjectFlags()));
+    RootedShape newShape(cx, EmptyShape::getInitialShape(cx, shape->getObjectClass(),
+                                                         proto, parent, shape->getObjectMetadata(),
+                                                         nfixed, shape->getObjectFlags()));
     for (unsigned i = 0; i < ids.length(); i++) {
         id = ids[i];
-        MOZ_ASSERT(!res->contains(cx, id));
 
         uint32_t index;
         bool indexed = js_IdIsIndex(id, &index);
@@ -666,11 +646,9 @@ js::NewReshapedObject(JSContext *cx, HandleObjectGroup group, JSObject *parent,
         newShape = cx->compartment()->propertyTree.getChild(cx, newShape, child);
         if (!newShape)
             return nullptr;
-        if (!NativeObject::setLastProperty(cx, res, newShape))
-            return nullptr;
     }
 
-    return res;
+    return newShape;
 }
 
 /*
@@ -905,7 +883,7 @@ NativeObject::changeProperty(ExclusiveContext *cx, HandleNativeObject obj,
     MOZ_ASSERT(!((attrs ^ shape->attrs) & JSPROP_SHARED) ||
                !(attrs & JSPROP_SHARED));
 
-    types::MarkTypePropertyNonData(cx, obj, shape->propid());
+    MarkTypePropertyNonData(cx, obj, shape->propid());
 
     if (!CheckCanChangeAttrs(cx, obj, shape, &attrs))
         return nullptr;
@@ -1724,7 +1702,7 @@ NewObjectCache::invalidateEntriesForShape(JSContext *cx, HandleShape shape, Hand
         kind = GetBackgroundAllocKind(kind);
 
     Rooted<GlobalObject *> global(cx, &shape->getObjectParent()->global());
-    RootedObjectGroup group(cx, cx->getNewGroup(clasp, TaggedProto(proto)));
+    RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, clasp, TaggedProto(proto)));
 
     EntryIndex entry;
     if (lookupGlobal(clasp, global, kind, &entry))

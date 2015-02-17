@@ -861,7 +861,7 @@ BufferTextureClient::AllocateForYCbCr(gfx::IntSize aYSize,
 
   size_t bufSize = YCbCrImageDataSerializer::ComputeMinBufferSize(aYSize,
                                                                   aCbCrSize);
-  if (!Allocate(bufSize)) {
+  if (!bufSize || !Allocate(bufSize)) {
     return false;
   }
   YCbCrImageDataSerializer serializer(GetBuffer(), GetBufferSize());
@@ -883,20 +883,6 @@ BufferTextureClient::GetLockedData() const
   return serializer.GetData();
 }
 
-TemporaryRef<gfx::DataSourceSurface>
-BufferTextureClient::GetAsSurface()
-{
-  ImageDataSerializer serializer(GetBuffer(), GetBufferSize());
-  MOZ_ASSERT(serializer.IsValid());
-
-  RefPtr<gfx::DataSourceSurface> wrappingSurf =
-    gfx::Factory::CreateWrappingDataSourceSurface(serializer.GetData(),
-                                                  serializer.GetStride(),
-                                                  serializer.GetSize(),
-                                                  serializer.GetFormat());
-  return gfx::CreateDataSourceSurfaceByCloning(wrappingSurf);
-}
-
 ////////////////////////////////////////////////////////////////////////
 // SharedSurfaceTextureClient
 
@@ -908,6 +894,7 @@ SharedSurfaceTextureClient::SharedSurfaceTextureClient(ISurfaceAllocator* aAlloc
   , mSurf(surf)
   , mGL(mSurf->mGL)
 {
+  AddFlags(TextureFlags::DEALLOCATE_CLIENT);
 }
 
 SharedSurfaceTextureClient::~SharedSurfaceTextureClient()

@@ -770,6 +770,7 @@ sync_java_files = [
     'background/bagheera/BoundedByteArrayEntity.java',
     'background/bagheera/DeflateHelper.java',
     'background/common/DateUtils.java',
+    'background/common/EditorBranch.java',
     'background/common/GlobalConstants.java',
     'background/common/log/Logger.java',
     'background/common/log/writers/AndroidLevelCachingLogWriter.java',
@@ -781,6 +782,7 @@ sync_java_files = [
     'background/common/log/writers/StringLogWriter.java',
     'background/common/log/writers/TagLogWriter.java',
     'background/common/log/writers/ThreadLocalTagLogWriter.java',
+    'background/common/PrefsBranch.java',
     'background/common/telemetry/TelemetryWrapper.java',
     'background/datareporting/TelemetryRecorder.java',
     'background/db/CursorDumper.java',
@@ -880,6 +882,7 @@ sync_java_files = [
     'fxa/sync/FxAccountNotificationManager.java',
     'fxa/sync/FxAccountSchedulePolicy.java',
     'fxa/sync/FxAccountSyncAdapter.java',
+    'fxa/sync/FxAccountSyncDelegate.java',
     'fxa/sync/FxAccountSyncService.java',
     'fxa/sync/FxAccountSyncStatusHelper.java',
     'fxa/sync/SchedulePolicy.java',
@@ -1146,4 +1149,8 @@ sync_java_files = [
     'tokenserver/TokenServerClientDelegate.java',
     'tokenserver/TokenServerException.java',
     'tokenserver/TokenServerToken.java',
+]
+reading_list_service_java_files = [
+    'reading/ReadingListSyncAdapter.java',
+    'reading/ReadingListSyncService.java',
 ]

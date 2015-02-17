@@ -15,13 +15,13 @@
 #include "jsgc.h"
 #include "jsobj.h"
 #include "jsprf.h"
-#include "jsproxy.h"
 #include "jswatchpoint.h"
 #include "jsweakmap.h"
 #include "jswrapper.h"
 #include "prmjtime.h"
 
 #include "builtin/TestingFunctions.h"
+#include "js/Proxy.h"
 #include "proxy/DeadObjectProxy.h"
 #include "vm/ArgumentsObject.h"
 #include "vm/WrapperObject.h"
@@ -63,14 +63,6 @@ js::ForgetSourceHook(JSRuntime *rt)
 {
     return Move(rt->sourceHook);
 }
-
-#ifdef NIGHTLY_BUILD
-JS_FRIEND_API(void)
-js::SetAssertOnScriptEntryHook(JSRuntime *rt, AssertOnScriptEntryHook hook)
-{
-    rt->assertOnScriptEntryHook_ = hook;
-}
-#endif
 
 JS_FRIEND_API(void)
 JS_SetGrayGCRootsTracer(JSRuntime *rt, JSTraceDataOp traceOp, void *data)
@@ -144,7 +136,7 @@ JS_NewObjectWithUniqueType(JSContext *cx, const JSClass *clasp, HandleObject pro
      * ObjectGroup attached to our proto with information about our object, since
      * we're not going to be using that ObjectGroup anyway.
      */
-    RootedObject obj(cx, NewObjectWithGivenProto(cx, (const js::Class *)clasp, nullptr,
+    RootedObject obj(cx, NewObjectWithGivenProto(cx, (const js::Class *)clasp, NullPtr(),
                                                  parent, SingletonObject));
     if (!obj)
         return nullptr;
@@ -707,7 +699,7 @@ FormatFrame(JSContext *cx, const ScriptFrameIter &iter, char *buf, int num,
     RootedFunction fun(cx, iter.maybeCallee(cx));
     RootedString funname(cx);
     if (fun)
-        funname = fun->atom();
+        funname = fun->displayAtom();
 
     RootedValue thisVal(cx);
     if (iter.hasUsableAbstractFramePtr() && iter.computeThis(cx)) {

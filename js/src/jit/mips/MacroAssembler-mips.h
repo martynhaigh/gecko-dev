@@ -236,6 +236,7 @@ class MacroAssemblerMIPS : public Assembler
     }
     void ma_b(Register lhs, Address addr, Label *l, Condition c, JumpKind jumpKind = LongJump);
     void ma_b(Address addr, Imm32 imm, Label *l, Condition c, JumpKind jumpKind = LongJump);
+    void ma_b(Address addr, ImmGCPtr imm, Label *l, Condition c, JumpKind jumpKind = LongJump);
     void ma_b(Address addr, Register rhs, Label *l, Condition c, JumpKind jumpKind = LongJump) {
         MOZ_ASSERT(rhs != ScratchRegister);
         ma_lw(ScratchRegister, addr);
@@ -1161,7 +1162,7 @@ public:
     // Makes a call using the only two methods that it is sane for indep code
     // to make a call.
     void callJit(Register callee);
-    void callJitFromAsmJS(Register callee);
+    void callJitFromAsmJS(Register callee) { call(callee); }
 
     void reserveStack(uint32_t amount);
     void freeStack(uint32_t amount);

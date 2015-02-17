@@ -8,8 +8,9 @@
 #define vm_UnboxedObject_h
 
 #include "jsgc.h"
-#include "jsinfer.h"
 #include "jsobj.h"
+
+#include "vm/TypeInference.h"
 
 namespace js {
 
@@ -35,7 +36,7 @@ UnboxedTypeNeedsPreBarrier(JSValueType type)
 }
 
 // Class describing the layout of an UnboxedPlainObject.
-class UnboxedLayout
+class UnboxedLayout : public mozilla::LinkedListElement<UnboxedLayout>
 {
   public:
     struct Property {
@@ -44,7 +45,7 @@ class UnboxedLayout
         JSValueType type;
 
         Property()
-          : name(nullptr), offset(0), type(JSVAL_TYPE_MAGIC)
+          : name(nullptr), offset(UINT32_MAX), type(JSVAL_TYPE_MAGIC)
         {}
     };
 
@@ -58,7 +59,7 @@ class UnboxedLayout
     size_t size_;
 
     // Any 'new' script information associated with this layout.
-    types::TypeNewScript *newScript_;
+    TypeNewScript *newScript_;
 
     // List for use in tracing objects with this layout. This has the same
     // structure as the trace list on a TypeDescr.
@@ -80,11 +81,11 @@ class UnboxedLayout
         return properties_;
     }
 
-    types::TypeNewScript *newScript() const {
+    TypeNewScript *newScript() const {
         return newScript_;
     }
 
-    void setNewScript(types::TypeNewScript *newScript, bool writeBarrier = true);
+    void setNewScript(TypeNewScript *newScript, bool writeBarrier = true);
 
     const int32_t *traceList() const {
         return traceList_;
@@ -131,52 +132,25 @@ class UnboxedPlainObject : public JSObject
   public:
     static const Class class_;
 
-    static bool obj_lookupGeneric(JSContext *cx, HandleObject obj,
-                                  HandleId id, MutableHandleObject objp,
-                                  MutableHandleShape propp);
-
     static bool obj_lookupProperty(JSContext *cx, HandleObject obj,
-                                   HandlePropertyName name,
-                                   MutableHandleObject objp,
+                                   HandleId id, MutableHandleObject objp,
                                    MutableHandleShape propp);
 
-    static bool obj_lookupElement(JSContext *cx, HandleObject obj,
-                                  uint32_t index, MutableHandleObject objp,
-                                  MutableHandleShape propp);
-
-    static bool obj_defineGeneric(JSContext *cx, HandleObject obj, HandleId id, HandleValue v,
-                                  PropertyOp getter, StrictPropertyOp setter, unsigned attrs);
-
-    static bool obj_defineProperty(JSContext *cx, HandleObject obj,
-                                   HandlePropertyName name, HandleValue v,
+    static bool obj_defineProperty(JSContext *cx, HandleObject obj, HandleId id, HandleValue v,
                                    PropertyOp getter, StrictPropertyOp setter, unsigned attrs);
 
-    static bool obj_defineElement(JSContext *cx, HandleObject obj, uint32_t index, HandleValue v,
-                                  PropertyOp getter, StrictPropertyOp setter, unsigned attrs);
-
-    static bool obj_getGeneric(JSContext *cx, HandleObject obj, HandleObject receiver,
-                               HandleId id, MutableHandleValue vp);
+    static bool obj_hasProperty(JSContext *cx, HandleObject obj, HandleId id, bool *foundp);
 
     static bool obj_getProperty(JSContext *cx, HandleObject obj, HandleObject receiver,
-                                HandlePropertyName name, MutableHandleValue vp);
+                                HandleId id, MutableHandleValue vp);
 
-    static bool obj_getElement(JSContext *cx, HandleObject obj, HandleObject receiver,
-                               uint32_t index, MutableHandleValue vp);
-
-    static bool obj_setGeneric(JSContext *cx, HandleObject obj, HandleId id,
-                               MutableHandleValue vp, bool strict);
-    static bool obj_setProperty(JSContext *cx, HandleObject obj, HandlePropertyName name,
-                                MutableHandleValue vp, bool strict);
-    static bool obj_setElement(JSContext *cx, HandleObject obj, uint32_t index,
-                               MutableHandleValue vp, bool strict);
+    static bool obj_setProperty(JSContext *cx, HandleObject obj, HandleObject receiver,
+                                HandleId id, MutableHandleValue vp, bool strict);
 
     static bool obj_getOwnPropertyDescriptor(JSContext *cx, HandleObject obj, HandleId id,
                                              MutableHandle<JSPropertyDescriptor> desc);
 
-    static bool obj_setGenericAttributes(JSContext *cx, HandleObject obj,
-                                         HandleId id, unsigned *attrsp);
-
-    static bool obj_deleteGeneric(JSContext *cx, HandleObject obj, HandleId id, bool *succeeded);
+    static bool obj_deleteProperty(JSContext *cx, HandleObject obj, HandleId id, bool *succeeded);
 
     static bool obj_enumerate(JSContext *cx, HandleObject obj, AutoIdVector &properties);
     static bool obj_watch(JSContext *cx, HandleObject obj, HandleId id, HandleObject callable);
@@ -208,7 +182,7 @@ class UnboxedPlainObject : public JSObject
 // preliminary objects and their group to the new unboxed representation.
 bool
 TryConvertToUnboxedLayout(JSContext *cx, Shape *templateShape,
-                          types::ObjectGroup *group, types::PreliminaryObjectArray *objects);
+                          ObjectGroup *group, PreliminaryObjectArray *objects);
 
 inline gc::AllocKind
 UnboxedLayout::getAllocKind() const

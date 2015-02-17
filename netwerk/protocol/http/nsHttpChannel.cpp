@@ -1278,16 +1278,10 @@ nsHttpChannel::ProcessAltService()
         return;
     }
 
-    if (isHttp && !gHttpHandler->AllowAltSvcOE()) {
-        return;
-    }
-
     const char *altSvc;
     if (!(altSvc = mResponseHead->PeekHeader(nsHttp::Alternate_Service))) {
         return;
     }
-
-    LOG(("nsHttpChannel %p Alt-Svc Response Header %s\n", this, altSvc));
 
     nsCString buf(altSvc);
     if (!nsHttp::IsReasonableHeaderValue(buf)) {
@@ -1295,87 +1289,24 @@ nsHttpChannel::ProcessAltService()
         return;
     }
 
-    ParsedHeaderValueListList parsedAltSvc(buf);
-    nsRefPtr<AltSvcMapping> mapping;
-
     nsAutoCString originHost;
     int32_t originPort = 80;
     mURI->GetPort(&originPort);
     if (NS_FAILED(mURI->GetHost(originHost))) {
         return;
     }
-    uint32_t now = NowInSeconds(), currentAge = 0;
-    mResponseHead->ComputeCurrentAge(now, mRequestTime, &currentAge);
 
-    for (uint32_t index = 0; index < parsedAltSvc.mValues.Length(); ++index) {
-        uint32_t maxage = 86400; // default
-        nsAutoCString hostname; // Always empty in the header form
-        nsAutoCString npnToken;
-        int32_t portno = originPort;
-
-        for (uint32_t pairIndex = 0;
-             pairIndex < parsedAltSvc.mValues[index].mValues.Length();
-             ++pairIndex) {
-            nsDependentCSubstring &currentName =
-                parsedAltSvc.mValues[index].mValues[pairIndex].mName;
-            nsDependentCSubstring &currentValue =
-                parsedAltSvc.mValues[index].mValues[pairIndex].mValue;
-
-            if (!pairIndex) {
-                // h2=:443
-                npnToken = currentName;
-                int32_t colonIndex = currentValue.FindChar(':');
-                if (colonIndex >= 0) {
-                    portno =
-                        atoi(PromiseFlatCString(currentValue).get() + colonIndex + 1);
-                } else {
-                    colonIndex = 0;
-                }
-                hostname.Assign(currentValue.BeginReading(), colonIndex);
-            } else if (currentName.Equals(NS_LITERAL_CSTRING("ma"))) {
-                maxage = atoi(PromiseFlatCString(currentValue).get());
-                break;
-            }
-        }
-
-        // unescape modifies a c string in place, so afterwards
-        // update nsCString length
-        nsUnescape(npnToken.BeginWriting());
-        npnToken.SetLength(strlen(npnToken.BeginReading()));
-
-        uint32_t spdyIndex;
-        SpdyInformation *spdyInfo = gHttpHandler->SpdyInfo();
-        if (!(NS_SUCCEEDED(spdyInfo->GetNPNIndex(npnToken, &spdyIndex)) &&
-              spdyInfo->ProtocolEnabled(spdyIndex))) {
-            LOG(("Alt Svc %p unknown protocol %s, ignoring", this, npnToken.get()));
-            continue;
-        }
-
-        mapping = new AltSvcMapping(scheme,
-                                    originHost, originPort,
-                                    mUsername, mPrivateBrowsing,
-                                    NowInSeconds() + maxage,
-                                    hostname, portno, npnToken);
-        if (!mapping) {
-            continue;
-        }
-
-        nsCOMPtr<nsIInterfaceRequestor> callbacks;
-        NS_NewNotificationCallbacksAggregation(mCallbacks, mLoadGroup,
-                                               getter_AddRefs(callbacks));
-        if (!callbacks) {
-            return;
-        }
-
-        nsCOMPtr<nsProxyInfo> proxyInfo;
-        if (mProxyInfo) {
-            proxyInfo = do_QueryInterface(mProxyInfo);
-        }
-
-        gHttpHandler->
-            UpdateAltServiceMapping(mapping, proxyInfo, callbacks,
-                                    mCaps & NS_HTTP_DISALLOW_SPDY);
+    nsCOMPtr<nsIInterfaceRequestor> callbacks;
+    nsCOMPtr<nsProxyInfo> proxyInfo;
+    NS_NewNotificationCallbacksAggregation(mCallbacks, mLoadGroup,
+                                           getter_AddRefs(callbacks));
+    if (mProxyInfo) {
+        proxyInfo = do_QueryInterface(mProxyInfo);
     }
+
+    AltSvcMapping::ProcessHeader(buf, scheme, originHost, originPort,
+                                 mUsername, mPrivateBrowsing, callbacks, proxyInfo,
+                                 mCaps & NS_HTTP_DISALLOW_SPDY);
 }
 
 nsresult
@@ -1826,7 +1757,8 @@ nsHttpChannel::StartRedirectChannelToHttps()
         upgradedURI->SetPort(oldPort);
 
     return StartRedirectChannelToURI(upgradedURI,
-                                     nsIChannelEventSink::REDIRECT_PERMANENT);
+                                     nsIChannelEventSink::REDIRECT_PERMANENT |
+                                     nsIChannelEventSink::REDIRECT_STS_UPGRADE);
 }
 
 void
@@ -2284,8 +2216,7 @@ nsHttpChannel::MaybeSetupByteRangeRequest(int64_t partialLen, int64_t contentLen
     nsresult rv = SetupByteRangeRequest(partialLen);
     if (NS_FAILED(rv)) {
         // Make the request unconditional again.
-        mRequestHead.ClearHeader(nsHttp::Range);
-        mRequestHead.ClearHeader(nsHttp::If_Range);
+        UntieByteRangeRequest();
     }
 
     return rv;
@@ -2317,6 +2248,13 @@ nsHttpChannel::SetupByteRangeRequest(int64_t partialLen)
     mIsPartialRequest = true;
 
     return NS_OK;
+}
+
+void
+nsHttpChannel::UntieByteRangeRequest()
+{
+    mRequestHead.ClearHeader(nsHttp::Range);
+    mRequestHead.ClearHeader(nsHttp::If_Range);
 }
 
 nsresult
@@ -3033,9 +2971,16 @@ nsHttpChannel::OnCacheEntryCheck(nsICacheEntry* entry, nsIApplicationCache* appC
             mCachedContentIsPartial = NS_SUCCEEDED(rv) && mIsPartialRequest;
             if (mCachedContentIsPartial) {
                 rv = OpenCacheInputStream(entry, false, !!appCache);
+                if (NS_FAILED(rv)) {
+                    UntieByteRangeRequest();
+                    return rv;
+                }
+
                 *aResult = ENTRY_NEEDS_REVALIDATION;
-                return rv;
-            } else if (size == 0 && mCacheOnlyMetadata) {
+                return NS_OK;
+            }
+
+            if (size == 0 && mCacheOnlyMetadata) {
                 // Don't break cache entry load when the entry's data size
                 // is 0 and mCacheOnlyMetadata flag is set. In that case we
                 // want to proceed since the LOAD_ONLY_IF_MODIFIED flag is
@@ -4690,12 +4635,16 @@ nsHttpChannel::Suspend()
 
     ++mSuspendCount;
 
-    if (mTransactionPump)
-        return mTransactionPump->Suspend();
-    if (mCachePump)
-        return mCachePump->Suspend();
+    nsresult rvTransaction = NS_OK;
+    if (mTransactionPump) {
+        rvTransaction = mTransactionPump->Suspend();
+    }
+    nsresult rvCache = NS_OK;
+    if (mCachePump) {
+        rvCache = mCachePump->Suspend();
+    }
 
-    return NS_OK;
+    return NS_FAILED(rvTransaction) ? rvTransaction : rvCache;
 }
 
 NS_IMETHODIMP
@@ -4711,12 +4660,17 @@ nsHttpChannel::Resume()
         NS_ENSURE_SUCCESS(rv, rv);
     }
 
-    if (mTransactionPump)
-        return mTransactionPump->Resume();
-    if (mCachePump)
-        return mCachePump->Resume();
+    nsresult rvTransaction = NS_OK;
+    if (mTransactionPump) {
+        rvTransaction = mTransactionPump->Resume();
+    }
 
-    return NS_OK;
+    nsresult rvCache = NS_OK;
+    if (mCachePump) {
+        rvCache = mCachePump->Resume();
+    }
+
+    return NS_FAILED(rvTransaction) ? rvTransaction : rvCache;
 }
 
 //-----------------------------------------------------------------------------
@@ -4845,7 +4799,17 @@ nsHttpChannel::BeginConnect()
         LOG(("nsHttpChannel %p Alt Service Mapping Found %s://%s:%d\n", this,
              scheme.get(), mapping->AlternateHost().get(),
              mapping->AlternatePort()));
-        mRequestHead.SetHeader(nsHttp::Alternate_Service_Used, NS_LITERAL_CSTRING("1"));
+
+        if (!(mLoadFlags & LOAD_ANONYMOUS) && !mPrivateBrowsing) {
+            nsAutoCString altUsedLine(mapping->AlternateHost());
+            bool defaultPort = mapping->AlternatePort() ==
+                (isHttps ? NS_HTTPS_DEFAULT_PORT : NS_HTTP_DEFAULT_PORT);
+            if (!defaultPort) {
+                altUsedLine.AppendLiteral(":");
+                altUsedLine.AppendInt(mapping->AlternatePort());
+            }
+            mRequestHead.SetHeader(nsHttp::Alternate_Service_Used, altUsedLine);
+        }
 
         nsCOMPtr<nsIConsoleService> consoleService =
             do_GetService(NS_CONSOLESERVICE_CONTRACTID);
@@ -4899,17 +4863,23 @@ nsHttpChannel::BeginConnect()
     if (mLoadFlags & LOAD_CLASSIFY_URI) {
         nsCOMPtr<nsIURIClassifier> classifier = do_GetService(NS_URICLASSIFIERSERVICE_CONTRACTID);
         if (classifier) {
-            nsCOMPtr<nsIPrincipal> principal = GetPrincipal(false);
             bool tp = false;
             channelClassifier->ShouldEnableTrackingProtection(this, &tp);
-            // See bug 1122691
+            // We skip speculative connections by setting mLocalBlocklist only
+            // when tracking protection is enabled. Though we could do this for
+            // both phishing and malware, it is not necessary for correctness,
+            // since no network events will be received while the
+            // nsChannelClassifier is in progress. See bug 1122691.
             if (tp) {
+                nsCOMPtr<nsIPrincipal> principal = GetURIPrincipal();
                 nsresult response = NS_OK;
                 classifier->ClassifyLocal(principal, tp, &response);
                 if (NS_FAILED(response)) {
-                    LOG(("nsHttpChannel::Found principal on local blocklist "
-                         "[this=%p]", this));
+                    LOG(("nsHttpChannel::ClassifyLocal found principal on local "
+                         "blocklist [this=%p]", this));
                     mLocalBlocklist = true;
+                } else {
+                    LOG(("nsHttpChannel::ClassifyLocal no result found [this=%p]", this));
                 }
             }
         }
@@ -4977,25 +4947,29 @@ nsHttpChannel::BeginConnect()
         }
         mCaps &= ~NS_HTTP_ALLOW_PIPELINING;
     }
-    // mLocalBlocklist is true only if the URI is not a tracking domain, it
-    // makes not guarantees about phishing or malware, so we must call
+    if (!(mLoadFlags & LOAD_CLASSIFY_URI)) {
+        return ContinueBeginConnect();
+    }
+    // mLocalBlocklist is true only if tracking protection is enabled and the
+    // URI is a tracking domain, it makes no guarantees about phishing or
+    // malware, so if LOAD_CLASSIFY_URI is true we must call
     // nsChannelClassifier to catch phishing and malware URIs.
     bool callContinueBeginConnect = true;
     if (mCanceled || !mLocalBlocklist) {
-        rv = ContinueBeginConnect();
-        if (NS_FAILED(rv)) {
-            return rv;
-        }
-        callContinueBeginConnect = false;
+       rv = ContinueBeginConnect();
+       if (NS_FAILED(rv)) {
+           return rv;
+       }
+       callContinueBeginConnect = false;
     }
     // nsChannelClassifier calls ContinueBeginConnect if it has not already
     // been called, after optionally cancelling the channel once we have a
     // remote verdict. We call a concrete class instead of an nsI* that might
     // be overridden.
     if (!mCanceled) {
-      LOG(("nsHttpChannel::Starting nsChannelClassifier %p [this=%p]",
+        LOG(("nsHttpChannel::Starting nsChannelClassifier %p [this=%p]",
            channelClassifier.get(), this));
-      channelClassifier->Start(this, callContinueBeginConnect);
+        channelClassifier->Start(this, callContinueBeginConnect);
     }
     return NS_OK;
 }

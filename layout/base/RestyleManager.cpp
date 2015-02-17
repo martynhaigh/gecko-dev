@@ -219,12 +219,12 @@ GetFrameForChildrenOnlyTransformHint(nsIFrame *aFrame)
   aFrame = aFrame->GetContent()->GetPrimaryFrame();
   if (aFrame->GetType() == nsGkAtoms::svgOuterSVGFrame) {
     aFrame = aFrame->GetFirstPrincipalChild();
-    NS_ABORT_IF_FALSE(aFrame->GetType() == nsGkAtoms::svgOuterSVGAnonChildFrame,
-                      "Where is the nsSVGOuterSVGFrame's anon child??");
+    MOZ_ASSERT(aFrame->GetType() == nsGkAtoms::svgOuterSVGAnonChildFrame,
+               "Where is the nsSVGOuterSVGFrame's anon child??");
   }
-  NS_ABORT_IF_FALSE(aFrame->IsFrameOfType(nsIFrame::eSVG |
-                                          nsIFrame::eSVGContainer),
-                    "Children-only transforms only expected on SVG frames");
+  MOZ_ASSERT(aFrame->IsFrameOfType(nsIFrame::eSVG |
+                                   nsIFrame::eSVGContainer),
+             "Children-only transforms only expected on SVG frames");
   return aFrame;
 }
 
@@ -278,8 +278,7 @@ DoApplyRenderingChangeToTree(nsIFrame* aFrame,
         NS_ASSERTION(text, "expected to find an ancestor SVGTextFrame");
         static_cast<SVGTextFrame*>(text)->NotifyGlyphMetricsChange();
       } else {
-        NS_ABORT_IF_FALSE(false, "unexpected frame got "
-                                 "nsChangeHint_UpdateTextPath");
+        MOZ_ASSERT(false, "unexpected frame got nsChangeHint_UpdateTextPath");
       }
     }
     if (aChange & nsChangeHint_UpdateOpacityLayer) {
@@ -590,7 +589,7 @@ RestyleManager::AddSubtreeToOverflowTracker(nsIFrame* aFrame)
 {
   mOverflowChangedTracker.AddFrame(
       aFrame,
-      OverflowChangedTracker::CHILDREN_AND_PARENT_CHANGED);
+      OverflowChangedTracker::CHILDREN_CHANGED);
   nsIFrame::ChildListIterator lists(aFrame);
   for (; !lists.IsDone(); lists.Next()) {
     nsFrameList::Enumerator childFrames(lists.CurrentList());
@@ -786,9 +785,11 @@ RestyleManager::ProcessRestyledFrames(nsStyleChangeList& aChangeList)
         // frame does not maintain overflow rects, so avoid calling
         // FinishAndStoreOverflow on it:
         hint = NS_SubtractHint(hint,
-                 NS_CombineHint(nsChangeHint_UpdateOverflow,
-                   NS_CombineHint(nsChangeHint_ChildrenOnlyTransform,
-                                  nsChangeHint_UpdatePostTransformOverflow)));
+                 NS_CombineHint(
+                   NS_CombineHint(nsChangeHint_UpdateOverflow,
+                                  nsChangeHint_ChildrenOnlyTransform),
+                   NS_CombineHint(nsChangeHint_UpdatePostTransformOverflow,
+                                  nsChangeHint_UpdateParentOverflow)));
       }
 
       if (!(frame->GetStateBits() & NS_FRAME_MAY_BE_TRANSFORMED)) {
@@ -830,11 +831,12 @@ RestyleManager::ProcessRestyledFrames(nsStyleChangeList& aChangeList)
       if (!didReflowThisFrame &&
           (hint & (nsChangeHint_UpdateOverflow |
                    nsChangeHint_UpdatePostTransformOverflow |
+                   nsChangeHint_UpdateParentOverflow |
                    nsChangeHint_UpdateSubtreeOverflow))) {
         if (hint & nsChangeHint_UpdateSubtreeOverflow) {
+          // FIXME (bug 1133392): Continuations?
           AddSubtreeToOverflowTracker(frame);
         }
-        OverflowChangedTracker::ChangeKind changeKind;
         if (hint & nsChangeHint_ChildrenOnlyTransform) {
           // The overflow areas of the child frames need to be updated:
           nsIFrame* hintFrame = GetFrameForChildrenOnlyTransformHint(frame);
@@ -846,14 +848,14 @@ RestyleManager::ProcessRestyledFrames(nsStyleChangeList& aChangeList)
                        "SVG frames should not have continuations "
                        "or ib-split siblings");
           for ( ; childFrame; childFrame = childFrame->GetNextSibling()) {
-            NS_ABORT_IF_FALSE(childFrame->IsFrameOfType(nsIFrame::eSVG),
-                              "Not expecting non-SVG children");
+            MOZ_ASSERT(childFrame->IsFrameOfType(nsIFrame::eSVG),
+                       "Not expecting non-SVG children");
             // If |childFrame| is dirty or has dirty children, we don't bother
             // updating overflows since that will happen when it's reflowed.
             if (!(childFrame->GetStateBits() &
                   (NS_FRAME_IS_DIRTY | NS_FRAME_HAS_DIRTY_CHILDREN))) {
               mOverflowChangedTracker.AddFrame(childFrame,
-                           OverflowChangedTracker::CHILDREN_AND_PARENT_CHANGED);
+                           OverflowChangedTracker::CHILDREN_CHANGED);
             }
             NS_ASSERTION(!nsLayoutUtils::GetNextContinuationOrIBSplitSibling(childFrame),
                          "SVG frames should not have continuations "
@@ -866,18 +868,37 @@ RestyleManager::ProcessRestyledFrames(nsStyleChangeList& aChangeList)
         // overflows since that will happen when it's reflowed.
         if (!(frame->GetStateBits() &
               (NS_FRAME_IS_DIRTY | NS_FRAME_HAS_DIRTY_CHILDREN))) {
-          // If we have both nsChangeHint_UpdateOverflow and
-          // nsChangeHint_UpdatePostTransformOverflow, CHILDREN_AND_PARENT_CHANGED
-          // is selected as it is stronger.
-          if (hint & (nsChangeHint_UpdateOverflow | 
-                      nsChangeHint_UpdateSubtreeOverflow)) {
-            changeKind = OverflowChangedTracker::CHILDREN_AND_PARENT_CHANGED;
-          } else {
-            changeKind = OverflowChangedTracker::TRANSFORM_CHANGED;
+          if (hint & (nsChangeHint_UpdateOverflow |
+                      nsChangeHint_UpdateSubtreeOverflow |
+                      nsChangeHint_UpdatePostTransformOverflow)) {
+            OverflowChangedTracker::ChangeKind changeKind;
+            // If we have both nsChangeHint_UpdateOverflow and
+            // nsChangeHint_UpdatePostTransformOverflow,
+            // CHILDREN_CHANGED is selected as it is
+            // strictly stronger.
+            if (hint & (nsChangeHint_UpdateOverflow |
+                        nsChangeHint_UpdateSubtreeOverflow)) {
+              changeKind = OverflowChangedTracker::CHILDREN_CHANGED;
+            } else {
+              changeKind = OverflowChangedTracker::TRANSFORM_CHANGED;
+            }
+            for (nsIFrame *cont = frame; cont; cont =
+                   nsLayoutUtils::GetNextContinuationOrIBSplitSibling(cont)) {
+              mOverflowChangedTracker.AddFrame(cont, changeKind);
+            }
           }
-          for (nsIFrame *cont = frame; cont; cont =
-                 nsLayoutUtils::GetNextContinuationOrIBSplitSibling(cont)) {
-            mOverflowChangedTracker.AddFrame(cont, changeKind);
+          // UpdateParentOverflow hints need to be processed in addition
+          // to the above, since if the processing of the above hints
+          // yields no change, the update will not propagate to the
+          // parent.
+          if (hint & nsChangeHint_UpdateParentOverflow) {
+            MOZ_ASSERT(frame->GetParent(),
+                       "shouldn't get style hints for the root frame");
+            for (nsIFrame *cont = frame; cont; cont =
+                   nsLayoutUtils::GetNextContinuationOrIBSplitSibling(cont)) {
+              mOverflowChangedTracker.AddFrame(cont->GetParent(),
+                                   OverflowChangedTracker::CHILDREN_CHANGED);
+            }
           }
         }
       }
@@ -1613,8 +1634,8 @@ RestyleManager::ProcessPendingRestyles()
   mPresContext->FrameConstructor()->CreateNeededFrames();
 
   // Process non-animation restyles...
-  NS_ABORT_IF_FALSE(!mIsProcessingRestyles,
-                    "Nesting calls to ProcessPendingRestyles?");
+  MOZ_ASSERT(!mIsProcessingRestyles,
+             "Nesting calls to ProcessPendingRestyles?");
 #ifdef DEBUG
   mIsProcessingRestyles = true;
 #endif
@@ -4080,6 +4101,7 @@ RestyleManager::ChangeHintToString(nsChangeHint aHint)
     "UpdateCursor", "UpdateEffects", "UpdateOpacityLayer",
     "UpdateTransformLayer", "ReconstructFrame", "UpdateOverflow",
     "UpdateSubtreeOverflow", "UpdatePostTransformOverflow",
+    "UpdateParentOverflow",
     "ChildrenOnlyTransform", "RecomputePosition", "AddOrRemoveTransform",
     "BorderStyleNoneChange", "UpdateTextPath", "NeutralChange",
     "InvalidateRenderingObservers"

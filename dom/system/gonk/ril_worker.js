@@ -36,10 +36,13 @@
  * JavaScript, and that's intended.
  */
 
+/* global BufObject */
+
 "use strict";
 
 importScripts("ril_consts.js");
 importScripts("resource://gre/modules/workers/require.js");
+importScripts("ril_worker_buf_object.js");
 
 // set to true in ril_consts.js to see debug messages
 let DEBUG = DEBUG_WORKER;
@@ -78,138 +81,6 @@ let RILQUIRKS_DATA_REGISTRATION_ON_DEMAND;
 
 // Ril quirk to control the uicc/data subscription.
 let RILQUIRKS_SUBSCRIPTION_CONTROL;
-
-function BufObject(aContext) {
-  this.context = aContext;
-}
-BufObject.prototype = {
-  context: null,
-
-  mToken: 0,
-  mTokenRequestMap: null,
-
-  init: function() {
-    this._init();
-
-    // This gets incremented each time we send out a parcel.
-    this.mToken = 1;
-
-    // Maps tokens we send out with requests to the request type, so that
-    // when we get a response parcel back, we know what request it was for.
-    this.mTokenRequestMap = new Map();
-  },
-
-  /**
-   * Process one parcel.
-   */
-  processParcel: function() {
-    let response_type = this.readInt32();
-
-    let request_type, options;
-    if (response_type == RESPONSE_TYPE_SOLICITED) {
-      let token = this.readInt32();
-      let error = this.readInt32();
-
-      options = this.mTokenRequestMap.get(token);
-      if (!options) {
-        if (DEBUG) {
-          this.context.debug("Suspicious uninvited request found: " +
-                             token + ". Ignored!");
-        }
-        return;
-      }
-
-      this.mTokenRequestMap.delete(token);
-      request_type = options.rilRequestType;
-
-      options.rilRequestError = error;
-      if (DEBUG) {
-        this.context.debug("Solicited response for request type " + request_type +
-                           ", token " + token + ", error " + error);
-      }
-    } else if (response_type == RESPONSE_TYPE_UNSOLICITED) {
-      request_type = this.readInt32();
-      if (DEBUG) {
-        this.context.debug("Unsolicited response for request type " + request_type);
-      }
-    } else {
-      if (DEBUG) {
-        this.context.debug("Unknown response type: " + response_type);
-      }
-      return;
-    }
-
-    this.context.RIL.handleParcel(request_type, this.readAvailable, options);
-  },
-
-  /**
-   * Start a new outgoing parcel.
-   *
-   * @param type
-   *        Integer specifying the request type.
-   * @param options [optional]
-   *        Object containing information about the request, e.g. the
-   *        original main thread message object that led to the RIL request.
-   */
-  newParcel: function(type, options) {
-    if (DEBUG) {
-      this.context.debug("New outgoing parcel of type " + type +
-                         ", token " + this.mToken);
-    }
-
-    // We're going to leave room for the parcel size at the beginning.
-    this.outgoingIndex = this.PARCEL_SIZE_SIZE;
-    this.writeInt32(this._reMapRequestType(type));
-    this.writeInt32(this.mToken);
-
-    if (!options) {
-      options = {};
-    }
-    options.rilRequestType = type;
-    options.rilRequestError = null;
-    this.mTokenRequestMap.set(this.mToken, options);
-    this.mToken++;
-    return this.mToken;
-  },
-
-  simpleRequest: function(type, options) {
-    this.newParcel(type, options);
-    this.sendParcel();
-  },
-
-  onSendParcel: function(parcel) {
-    postRILMessage(this.context.clientId, parcel);
-  },
-
-  /**
-   * Remapping the request type to different values based on RIL version.
-   * We only have to do this for SUBSCRIPTION right now, so I just make it
-   * simple. A generic logic or structure could be discussed if we have more
-   * use cases, especially the cases from different partners.
-   */
-  _reMapRequestType: function(type) {
-    let newType = type;
-    switch (type) {
-      case REQUEST_SET_UICC_SUBSCRIPTION:
-      case REQUEST_SET_DATA_SUBSCRIPTION:
-        if (this.context.RIL.version < 9) {
-          // Shift the CAF's proprietary parcels. Please see
-          // https://www.codeaurora.org/cgit/quic/la/platform/hardware/ril/tree/include/telephony/ril.h?h=b2g_jb_3.2
-          newType = type - 1;
-        }
-        break;
-    }
-
-    return newType;
-  }
-};
-
-(function() {
-  let base = require("resource://gre/modules/workers/worker_buf.js").Buf;
-  for (let p in base) {
-    BufObject.prototype[p] = base[p];
-  }
-})();
 
 const TELEPHONY_REQUESTS = [
   REQUEST_GET_CURRENT_CALLS,
@@ -529,11 +400,6 @@ RilObject.prototype = {
      *       of "0" (USSD-Notify/no further action) or "2" (session terminated)
      */
     this._ussdSession = null;
-
-   /**
-    * Regular expresion to parse MMI codes.
-    */
-    this._mmiRegExp = null;
 
     /**
      * Cell Broadcast Search Lists.
@@ -1613,8 +1479,6 @@ RilObject.prototype = {
   /**
    * Dial a non-emergency number.
    *
-   * @param isDialEmergency
-   *        Whether it is called by dialEmergency.
    * @param isEmergency
    *        Whether the number is an emergency number.
    * @param number
@@ -1653,18 +1517,6 @@ RilObject.prototype = {
 
       this.dialInternal(options);
     } else {
-      // Notify error in establishing the call without radio.
-      if (isRadioOff) {
-        onerror(GECKO_ERROR_RADIO_NOT_AVAILABLE);
-        return;
-      }
-
-      // Shouldn't dial a non-emergency number by dialEmergency.
-      if (options.isDialEmergency || this.voiceRegistrationState.emergencyCallsOnly) {
-        onerror(GECKO_CALL_ERROR_BAD_NUMBER);
-        return;
-      }
-
       // Exit emergency callback mode when user dial a non-emergency call.
       if (this._isInEmergencyCbMode) {
         this.exitEmergencyCbMode();
@@ -1677,13 +1529,6 @@ RilObject.prototype = {
   },
 
   dialInternal: function(options) {
-    // Make a Cdma 3way call.
-    if (this._isCdma && Object.keys(this.currentCalls).length == 1) {
-      options.featureStr = options.number;
-      this.cdmaFlash(options);
-      return;
-    }
-
     this.telephonyRequestQueue.push(options.request, () => {
       let Buf = this.context.Buf;
       Buf.newParcel(options.request, options);
@@ -1697,22 +1542,18 @@ RilObject.prototype = {
     });
   },
 
+  /**
+   * CDMA flash.
+   *
+   * @param featureStr (optional)
+   *        Dialing number when the command is used for three-way-calling
+   */
   cdmaFlash: function(options) {
     let Buf = this.context.Buf;
-    options.isCdma = true;
     options.request = REQUEST_CDMA_FLASH;
     Buf.newParcel(options.request, options);
-    Buf.writeString(options.featureStr);
+    Buf.writeString(options.featureStr || "");
     Buf.sendParcel();
-  },
-
-  /**
-   * Hang up all calls
-   */
-  hangUpAll: function() {
-    for (let callIndex in this.currentCalls) {
-      this.hangUpCall({callIndex: callIndex});
-    }
   },
 
   /**
@@ -1885,70 +1726,13 @@ RilObject.prototype = {
     }
   },
 
-  holdCall: function(options) {
-    let call = this.currentCalls[options.callIndex];
-    if (!call) {
-      options.errorMsg = GECKO_ERROR_GENERIC_FAILURE;
-      options.success = false;
-      this.sendChromeMessage(options);
-      return;
-    }
-
-    let Buf = this.context.Buf;
-    if (this._isCdma) {
-      options.featureStr = "";
-      this.cdmaFlash(options);
-    } else if (call.state == CALL_STATE_ACTIVE) {
-      this.switchActiveCall(options);
-    }
-  },
-
-  resumeCall: function(options) {
-    let call = this.currentCalls[options.callIndex];
-    if (!call) {
-      options.errorMsg = GECKO_ERROR_GENERIC_FAILURE;
-      options.success = false;
-      this.sendChromeMessage(options);
-      return;
-    }
-
-    let Buf = this.context.Buf;
-    if (this._isCdma) {
-      options.featureStr = "";
-      this.cdmaFlash(options);
-    } else if (call.state == CALL_STATE_HOLDING) {
-      this.switchActiveCall(options);
-    }
-  },
-
   conferenceCall: function(options) {
-    if (this._isCdma) {
-      options.featureStr = "";
-      this.cdmaFlash(options);
-      return;
-    }
-
     this.telephonyRequestQueue.push(REQUEST_CONFERENCE, () => {
       this.context.Buf.simpleRequest(REQUEST_CONFERENCE, options);
     });
   },
 
   separateCall: function(options) {
-    let call = this.currentCalls[options.callIndex];
-    if (!call) {
-      options.errorName = "removeError";
-      options.errorMsg = GECKO_ERROR_GENERIC_FAILURE;
-      options.success = false;
-      this.sendChromeMessage(options);
-      return;
-    }
-
-    if (this._isCdma) {
-      options.featureStr = "";
-      this.cdmaFlash(options);
-      return;
-    }
-
     this.telephonyRequestQueue.push(REQUEST_SEPARATE_CONNECTION, () => {
       let Buf = this.context.Buf;
       Buf.newParcel(REQUEST_SEPARATE_CONNECTION, options);
@@ -1956,53 +1740,6 @@ RilObject.prototype = {
       Buf.writeInt32(options.callIndex);
       Buf.sendParcel();
     });
-  },
-
-  hangUpConference: function(options) {
-    if (this._isCdma) {
-      // In cdma, ril only maintains one call index.
-      let call = this.currentCalls[1];
-      if (!call) {
-        options.success = false;
-        options.errorMsg = GECKO_ERROR_GENERIC_FAILURE;
-        this.sendChromeMessage(options);
-        return;
-      }
-
-      options.callIndex = 1;
-      this.hangUpCall(options);
-      return;
-    }
-
-    if (this.currentConferenceState === CALL_STATE_ACTIVE) {
-      this.hangUpForeground(options);
-    } else {
-      this.hangUpBackground(options);
-    }
-  },
-
-  holdConference: function(options) {
-    if (this._isCdma) {
-      // We cannot hold a conference call on CDMA.
-      options.success = false;
-      options.errorMsg = GECKO_ERROR_GENERIC_FAILURE;
-      this.sendChromeMessage(options);
-      return;
-    }
-
-    this.switchActiveCall(options);
-  },
-
-  resumeConference: function(options) {
-    if (this._isCdma) {
-      // We cannot resume a conference call on CDMA
-      options.success = false;
-      options.errorMsg = GECKO_ERROR_GENERIC_FAILURE;
-      this.sendChromeMessage(options);
-      return;
-    }
-
-    this.switchActiveCall(options);
   },
 
   /**
@@ -2743,7 +2480,7 @@ RilObject.prototype = {
       return;
     }
 
-    this.sendUSSD(options);
+    this.sendUSSD(options, false);
   },
 
   /**
@@ -2757,11 +2494,9 @@ RilObject.prototype = {
    *
    * @param ussd
    *        String containing the USSD code.
-   * @param checkSession
-   *        True if an existing session should be there.
    */
-  sendUSSD: function(options) {
-    if (options.checkSession && !this._ussdSession) {
+  sendUSSD: function(options, checkSession = true) {
+    if (checkSession && !this._ussdSession) {
       options.success = false;
       options.errorMsg = GECKO_ERROR_GENERIC_FAILURE;
       this.sendChromeMessage(options);
@@ -3253,6 +2988,14 @@ RilObject.prototype = {
       GsmPDUHelper.writeHexOctet(size / 4);
     });
 
+    // Event List
+    if (options.eventList != null) {
+      GsmPDUHelper.writeHexOctet(COMPREHENSIONTLV_TAG_EVENT_LIST |
+                                 COMPREHENSIONTLV_FLAG_CR);
+      GsmPDUHelper.writeHexOctet(1);
+      GsmPDUHelper.writeHexOctet(options.eventList);
+    }
+
     // Device Identifies
     GsmPDUHelper.writeHexOctet(COMPREHENSIONTLV_TAG_DEVICE_ID |
                                COMPREHENSIONTLV_FLAG_CR);
@@ -3274,14 +3017,6 @@ RilObject.prototype = {
                                  COMPREHENSIONTLV_FLAG_CR);
       GsmPDUHelper.writeHexOctet(0);
       // Help Request doesn't have value
-    }
-
-    // Event List
-    if (options.eventList != null) {
-      GsmPDUHelper.writeHexOctet(COMPREHENSIONTLV_TAG_EVENT_LIST |
-                                 COMPREHENSIONTLV_FLAG_CR);
-      GsmPDUHelper.writeHexOctet(1);
-      GsmPDUHelper.writeHexOctet(options.eventList);
     }
 
     // Location Status
@@ -4491,6 +4226,8 @@ RilObject.prototype = {
       case NETWORK_CREG_TECH_LTE:
       case NETWORK_CREG_TECH_HSPAP:
       case NETWORK_CREG_TECH_GSM:
+      case NETWORK_CREG_TECH_DCHSPAP_1:
+      case NETWORK_CREG_TECH_DCHSPAP_2:
         return true;
     }
 
@@ -5376,6 +5113,16 @@ RilObject.prototype = {
     });
   },
 
+  sendDefaultResponse: function(options) {
+    if (!options.rilMessageType) {
+      return;
+    }
+
+    options.success = (options.rilRequestError === 0);
+    options.errorMsg = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
+    this.sendChromeMessage(options);
+  },
+
   /**
    * Send messages to the main thread.
    */
@@ -5556,42 +5303,22 @@ RilObject.prototype[REQUEST_GET_IMSI] = function REQUEST_GET_IMSI(length, option
   this.sendChromeMessage(options);
 };
 RilObject.prototype[REQUEST_HANGUP] = function REQUEST_HANGUP(length, options) {
-  if (options.rilMessageType == null) {
-    return;
-  }
-
-  options.success = (options.rilRequestError === 0);
-  options.errorMsg = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
-  this.sendChromeMessage(options);
+  this.sendDefaultResponse(options);
 };
 RilObject.prototype[REQUEST_HANGUP_WAITING_OR_BACKGROUND] = function REQUEST_HANGUP_WAITING_OR_BACKGROUND(length, options) {
-  RilObject.prototype[REQUEST_HANGUP].call(this, length, options);
+  this.sendDefaultResponse(options);
 };
 RilObject.prototype[REQUEST_HANGUP_FOREGROUND_RESUME_BACKGROUND] = function REQUEST_HANGUP_FOREGROUND_RESUME_BACKGROUND(length, options) {
-  RilObject.prototype[REQUEST_HANGUP].call(this, length, options);
+  this.sendDefaultResponse(options);
 };
 RilObject.prototype[REQUEST_SWITCH_WAITING_OR_HOLDING_AND_ACTIVE] = function REQUEST_SWITCH_WAITING_OR_HOLDING_AND_ACTIVE(length, options) {
-  options.success = (options.rilRequestError === 0);
-  options.errorMsg = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
-  this.sendChromeMessage(options);
+  this.sendDefaultResponse(options);
 };
 RilObject.prototype[REQUEST_CONFERENCE] = function REQUEST_CONFERENCE(length, options) {
-  options.success = (options.rilRequestError === 0);
-  if (!options.success) {
-    options.errorName = "addError";
-    options.errorMsg = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
-    this.sendChromeMessage(options);
-    return;
-  }
-
-  this.sendChromeMessage(options);
+  this.sendDefaultResponse(options);
 };
 RilObject.prototype[REQUEST_UDUB] = function REQUEST_UDUB(length, options) {
-  options.success = (options.rilRequestError === 0);
-  if (!options.success) {
-    options.errorMsg = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
-  }
-  this.sendChromeMessage(options);
+  this.sendDefaultResponse(options);
 };
 RilObject.prototype[REQUEST_LAST_CALL_FAIL_CAUSE] = function REQUEST_LAST_CALL_FAIL_CAUSE(length, options) {
   let Buf = this.context.Buf;
@@ -6046,11 +5773,7 @@ RilObject.prototype[REQUEST_GET_IMEISV] = function REQUEST_GET_IMEISV(length, op
   this.IMEISV = this.context.Buf.readString();
 };
 RilObject.prototype[REQUEST_ANSWER] = function REQUEST_ANSWER(length, options) {
-  options.success = (options.rilRequestError === 0);
-  if (!options.success) {
-    options.errorMsg = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
-  }
-  this.sendChromeMessage(options);
+  this.sendDefaultResponse(options);
 };
 RilObject.prototype[REQUEST_DEACTIVATE_DATA_CALL] = function REQUEST_DEACTIVATE_DATA_CALL(length, options) {
   if (options.rilRequestError) {
@@ -6248,15 +5971,7 @@ RilObject.prototype[REQUEST_BASEBAND_VERSION] = function REQUEST_BASEBAND_VERSIO
   if (DEBUG) this.context.debug("Baseband version: " + this.basebandVersion);
 };
 RilObject.prototype[REQUEST_SEPARATE_CONNECTION] = function REQUEST_SEPARATE_CONNECTION(length, options) {
-  options.success = (options.rilRequestError === 0);
-  if (!options.success) {
-    options.errorName = "removeError";
-    options.errorMsg = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
-    this.sendChromeMessage(options);
-    return;
-  }
-
-  this.sendChromeMessage(options);
+  this.sendDefaultResponse(options);
 };
 RilObject.prototype[REQUEST_SET_MUTE] = null;
 RilObject.prototype[REQUEST_GET_MUTE] = null;
@@ -6481,6 +6196,8 @@ RilObject.prototype[REQUEST_GET_NEIGHBORING_CELL_IDS] = function REQUEST_GET_NEI
       case NETWORK_CREG_TECH_HSUPA:
       case NETWORK_CREG_TECH_HSPA:
       case NETWORK_CREG_TECH_HSPAP:
+      case NETWORK_CREG_TECH_DCHSPAP_1:
+      case NETWORK_CREG_TECH_DCHSPAP_2:
         cellId.wcdmaPsc = this.parseInt(cid, -1, 16);
         break;
     }
@@ -6590,17 +6307,7 @@ RilObject.prototype[REQUEST_CDMA_QUERY_PREFERRED_VOICE_PRIVACY_MODE] = function 
   this.sendChromeMessage(options);
 };
 RilObject.prototype[REQUEST_CDMA_FLASH] = function REQUEST_CDMA_FLASH(length, options) {
-  options.success = (options.rilRequestError === 0);
-  if (!options.success) {
-    if (options.rilMessageType === "conferenceCall") {
-      options.errorName = "addError";
-    } else if (options.rilMessageType === "separateCall") {
-      options.errorName = "removeError";
-    }
-    options.errorMsg = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
-  }
-
-  this.sendChromeMessage(options);
+  this.sendDefaultResponse(options);
 };
 RilObject.prototype[REQUEST_CDMA_BURST_DTMF] = null;
 RilObject.prototype[REQUEST_CDMA_VALIDATE_AND_WRITE_AKEY] = null;
@@ -10848,6 +10555,8 @@ StkCommandParamsFactoryObject.prototype = {
    *        The value object of CommandDetails TLV.
    * @param ctlvs
    *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
    */
   processRefresh: function(cmdDetails, ctlvs, onComplete) {
     let refreshType = cmdDetails.commandQualifier;
@@ -10876,8 +10585,11 @@ StkCommandParamsFactoryObject.prototype = {
    *        The value object of CommandDetails TLV.
    * @param ctlvs
    *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
    */
   processPollInterval: function(cmdDetails, ctlvs, onComplete) {
+    // Duration is mandatory.
     let ctlv = this.context.StkProactiveCmdHelper.searchForTag(
         COMPREHENSIONTLV_TAG_DURATION, ctlvs);
     if (!ctlv) {
@@ -10897,6 +10609,8 @@ StkCommandParamsFactoryObject.prototype = {
    *        The value object of CommandDetails TLV.
    * @param ctlvs
    *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
    */
   processPollOff: function(cmdDetails, ctlvs, onComplete) {
     onComplete(null);
@@ -10909,8 +10623,11 @@ StkCommandParamsFactoryObject.prototype = {
    *        The value object of CommandDetails TLV.
    * @param ctlvs
    *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
    */
   processSetUpEventList: function(cmdDetails, ctlvs, onComplete) {
+    // Event list is mandatory.
     let ctlv = this.context.StkProactiveCmdHelper.searchForTag(
         COMPREHENSIONTLV_TAG_EVENT_LIST, ctlvs);
     if (!ctlv) {
@@ -10924,16 +10641,21 @@ StkCommandParamsFactoryObject.prototype = {
   },
 
   /**
-   * Construct a param for Select Item.
+   * Construct a param for Setup Menu.
    *
    * @param cmdDetails
    *        The value object of CommandDetails TLV.
    * @param ctlvs
    *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
    */
-  processSelectItem: function(cmdDetails, ctlvs, onComplete) {
+  processSetupMenu: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
-    let menu = {};
+    let menu = {
+      // Help information available.
+      isHelpAvailable: !!(cmdDetails.commandQualifier & 0x80)
+    };
 
     let selectedCtlvs = StkProactiveCmdHelper.searchForSelectedTags(ctlvs, [
       COMPREHENSIONTLV_TAG_ALPHA_ID,
@@ -10944,11 +10666,13 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_ICON_ID_LIST
     ]);
 
+    // Alpha identifier is optional.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ALPHA_ID);
     if (ctlv) {
       menu.title = ctlv.value.identifier;
     }
 
+    // Item data object for item 1 is mandatory.
     let menuCtlvs = selectedCtlvs[COMPREHENSIONTLV_TAG_ITEM];
     if (!menuCtlvs) {
       this.context.RIL.sendStkTerminalResponse({
@@ -10958,32 +10682,26 @@ StkCommandParamsFactoryObject.prototype = {
     }
     menu.items = menuCtlvs.map(aCtlv => aCtlv.value);
 
+    // Item identifier is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ITEM_ID);
     if (ctlv) {
       menu.defaultItem = ctlv.value.identifier - 1;
     }
 
-    if (cmdDetails.typeOfCommand == STK_CMD_SELECT_ITEM) {
-      // The 1st bit and 2nd bit determines the presentation type.
-      menu.presentationType = cmdDetails.commandQualifier & 0x03;
-    }
-
-    // Help information available.
-    if (cmdDetails.commandQualifier & 0x80) {
-      menu.isHelpAvailable = true;
-    }
-
+    // Items next action indicator is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_NEXT_ACTION_IND);
     if (ctlv) {
       menu.nextActionList = ctlv.value;
     }
 
+    // Icon identifier is optional.
     let iconIdCtlvs = null;
     let menuIconCtlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ICON_ID);
     if (menuIconCtlv) {
       iconIdCtlvs = [menuIconCtlv];
     }
 
+    // Item icon identifier list is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ICON_ID_LIST);
     if (ctlv) {
       if (!iconIdCtlvs) {
@@ -11016,9 +10734,40 @@ StkCommandParamsFactoryObject.prototype = {
     });
   },
 
+  /**
+   * Construct a param for Select Item.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
+  processSelectItem: function(cmdDetails, ctlvs, onComplete) {
+    this.processSetupMenu(cmdDetails, ctlvs, (menu) => {
+      // The 1st bit and 2nd bit determines the presentation type.
+      menu.presentationType = cmdDetails.commandQualifier & 0x03;
+      onComplete(menu);
+    });
+  },
+
+  /**
+   * Construct a param for Display Text.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
   processDisplayText: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
-    let textMsg = {};
+    let textMsg = {
+      isHighPriority: !!(cmdDetails.commandQualifier & 0x01),
+      userClear: !!(cmdDetails.commandQualifier & 0x80)
+    };
 
     let selectedCtlvs = StkProactiveCmdHelper.searchForSelectedTags(ctlvs, [
       COMPREHENSIONTLV_TAG_TEXT_STRING,
@@ -11027,6 +10776,7 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_ICON_ID
     ]);
 
+    // Text string is mandatory.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_TEXT_STRING);
     if (!ctlv) {
       this.context.RIL.sendStkTerminalResponse({
@@ -11036,31 +10786,32 @@ StkCommandParamsFactoryObject.prototype = {
     }
     textMsg.text = ctlv.value.textString;
 
-    ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_IMMEDIATE_RESPONSE);
-    if (ctlv) {
-      textMsg.responseNeeded = true;
-    }
+    // Immediate response is optional.
+    textMsg.responseNeeded =
+      !!(selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_IMMEDIATE_RESPONSE));
 
+    // Duration is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_DURATION);
     if (ctlv) {
       textMsg.duration = ctlv.value;
     }
 
-    // High priority.
-    if (cmdDetails.commandQualifier & 0x01) {
-      textMsg.isHighPriority = true;
-    }
-
-    // User clear.
-    if (cmdDetails.commandQualifier & 0x80) {
-      textMsg.userClear = true;
-    }
-
+    // Icon identifier is optional.
     this.appendIconIfNecessary(selectedCtlvs[COMPREHENSIONTLV_TAG_ICON_ID] || null,
                                textMsg,
                                onComplete);
   },
 
+  /**
+   * Construct a param for Setup Idle Mode Text.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
   processSetUpIdleModeText: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
     let textMsg = {};
@@ -11070,6 +10821,7 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_ICON_ID
     ]);
 
+    // Text string is mandatory.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_TEXT_STRING);
     if (!ctlv) {
       this.context.RIL.sendStkTerminalResponse({
@@ -11079,14 +10831,35 @@ StkCommandParamsFactoryObject.prototype = {
     }
     textMsg.text = ctlv.value.textString;
 
+    // Icon identifier is optional.
     this.appendIconIfNecessary(selectedCtlvs[COMPREHENSIONTLV_TAG_ICON_ID] || null,
                                textMsg,
                                onComplete);
   },
 
+  /**
+   * Construct a param for Get Inkey.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
   processGetInkey: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
-    let input = {};
+    let input = {
+      minLength: 1,
+      maxLength: 1,
+      isAlphabet: !!(cmdDetails.commandQualifier & 0x01),
+      isUCS2: !!(cmdDetails.commandQualifier & 0x02),
+      // Character sets defined in bit 1 and bit 2 are disable and
+      // the YES/NO reponse is required.
+      isYesNoRequested: !!(cmdDetails.commandQualifier & 0x04),
+      // Help information available.
+      isHelpAvailable: !!(cmdDetails.commandQualifier & 0x80)
+    };
 
     let selectedCtlvs = StkProactiveCmdHelper.searchForSelectedTags(ctlvs, [
       COMPREHENSIONTLV_TAG_TEXT_STRING,
@@ -11094,6 +10867,7 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_ICON_ID
     ]);
 
+    // Text string is mandatory.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_TEXT_STRING);
     if (!ctlv) {
       this.context.RIL.sendStkTerminalResponse({
@@ -11103,44 +10877,40 @@ StkCommandParamsFactoryObject.prototype = {
     }
     input.text = ctlv.value.textString;
 
-    // duration
+    // Duration is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_DURATION);
     if (ctlv) {
       input.duration = ctlv.value;
     }
 
-    input.minLength = 1;
-    input.maxLength = 1;
-
-    // isAlphabet
-    if (cmdDetails.commandQualifier & 0x01) {
-      input.isAlphabet = true;
-    }
-
-    // UCS2
-    if (cmdDetails.commandQualifier & 0x02) {
-      input.isUCS2 = true;
-    }
-
-    // Character sets defined in bit 1 and bit 2 are disable and
-    // the YES/NO reponse is required.
-    if (cmdDetails.commandQualifier & 0x04) {
-      input.isYesNoRequested = true;
-    }
-
-    // Help information available.
-    if (cmdDetails.commandQualifier & 0x80) {
-      input.isHelpAvailable = true;
-    }
-
+    // Icon identifier is optional.
     this.appendIconIfNecessary(selectedCtlvs[COMPREHENSIONTLV_TAG_ICON_ID] || null,
                                input,
                                onComplete);
   },
 
+  /**
+   * Construct a param for Get Input.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
   processGetInput: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
-    let input = {};
+    let input = {
+      isAlphabet: !!(cmdDetails.commandQualifier & 0x01),
+      isUCS2: !!(cmdDetails.commandQualifier & 0x02),
+      // User input shall not be revealed
+      hideInput: !!(cmdDetails.commandQualifier & 0x04),
+      // User input in SMS packed format
+      isPacked: !!(cmdDetails.commandQualifier & 0x08),
+      // Help information available.
+      isHelpAvailable: !!(cmdDetails.commandQualifier & 0x80)
+    };
 
     let selectedCtlvs = StkProactiveCmdHelper.searchForSelectedTags(ctlvs, [
       COMPREHENSIONTLV_TAG_TEXT_STRING,
@@ -11149,6 +10919,7 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_ICON_ID
     ]);
 
+    // Text string is mandatory.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_TEXT_STRING);
     if (!ctlv) {
       this.context.RIL.sendStkTerminalResponse({
@@ -11158,47 +10929,39 @@ StkCommandParamsFactoryObject.prototype = {
     }
     input.text = ctlv.value.textString;
 
+    // Response length is mandatory.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_RESPONSE_LENGTH);
-    if (ctlv) {
-      input.minLength = ctlv.value.minLength;
-      input.maxLength = ctlv.value.maxLength;
+    if (!ctlv) {
+      this.context.RIL.sendStkTerminalResponse({
+        command: cmdDetails,
+        resultCode: STK_RESULT_REQUIRED_VALUES_MISSING});
+      throw new Error("Stk Get Input: Required value missing : Response Length");
     }
+    input.minLength = ctlv.value.minLength;
+    input.maxLength = ctlv.value.maxLength;
 
+    // Default text is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_DEFAULT_TEXT);
     if (ctlv) {
       input.defaultText = ctlv.value.textString;
     }
 
-    // Alphabet only
-    if (cmdDetails.commandQualifier & 0x01) {
-      input.isAlphabet = true;
-    }
-
-    // UCS2
-    if (cmdDetails.commandQualifier & 0x02) {
-      input.isUCS2 = true;
-    }
-
-    // User input shall not be revealed
-    if (cmdDetails.commandQualifier & 0x04) {
-      input.hideInput = true;
-    }
-
-    // User input in SMS packed format
-    if (cmdDetails.commandQualifier & 0x08) {
-      input.isPacked = true;
-    }
-
-    // Help information available.
-    if (cmdDetails.commandQualifier & 0x80) {
-      input.isHelpAvailable = true;
-    }
-
+    // Icon identifier is optional.
     this.appendIconIfNecessary(selectedCtlvs[COMPREHENSIONTLV_TAG_ICON_ID] || null,
                                input,
                                onComplete);
   },
 
+  /**
+   * Construct a param for SendSS/SMS/USSD/DTMF.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
   processEventNotify: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
     let textMsg = {};
@@ -11208,16 +10971,28 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_ICON_ID
     ]);
 
+    // Alpha identifier is optional.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ALPHA_ID);
     if (ctlv) {
       textMsg.text = ctlv.value.identifier;
     }
 
+    // Icon identifier is optional.
     this.appendIconIfNecessary(selectedCtlvs[COMPREHENSIONTLV_TAG_ICON_ID] || null,
                                textMsg,
                                onComplete);
   },
 
+  /**
+   * Construct a param for Setup Call.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
   processSetupCall: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
     let call = {};
@@ -11231,6 +11006,7 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_DURATION
     ]);
 
+    // Address is mandatory.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ADDRESS);
     if (!ctlv) {
       this.context.RIL.sendStkTerminalResponse({
@@ -11240,24 +11016,27 @@ StkCommandParamsFactoryObject.prototype = {
     }
     call.address = ctlv.value.number;
 
+    // Alpha identifier (user confirmation phase) is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ALPHA_ID);
     if (ctlv) {
       confirmMessage.text = ctlv.value.identifier;
       call.confirmMessage = confirmMessage;
     }
 
+    // Alpha identifier (call set up phase) is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ALPHA_ID);
     if (ctlv) {
       callMessage.text = ctlv.value.identifier;
       call.callMessage = callMessage;
     }
 
-    // see 3GPP TS 31.111 section 6.4.13
+    // Duration is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_DURATION);
     if (ctlv) {
       call.duration = ctlv.value;
     }
 
+    // Icon identifier is optional.
     let iconIdCtlvs = selectedCtlvs[COMPREHENSIONTLV_TAG_ICON_ID] || null;
     this.loadIcons(iconIdCtlvs, (aIcons) => {
       if (aIcons) {
@@ -11278,9 +11057,21 @@ StkCommandParamsFactoryObject.prototype = {
     });
   },
 
+  /**
+   * Construct a param for Launch Browser.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
   processLaunchBrowser: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
-    let browser = {};
+    let browser = {
+      mode: cmdDetails.commandQualifier & 0x03
+    };
     let confirmMessage = {};
 
     let selectedCtlvs = StkProactiveCmdHelper.searchForSelectedTags(ctlvs, [
@@ -11289,6 +11080,7 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_ICON_ID
     ]);
 
+    // URL is mandatory.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_URL);
     if (!ctlv) {
       this.context.RIL.sendStkTerminalResponse({
@@ -11298,14 +11090,14 @@ StkCommandParamsFactoryObject.prototype = {
     }
     browser.url = ctlv.value.url;
 
-    browser.mode = cmdDetails.commandQualifier & 0x03;
-
+    // Alpha identifier is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ALPHA_ID);
     if (ctlv) {
       confirmMessage.text = ctlv.value.identifier;
       browser.confirmMessage = confirmMessage;
     }
 
+    // Icon identifier is optional.
     let iconIdCtlvs = selectedCtlvs[COMPREHENSIONTLV_TAG_ICON_ID] || null;
     this.loadIcons(iconIdCtlvs, (aIcons) => {
        if (aIcons) {
@@ -11319,9 +11111,22 @@ StkCommandParamsFactoryObject.prototype = {
     });
   },
 
+  /**
+   * Construct a param for Play Tone.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
   processPlayTone: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
-    let playTone = {};
+    let playTone = {
+      // The vibrate is only defined in TS 102.223.
+      isVibrate: !!(cmdDetails.commandQualifier & 0x01)
+    };
 
     let selectedCtlvs = StkProactiveCmdHelper.searchForSelectedTags(ctlvs, [
       COMPREHENSIONTLV_TAG_ALPHA_ID,
@@ -11330,36 +11135,39 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_ICON_ID
     ]);
 
+    // Alpha identifier is optional.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ALPHA_ID);
     if (ctlv) {
       playTone.text = ctlv.value.identifier;
     }
 
+    // Tone is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_TONE);
     if (ctlv) {
       playTone.tone = ctlv.value.tone;
     }
 
+    // Duration is optional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_DURATION);
     if (ctlv) {
       playTone.duration = ctlv.value;
     }
 
-    // vibrate is only defined in TS 102.223
-    playTone.isVibrate = (cmdDetails.commandQualifier & 0x01) !== 0x00;
-
+    // Icon identifier is optional.
     this.appendIconIfNecessary(selectedCtlvs[COMPREHENSIONTLV_TAG_ICON_ID] || null,
                                playTone,
                                onComplete);
   },
 
   /**
-   * Construct a param for Provide Local Information
+   * Construct a param for Provide Local Information.
    *
    * @param cmdDetails
    *        The value object of CommandDetails TLV.
    * @param ctlvs
    *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
    */
   processProvideLocalInfo: function(cmdDetails, ctlvs, onComplete) {
     let provideLocalInfo = {
@@ -11369,6 +11177,16 @@ StkCommandParamsFactoryObject.prototype = {
     onComplete(provideLocalInfo);
   },
 
+  /**
+   * Construct a param for Timer Management.
+   *
+   * @param cmdDetails
+   *        The value object of CommandDetails TLV.
+   * @param ctlvs
+   *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
+   */
   processTimerManagement: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
     let timer = {
@@ -11380,11 +11198,17 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_TIMER_VALUE
     ]);
 
+    // Timer identifier is mandatory.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_TIMER_IDENTIFIER);
-    if (ctlv) {
-      timer.timerId = ctlv.value.timerId;
+    if (!ctlv) {
+      this.context.RIL.sendStkTerminalResponse({
+        command: cmdDetails,
+        resultCode: STK_RESULT_REQUIRED_VALUES_MISSING});
+      throw new Error("Stk Timer Management: Required value missing : Timer Identifier");
     }
+    timer.timerId = ctlv.value.timerId;
 
+    // Timer value is conditional.
     ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_TIMER_VALUE);
     if (ctlv) {
       timer.timerValue = ctlv.value.timerValue;
@@ -11400,6 +11224,8 @@ StkCommandParamsFactoryObject.prototype = {
     *        The value object of CommandDetails TLV.
     * @param ctlvs
     *        The all TLVs in this proactive command.
+   * @param onComplete
+   *        Callback to be called when complete.
     */
   processBipMessage: function(cmdDetails, ctlvs, onComplete) {
     let StkProactiveCmdHelper = this.context.StkProactiveCmdHelper;
@@ -11410,11 +11236,13 @@ StkCommandParamsFactoryObject.prototype = {
       COMPREHENSIONTLV_TAG_ICON_ID
     ]);
 
+    // Alpha identifier is optional.
     let ctlv = selectedCtlvs.retrieve(COMPREHENSIONTLV_TAG_ALPHA_ID);
     if (ctlv) {
       bipMsg.text = ctlv.value.identifier;
     }
 
+    // Icon identifier is optional.
     this.appendIconIfNecessary(selectedCtlvs[COMPREHENSIONTLV_TAG_ICON_ID] || null,
                                bipMsg,
                                onComplete);
@@ -11436,7 +11264,7 @@ StkCommandParamsFactoryObject.prototype[STK_CMD_SET_UP_EVENT_LIST] = function ST
   return this.processSetUpEventList(cmdDetails, ctlvs, onComplete);
 };
 StkCommandParamsFactoryObject.prototype[STK_CMD_SET_UP_MENU] = function STK_CMD_SET_UP_MENU(cmdDetails, ctlvs, onComplete) {
-  return this.processSelectItem(cmdDetails, ctlvs, onComplete);
+  return this.processSetupMenu(cmdDetails, ctlvs, onComplete);
 };
 StkCommandParamsFactoryObject.prototype[STK_CMD_SELECT_ITEM] = function STK_CMD_SELECT_ITEM(cmdDetails, ctlvs, onComplete) {
   return this.processSelectItem(cmdDetails, ctlvs, onComplete);
@@ -16182,8 +16010,6 @@ function Context(aClientId) {
   this.clientId = aClientId;
 
   this.Buf = new BufObject(this);
-  this.Buf.init();
-
   this.RIL = new RilObject(this);
   this.RIL.initRILState();
 }

@@ -25,7 +25,6 @@
 
 using namespace js;
 using namespace js::gc;
-using namespace js::types;
 
 using mozilla::PodZero;
 
@@ -153,7 +152,7 @@ CallObject::createSingleton(JSContext *cx, HandleShape shape, uint32_t lexicalBe
     MOZ_ASSERT(CanBeFinalizedInBackground(kind, &CallObject::class_));
     kind = gc::GetBackgroundAllocKind(kind);
 
-    RootedObjectGroup group(cx, cx->getLazySingletonGroup(&class_, TaggedProto(nullptr)));
+    RootedObjectGroup group(cx, ObjectGroup::lazySingletonGroup(cx, &class_, TaggedProto(nullptr)));
     if (!group)
         return nullptr;
     RootedObject obj(cx, JSObject::create(cx, kind, gc::TenuredHeap, shape, group));
@@ -178,7 +177,7 @@ CallObject::createTemplateObject(JSContext *cx, HandleScript script, gc::Initial
     RootedShape shape(cx, script->bindings.callObjShape());
     MOZ_ASSERT(shape->getObjectClass() == &class_);
 
-    RootedObjectGroup group(cx, cx->getNewGroup(&class_, TaggedProto(nullptr)));
+    RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &class_, TaggedProto(nullptr)));
     if (!group)
         return nullptr;
 
@@ -326,7 +325,7 @@ DeclEnvObject::createTemplateObject(JSContext *cx, HandleFunction fun, gc::Initi
 {
     MOZ_ASSERT(IsNurseryAllocable(FINALIZE_KIND));
 
-    RootedObjectGroup group(cx, cx->getNewGroup(&class_, TaggedProto(nullptr)));
+    RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &class_, TaggedProto(nullptr)));
     if (!group)
         return nullptr;
 
@@ -400,7 +399,7 @@ js::XDRStaticWithObject(XDRState<XDR_DECODE> *, HandleObject, MutableHandle<Stat
 StaticWithObject *
 StaticWithObject::create(ExclusiveContext *cx)
 {
-    RootedObjectGroup group(cx, cx->getNewGroup(&class_, TaggedProto(nullptr)));
+    RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &class_, TaggedProto(nullptr)));
     if (!group)
         return nullptr;
 
@@ -433,7 +432,8 @@ DynamicWithObject::create(JSContext *cx, HandleObject object, HandleObject enclo
                           HandleObject staticWith, WithKind kind)
 {
     MOZ_ASSERT(staticWith->is<StaticWithObject>());
-    RootedObjectGroup group(cx, cx->getNewGroup(&class_, TaggedProto(staticWith.get())));
+    RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &class_,
+                                                             TaggedProto(staticWith.get())));
     if (!group)
         return nullptr;
 
@@ -461,105 +461,45 @@ DynamicWithObject::create(JSContext *cx, HandleObject object, HandleObject enclo
 }
 
 static bool
-with_LookupGeneric(JSContext *cx, HandleObject obj, HandleId id,
-                   MutableHandleObject objp, MutableHandleShape propp)
+with_LookupProperty(JSContext *cx, HandleObject obj, HandleId id,
+                    MutableHandleObject objp, MutableHandleShape propp)
 {
     RootedObject actual(cx, &obj->as<DynamicWithObject>().object());
     return LookupProperty(cx, actual, id, objp, propp);
 }
 
 static bool
-with_LookupProperty(JSContext *cx, HandleObject obj, HandlePropertyName name,
-                    MutableHandleObject objp, MutableHandleShape propp)
-{
-    Rooted<jsid> id(cx, NameToId(name));
-    return with_LookupGeneric(cx, obj, id, objp, propp);
-}
-
-static bool
-with_LookupElement(JSContext *cx, HandleObject obj, uint32_t index,
-                   MutableHandleObject objp, MutableHandleShape propp)
-{
-    RootedId id(cx);
-    if (!IndexToId(cx, index, &id))
-        return false;
-    return with_LookupGeneric(cx, obj, id, objp, propp);
-}
-
-static bool
-with_DefineGeneric(JSContext *cx, HandleObject obj, HandleId id, HandleValue value,
-                   JSPropertyOp getter, JSStrictPropertyOp setter, unsigned attrs)
+with_DefineProperty(JSContext *cx, HandleObject obj, HandleId id, HandleValue value,
+                    JSPropertyOp getter, JSStrictPropertyOp setter, unsigned attrs)
 {
     RootedObject actual(cx, &obj->as<DynamicWithObject>().object());
     return DefineProperty(cx, actual, id, value, getter, setter, attrs);
 }
 
 static bool
-with_DefineProperty(JSContext *cx, HandleObject obj, HandlePropertyName name, HandleValue value,
-                   JSPropertyOp getter, JSStrictPropertyOp setter, unsigned attrs)
+with_HasProperty(JSContext *cx, HandleObject obj, HandleId id, bool *foundp)
 {
-    Rooted<jsid> id(cx, NameToId(name));
-    return with_DefineGeneric(cx, obj, id, value, getter, setter, attrs);
+    RootedObject actual(cx, &obj->as<DynamicWithObject>().object());
+    return HasProperty(cx, actual, id, foundp);
 }
 
 static bool
-with_DefineElement(JSContext *cx, HandleObject obj, uint32_t index, HandleValue value,
-                   JSPropertyOp getter, JSStrictPropertyOp setter, unsigned attrs)
-{
-    RootedId id(cx);
-    if (!IndexToId(cx, index, &id))
-        return false;
-    return with_DefineGeneric(cx, obj, id, value, getter, setter, attrs);
-}
-
-static bool
-with_GetGeneric(JSContext *cx, HandleObject obj, HandleObject receiver, HandleId id,
-                MutableHandleValue vp)
+with_GetProperty(JSContext *cx, HandleObject obj, HandleObject receiver, HandleId id,
+                 MutableHandleValue vp)
 {
     RootedObject actual(cx, &obj->as<DynamicWithObject>().object());
     return GetProperty(cx, actual, actual, id, vp);
 }
 
 static bool
-with_GetProperty(JSContext *cx, HandleObject obj, HandleObject receiver, HandlePropertyName name,
-                 MutableHandleValue vp)
-{
-    RootedId id(cx, NameToId(name));
-    return with_GetGeneric(cx, obj, receiver, id, vp);
-}
-
-static bool
-with_GetElement(JSContext *cx, HandleObject obj, HandleObject receiver, uint32_t index,
-                MutableHandleValue vp)
-{
-    RootedId id(cx);
-    if (!IndexToId(cx, index, &id))
-        return false;
-    return with_GetGeneric(cx, obj, receiver, id, vp);
-}
-
-static bool
-with_SetGeneric(JSContext *cx, HandleObject obj, HandleId id,
-                MutableHandleValue vp, bool strict)
-{
-    RootedObject actual(cx, &obj->as<DynamicWithObject>().object());
-    return SetProperty(cx, actual, actual, id, vp, strict);
-}
-
-static bool
-with_SetProperty(JSContext *cx, HandleObject obj, HandlePropertyName name,
+with_SetProperty(JSContext *cx, HandleObject obj, HandleObject receiver, HandleId id,
                  MutableHandleValue vp, bool strict)
 {
     RootedObject actual(cx, &obj->as<DynamicWithObject>().object());
-    return SetProperty(cx, actual, actual, name, vp, strict);
-}
-
-static bool
-with_SetElement(JSContext *cx, HandleObject obj, uint32_t index,
-                MutableHandleValue vp, bool strict)
-{
-    RootedObject actual(cx, &obj->as<DynamicWithObject>().object());
-    return SetElement(cx, actual, actual, index, vp, strict);
+    RootedObject actualReceiver(cx, receiver);
+    if (receiver == obj)
+        actualReceiver = actual;
+    return SetProperty(cx, actual, actualReceiver, id, vp, strict);
 }
 
 static bool
@@ -571,14 +511,7 @@ with_GetOwnPropertyDescriptor(JSContext *cx, HandleObject obj, HandleId id,
 }
 
 static bool
-with_SetGenericAttributes(JSContext *cx, HandleObject obj, HandleId id, unsigned *attrsp)
-{
-    RootedObject actual(cx, &obj->as<DynamicWithObject>().object());
-    return SetPropertyAttributes(cx, actual, id, attrsp);
-}
-
-static bool
-with_DeleteGeneric(JSContext *cx, HandleObject obj, HandleId id, bool *succeeded)
+with_DeleteProperty(JSContext *cx, HandleObject obj, HandleId id, bool *succeeded)
 {
     RootedObject actual(cx, &obj->as<DynamicWithObject>().object());
     return DeleteProperty(cx, actual, id, succeeded);
@@ -616,21 +549,13 @@ const Class DynamicWithObject::class_ = {
     JS_NULL_CLASS_SPEC,
     JS_NULL_CLASS_EXT,
     {
-        with_LookupGeneric,
         with_LookupProperty,
-        with_LookupElement,
-        with_DefineGeneric,
         with_DefineProperty,
-        with_DefineElement,
-        with_GetGeneric,
+        with_HasProperty,
         with_GetProperty,
-        with_GetElement,
-        with_SetGeneric,
         with_SetProperty,
-        with_SetElement,
         with_GetOwnPropertyDescriptor,
-        with_SetGenericAttributes,
-        with_DeleteGeneric,
+        with_DeleteProperty,
         nullptr, nullptr,    /* watch/unwatch */
         nullptr,             /* getElements */
         nullptr,             /* enumerate (native enumeration of target doesn't work) */
@@ -641,7 +566,7 @@ const Class DynamicWithObject::class_ = {
 /* static */ StaticEvalObject *
 StaticEvalObject::create(JSContext *cx, HandleObject enclosing)
 {
-    RootedObjectGroup group(cx, cx->getNewGroup(&class_, TaggedProto(nullptr)));
+    RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &class_, TaggedProto(nullptr)));
     if (!group)
         return nullptr;
 
@@ -674,7 +599,8 @@ ClonedBlockObject::create(JSContext *cx, Handle<StaticBlockObject *> block, Hand
 {
     MOZ_ASSERT(block->getClass() == &BlockObject::class_);
 
-    RootedObjectGroup group(cx, cx->getNewGroup(&BlockObject::class_, TaggedProto(block.get())));
+    RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &BlockObject::class_,
+                                                             TaggedProto(block.get())));
     if (!group)
         return nullptr;
 
@@ -746,7 +672,8 @@ ClonedBlockObject::copyUnaliasedValues(AbstractFramePtr frame)
 StaticBlockObject *
 StaticBlockObject::create(ExclusiveContext *cx)
 {
-    RootedObjectGroup group(cx, cx->getNewGroup(&BlockObject::class_, TaggedProto(nullptr)));
+    RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &BlockObject::class_,
+                                                             TaggedProto(nullptr)));
     if (!group)
         return nullptr;
 
@@ -958,7 +885,7 @@ js::CloneNestedScopeObject(JSContext *cx, HandleObject enclosingScope, Handle<Ne
 /* static */ UninitializedLexicalObject *
 UninitializedLexicalObject::create(JSContext *cx, HandleObject enclosing)
 {
-    RootedObjectGroup group(cx, cx->getNewGroup(&class_, TaggedProto(nullptr)));
+    RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &class_, TaggedProto(nullptr)));
     if (!group)
         return nullptr;
 
@@ -988,81 +915,34 @@ ReportUninitializedLexicalId(JSContext *cx, HandleId id)
 }
 
 static bool
-uninitialized_LookupGeneric(JSContext *cx, HandleObject obj, HandleId id,
-                            MutableHandleObject objp, MutableHandleShape propp)
+uninitialized_LookupProperty(JSContext *cx, HandleObject obj, HandleId id,
+                             MutableHandleObject objp, MutableHandleShape propp)
 {
     ReportUninitializedLexicalId(cx, id);
     return false;
 }
 
 static bool
-uninitialized_LookupProperty(JSContext *cx, HandleObject obj, HandlePropertyName name,
-                    MutableHandleObject objp, MutableHandleShape propp)
-{
-    Rooted<jsid> id(cx, NameToId(name));
-    return uninitialized_LookupGeneric(cx, obj, id, objp, propp);
-}
-
-static bool
-uninitialized_LookupElement(JSContext *cx, HandleObject obj, uint32_t index,
-                            MutableHandleObject objp, MutableHandleShape propp)
-{
-    RootedId id(cx);
-    if (!IndexToId(cx, index, &id))
-        return false;
-    return uninitialized_LookupGeneric(cx, obj, id, objp, propp);
-}
-
-static bool
-uninitialized_GetGeneric(JSContext *cx, HandleObject obj, HandleObject receiver, HandleId id,
-                         MutableHandleValue vp)
+uninitialized_HasProperty(JSContext *cx, HandleObject obj, HandleId id, bool *foundp)
 {
     ReportUninitializedLexicalId(cx, id);
     return false;
 }
 
 static bool
-uninitialized_GetProperty(JSContext *cx, HandleObject obj, HandleObject receiver,
-                          HandlePropertyName name, MutableHandleValue vp)
-{
-    RootedId id(cx, NameToId(name));
-    return uninitialized_GetGeneric(cx, obj, receiver, id, vp);
-}
-
-static bool
-uninitialized_GetElement(JSContext *cx, HandleObject obj, HandleObject receiver, uint32_t index,
-                         MutableHandleValue vp)
-{
-    RootedId id(cx);
-    if (!IndexToId(cx, index, &id))
-        return false;
-    return uninitialized_GetGeneric(cx, obj, receiver, id, vp);
-}
-
-static bool
-uninitialized_SetGeneric(JSContext *cx, HandleObject obj, HandleId id,
-                         MutableHandleValue vp, bool strict)
+uninitialized_GetProperty(JSContext *cx, HandleObject obj, HandleObject receiver, HandleId id,
+                          MutableHandleValue vp)
 {
     ReportUninitializedLexicalId(cx, id);
     return false;
 }
 
 static bool
-uninitialized_SetProperty(JSContext *cx, HandleObject obj, HandlePropertyName name,
+uninitialized_SetProperty(JSContext *cx, HandleObject obj, HandleObject receiver, HandleId id,
                           MutableHandleValue vp, bool strict)
 {
-    RootedId id(cx, NameToId(name));
-    return uninitialized_SetGeneric(cx, obj, id, vp, strict);
-}
-
-static bool
-uninitialized_SetElement(JSContext *cx, HandleObject obj, uint32_t index,
-                         MutableHandleValue vp, bool strict)
-{
-    RootedId id(cx);
-    if (!IndexToId(cx, index, &id))
-        return false;
-    return uninitialized_SetGeneric(cx, obj, id, vp, strict);
+    ReportUninitializedLexicalId(cx, id);
+    return false;
 }
 
 static bool
@@ -1074,14 +954,7 @@ uninitialized_GetOwnPropertyDescriptor(JSContext *cx, HandleObject obj, HandleId
 }
 
 static bool
-uninitialized_SetGenericAttributes(JSContext *cx, HandleObject obj, HandleId id, unsigned *attrsp)
-{
-    ReportUninitializedLexicalId(cx, id);
-    return false;
-}
-
-static bool
-uninitialized_DeleteGeneric(JSContext *cx, HandleObject obj, HandleId id, bool *succeeded)
+uninitialized_DeleteProperty(JSContext *cx, HandleObject obj, HandleId id, bool *succeeded)
 {
     ReportUninitializedLexicalId(cx, id);
     return false;
@@ -1106,21 +979,13 @@ const Class UninitializedLexicalObject::class_ = {
     JS_NULL_CLASS_SPEC,
     JS_NULL_CLASS_EXT,
     {
-        uninitialized_LookupGeneric,
         uninitialized_LookupProperty,
-        uninitialized_LookupElement,
-        nullptr,             /* defineGeneric */
         nullptr,             /* defineProperty */
-        nullptr,             /* defineElement */
-        uninitialized_GetGeneric,
+        uninitialized_HasProperty,
         uninitialized_GetProperty,
-        uninitialized_GetElement,
-        uninitialized_SetGeneric,
         uninitialized_SetProperty,
-        uninitialized_SetElement,
         uninitialized_GetOwnPropertyDescriptor,
-        uninitialized_SetGenericAttributes,
-        uninitialized_DeleteGeneric,
+        uninitialized_DeleteProperty,
         nullptr, nullptr,    /* watch/unwatch */
         nullptr,             /* getElements */
         nullptr,             /* enumerate (native enumeration of target doesn't work) */

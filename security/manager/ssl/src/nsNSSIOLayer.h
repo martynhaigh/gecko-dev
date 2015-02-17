@@ -165,12 +165,6 @@ private:
   nsCOMPtr<nsIX509Cert> mClientCert;
 };
 
-enum StrongCipherStatus {
-  StrongCipherStatusUnknown,
-  StrongCiphersWorked,
-  StrongCiphersFailed
-};
-
 class nsSSLIOLayerHelpers
 {
 public:
@@ -200,7 +194,6 @@ private:
     uint16_t tolerant;
     uint16_t intolerant;
     PRErrorCode intoleranceReason;
-    StrongCipherStatus strongCipherStatus;
 
     void AssertInvariant() const
     {
@@ -219,22 +212,23 @@ public:
   bool rememberIntolerantAtVersion(const nsACString& hostname, int16_t port,
                                    uint16_t intolerant, uint16_t minVersion,
                                    PRErrorCode intoleranceReason);
-  bool rememberStrongCiphersFailed(const nsACString& hostName, int16_t port,
-                                   PRErrorCode intoleranceReason);
   // returns the known tolerant version
   // or 0 if there is no known tolerant version
   uint16_t forgetIntolerance(const nsACString& hostname, int16_t port);
   void adjustForTLSIntolerance(const nsACString& hostname, int16_t port,
-                               /*in/out*/ SSLVersionRange& range,
-                               /*out*/ StrongCipherStatus& strongCipherStatus);
+                               /*in/out*/ SSLVersionRange& range);
   PRErrorCode getIntoleranceReason(const nsACString& hostname, int16_t port);
 
   void clearStoredData();
   void loadVersionFallbackLimit();
   void setInsecureFallbackSites(const nsCString& str);
+  bool isInsecureFallbackSite(const nsACString& hostname);
 
   bool mFalseStartRequireNPN;
-  bool mFalseStartRequireForwardSecrecy;
+  // Use the static list of sites that require insecure fallback
+  // to TLS 1.0 if true, set by the pref
+  // security.tls.insecure_fallback_hosts.use_static_list.
+  bool mUseStaticFallbackList;
   uint16_t mVersionFallbackLimit;
 private:
   mozilla::Mutex mutex;

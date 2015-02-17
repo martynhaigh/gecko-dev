@@ -13,18 +13,16 @@
 #include "MediaSourceReader.h"
 #include "MediaSourceResource.h"
 #include "MediaSourceUtils.h"
+#include "VideoUtils.h"
 
 #ifdef PR_LOGGING
 extern PRLogModuleInfo* GetMediaSourceLog();
-extern PRLogModuleInfo* GetMediaSourceAPILog();
 
-#define MSE_DEBUG(...) PR_LOG(GetMediaSourceLog(), PR_LOG_DEBUG, (__VA_ARGS__))
-#define MSE_DEBUGV(...) PR_LOG(GetMediaSourceLog(), PR_LOG_DEBUG+1, (__VA_ARGS__))
-#define MSE_API(...) PR_LOG(GetMediaSourceAPILog(), PR_LOG_DEBUG, (__VA_ARGS__))
+#define MSE_DEBUG(arg, ...) PR_LOG(GetMediaSourceLog(), PR_LOG_DEBUG, ("MediaSourceDecoder(%p)::%s: " arg, this, __func__, ##__VA_ARGS__))
+#define MSE_DEBUGV(arg, ...) PR_LOG(GetMediaSourceLog(), PR_LOG_DEBUG + 1, ("MediaSourceDecoder(%p)::%s: " arg, this, __func__, ##__VA_ARGS__))
 #else
 #define MSE_DEBUG(...)
 #define MSE_DEBUGV(...)
-#define MSE_API(...)
 #endif
 
 namespace mozilla {
@@ -87,14 +85,14 @@ MediaSourceDecoder::GetSeekable(dom::TimeRanges* aSeekable)
   } else {
     aSeekable->Add(0, duration);
   }
-  MSE_DEBUG("MediaSourceDecoder(%p)::GetSeekable ranges=%s", this, DumpTimeRanges(aSeekable).get());
+  MSE_DEBUG("ranges=%s", DumpTimeRanges(aSeekable).get());
   return NS_OK;
 }
 
 void
 MediaSourceDecoder::Shutdown()
 {
-  MSE_DEBUG("MediaSourceDecoder(%p)::Shutdown", this);
+  MSE_DEBUG("Shutdown");
   // Detach first so that TrackBuffers are unused on the main thread when
   // shut down on the decode task queue.
   if (mMediaSource) {
@@ -205,7 +203,7 @@ MediaSourceDecoder::DurationChanged(double aOldDuration, double aNewDuration)
 }
 
 void
-MediaSourceDecoder::SetDecodedDuration(int64_t aDuration)
+MediaSourceDecoder::SetInitialDuration(int64_t aDuration)
 {
   // Only use the decoded duration if one wasn't already
   // set.
@@ -218,7 +216,7 @@ MediaSourceDecoder::SetDecodedDuration(int64_t aDuration)
   if (aDuration >= 0) {
     duration /= USECS_PER_S;
   }
-  DoSetMediaSourceDuration(duration);
+  SetMediaSourceDuration(duration, MSRangeRemovalAction::SKIP);
 }
 
 void
@@ -226,15 +224,14 @@ MediaSourceDecoder::SetMediaSourceDuration(double aDuration, MSRangeRemovalActio
 {
   ReentrantMonitorAutoEnter mon(GetReentrantMonitor());
   double oldDuration = mMediaSourceDuration;
-  DoSetMediaSourceDuration(aDuration);
-  ScheduleDurationChange(oldDuration, aDuration, aAction);
-}
-
-void
-MediaSourceDecoder::DoSetMediaSourceDuration(double aDuration)
-{
   if (aDuration >= 0) {
-    mDecoderStateMachine->SetDuration(aDuration * USECS_PER_S);
+    int64_t checkedDuration;
+    if (NS_FAILED(SecondsToUsecs(aDuration, checkedDuration))) {
+      // INT64_MAX is used as infinity by the state machine.
+      // We want a very bigger number, but not infinity.
+      checkedDuration = INT64_MAX - 1;
+    }
+    mDecoderStateMachine->SetDuration(checkedDuration);
     mMediaSourceDuration = aDuration;
   } else {
     mDecoderStateMachine->SetDuration(INT64_MAX);
@@ -243,6 +240,7 @@ MediaSourceDecoder::DoSetMediaSourceDuration(double aDuration)
   if (mReader) {
     mReader->SetMediaSourceDuration(mMediaSourceDuration);
   }
+  ScheduleDurationChange(oldDuration, aDuration, aAction);
 }
 
 void
@@ -314,5 +312,15 @@ MediaSourceDecoder::IsActiveReader(MediaDecoderReader* aReader)
 {
   return mReader->IsActiveReader(aReader);
 }
+
+double
+MediaSourceDecoder::GetDuration()
+{
+  ReentrantMonitorAutoEnter mon(GetReentrantMonitor());
+  return mMediaSourceDuration;
+}
+
+#undef MSE_DEBUG
+#undef MSE_DEBUGV
 
 } // namespace mozilla
