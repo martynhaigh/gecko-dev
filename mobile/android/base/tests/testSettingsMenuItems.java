@@ -216,7 +216,6 @@ public class testSettingsMenuItems extends PixelTest {
             for (String[] menuItem : menuPath) {
                 final String item = menuItem[0];
                 section = "^" + item + "$";
-                mAsserter.dumpLog("processing "+section);
 
                 waitForEnabledText(section);
 
