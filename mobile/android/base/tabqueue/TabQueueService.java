@@ -23,9 +23,13 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
- /** On launch of an external url this service displays a view overtop of the currently running activity with an action
- *   to open the url in fennec immediately.  If the user takes no action or the service receives another intent, the
- *   url is added to a file which is then read in fennec on next launch.
+
+/**
+ * On launch this service displays a view over the currently running activity with an action
+ * to open the url in fennec immediately.  If the user takes no action or the service receives another intent, the
+ * url is added to a file which is then read in fennec on next launch.  The view is inserted from this service, in
+ * conjunction with the SYSTEM_ALERT_WINDOW permission, to display the view on top of the application in the background
+ * whilst still allowing the user to interact with the background application.
  */
 public class TabQueueService extends Service {
      private static final String LOGTAG = "Gecko" + TabQueueService.class.getSimpleName();
@@ -143,8 +147,8 @@ public class TabQueueService extends Service {
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
-        Log.d(LOGTAG, "Adding URL to list: " + intentData);
         // TODO Add url to list here.
+        Log.d(LOGTAG, "Adding URL to list: " + intentData);
 
     }
 }

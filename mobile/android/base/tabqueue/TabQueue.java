@@ -68,10 +68,6 @@ public class TabQueue extends Locales.LocaleAwareActivity {
      */
     private void abortDueToNoURL() {
         Log.d(LOGTAG, "Unable to process tab queue insertion. No URL found!");
-        Toast t = new Toast(getBaseContext());
-        t.setText("Unable to process tab queue insertion. No URL found!");
-        t.setDuration(Toast.LENGTH_SHORT);
-        t.show();
         finish();
     }
 }
