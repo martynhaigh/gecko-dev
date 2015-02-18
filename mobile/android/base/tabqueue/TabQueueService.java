@@ -141,6 +141,7 @@ public class TabQueueService extends Service {
 
     private void addUrlToList(Intent intentParam) {
         if (intentParam == null) {
+            // This should never happen, but lets return silently instead of crash if it does!
             return;
         }
         final ContextUtils.SafeIntent intent = new ContextUtils.SafeIntent(intentParam);
