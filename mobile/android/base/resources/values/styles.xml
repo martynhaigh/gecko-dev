@@ -920,4 +920,6 @@
         <item name="android:paddingRight">8dp</item>
     </style>
 
+    <!-- Completely hide the activity - this is used for the tab queue -->
+    <style name="TabQueueActivity" parent="android:style/Theme.NoDisplay" />
 </resources>

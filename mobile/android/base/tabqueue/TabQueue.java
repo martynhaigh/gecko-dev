@@ -27,7 +27,7 @@ import android.widget.Toast;
 import java.util.List;
 
 public class TabQueue extends Locales.LocaleAwareActivity {
-    private static final String LOGTAG = "TabQueue";
+    private static final String LOGTAG = "Gecko" + TabQueue.class.getSimpleName();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,6 +74,9 @@ public class TabQueue extends Locales.LocaleAwareActivity {
         finish();
     }
 
+    /**
+     * Start fennec with the supplied intent.
+     */
     private void loadNormally(Intent intent) {
         Telemetry.sendUIEvent(TelemetryContract.Event.LOAD_URL, TelemetryContract.Method.TAB_QUEUE);
 
@@ -86,6 +89,7 @@ public class TabQueue extends Locales.LocaleAwareActivity {
      * Abort as we were started with no URL.
      */
     private void abortDueToNoURL() {
+        // Lets decide what to do here in bug 1134148
         Log.d(LOGTAG, "Unable to process tab queue insertion. No URL found!");
         finish();
     }
