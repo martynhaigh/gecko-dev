@@ -67,6 +67,7 @@ public class TabQueue extends Locales.LocaleAwareActivity {
      * Abort as we were started with no URL.
      */
     private void abortDueToNoURL() {
+        // Lets decide what to do here in bug 1134148
         Log.d(LOGTAG, "Unable to process tab queue insertion. No URL found!");
         finish();
     }
