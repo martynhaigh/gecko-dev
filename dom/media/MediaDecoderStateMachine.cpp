@@ -1253,6 +1253,7 @@ void MediaDecoderStateMachine::UpdatePlaybackPositionInternal(int64_t aTime)
   if (aTime > mEndTime) {
     NS_ASSERTION(mCurrentFrameTime > GetDuration(),
                  "CurrentTime must be after duration if aTime > endTime!");
+    DECODER_LOG("Setting new end time to %lld", aTime);
     mEndTime = aTime;
     nsCOMPtr<nsIRunnable> event =
       NS_NewRunnableMethod(mDecoder, &MediaDecoder::DurationChanged);
@@ -1397,13 +1398,28 @@ int64_t MediaDecoderStateMachine::GetEndTime()
   return mEndTime;
 }
 
+// Runnable which dispatches an event to the main thread to seek to the new
+// aSeekTarget.
+class SeekRunnable : public nsRunnable {
+public:
+  SeekRunnable(MediaDecoder* aDecoder, double aSeekTarget)
+    : mDecoder(aDecoder), mSeekTarget(aSeekTarget) {}
+  NS_IMETHOD Run() {
+    mDecoder->Seek(mSeekTarget, SeekTarget::Accurate);
+    return NS_OK;
+  }
+private:
+  nsRefPtr<MediaDecoder> mDecoder;
+  double mSeekTarget;
+};
+
 void MediaDecoderStateMachine::SetDuration(int64_t aDuration)
 {
   NS_ASSERTION(NS_IsMainThread() || OnDecodeThread(),
                "Should be on main or decode thread.");
   AssertCurrentThreadInMonitor();
 
-  if (aDuration == -1) {
+  if (aDuration < 0) {
     mDurationSet = false;
     return;
   }
@@ -1420,6 +1436,21 @@ void MediaDecoderStateMachine::SetDuration(int64_t aDuration)
   }
 
   mEndTime = mStartTime + aDuration;
+
+  if (mDecoder && mEndTime >= 0 && mEndTime < mCurrentFrameTime) {
+    // The current playback position is now past the end of the element duration
+    // the user agent must also seek to the time of the end of the media
+    // resource.
+    if (NS_IsMainThread()) {
+      // Seek synchronously.
+      mDecoder->Seek(double(mEndTime) / USECS_PER_S, SeekTarget::Accurate);
+    } else {
+      // Queue seek to new end position.
+      nsCOMPtr<nsIRunnable> task =
+        new SeekRunnable(mDecoder, double(mEndTime) / USECS_PER_S);
+      NS_DispatchToMainThread(task);
+    }
+  }
 }
 
 void MediaDecoderStateMachine::UpdateEstimatedDuration(int64_t aDuration)
@@ -2082,6 +2113,13 @@ bool MediaDecoderStateMachine::HasLowUndecodedData(int64_t aUsecs)
   AssertCurrentThreadInMonitor();
   NS_ASSERTION(mState > DECODER_STATE_DECODING_FIRSTFRAME,
                "Must have loaded first frame for GetBuffered() to work");
+
+  // If we don't have a duration, GetBuffered is probably not going to produce
+  // a useful buffered range. Return false here so that we don't get stuck in
+  // buffering mode for live streams.
+  if (GetDuration() < 0) {
+    return false;
+  }
 
   nsRefPtr<dom::TimeRanges> buffered = new dom::TimeRanges();
   nsresult rv = mReader->GetBuffered(buffered.get());
@@ -2920,7 +2958,7 @@ MediaDecoderStateMachine::FlushDecoding()
     // The reader is not supposed to put any tasks to deliver samples into
     // the queue after this runs (unless we request another sample from it).
     RefPtr<nsIRunnable> task;
-    task = NS_NewRunnableMethod(mReader, &MediaDecoderReader::ResetDecode);
+    task = NS_NewRunnableMethod(this, &MediaDecoderStateMachine::ResetDecode);
 
     // Wait for the ResetDecode to run and for the decoder to abort
     // decoding operations and run any pending callbacks. This is
@@ -2931,13 +2969,33 @@ MediaDecoderStateMachine::FlushDecoding()
     // and shutdown on B2G will fail as there are outstanding video frames
     // alive.
     ReentrantMonitorAutoExit exitMon(mDecoder->GetReentrantMonitor());
-    DecodeTaskQueue()->FlushAndDispatch(task);
+    DecodeTaskQueue()->Dispatch(task);
+    DecodeTaskQueue()->AwaitIdle();
   }
 
   // We must reset playback so that all references to frames queued
   // in the state machine are dropped, else subsequent calls to Shutdown()
   // or ReleaseMediaResources() can fail on B2G.
   ResetPlayback();
+}
+
+void
+MediaDecoderStateMachine::ResetDecode()
+{
+  NS_ASSERTION(OnDecodeThread(), "Should be on decode thread.");
+
+  if (!mReader) {
+    return;
+  }
+
+  {
+    ReentrantMonitorAutoEnter mon(mDecoder->GetReentrantMonitor());
+    if (mWaitingForDecoderSeek && !mCancelingSeek) {
+      mReader->CancelSeek();
+      mCancelingSeek = true;
+    }
+  }
+  mReader->ResetDecode();
 }
 
 void MediaDecoderStateMachine::RenderVideoFrame(VideoData* aData,

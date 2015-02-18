@@ -20,9 +20,9 @@
 #include "js/Class.h"
 
 #if JS_STACK_GROWTH_DIRECTION > 0
-# define JS_CHECK_STACK_SIZE(limit, sp) ((uintptr_t)(sp) < (limit))
+# define JS_CHECK_STACK_SIZE(limit, sp) (MOZ_LIKELY(((uintptr_t)(sp) < (limit)))
 #else
-# define JS_CHECK_STACK_SIZE(limit, sp) ((uintptr_t)(sp) > (limit))
+# define JS_CHECK_STACK_SIZE(limit, sp) (MOZ_LIKELY((uintptr_t)(sp) > (limit)))
 #endif
 
 class JSAtom;
@@ -299,10 +299,10 @@ namespace js {
         {                                                                               \
             js::proxy_LookupProperty,                                                   \
             js::proxy_DefineProperty,                                                   \
+            js::proxy_HasProperty,                                                      \
             js::proxy_GetProperty,                                                      \
             js::proxy_SetProperty,                                                      \
             js::proxy_GetOwnPropertyDescriptor,                                         \
-            js::proxy_SetPropertyAttributes,                                            \
             js::proxy_DeleteProperty,                                                   \
             js::proxy_Watch, js::proxy_Unwatch,                                         \
             js::proxy_GetElements,                                                      \
@@ -333,17 +333,16 @@ extern JS_FRIEND_API(bool)
 proxy_DefineProperty(JSContext *cx, JS::HandleObject obj, JS::HandleId id, JS::HandleValue value,
                      JSPropertyOp getter, JSStrictPropertyOp setter, unsigned attrs);
 extern JS_FRIEND_API(bool)
+proxy_HasProperty(JSContext *cx, JS::HandleObject obj, JS::HandleId id, bool *foundp);
+extern JS_FRIEND_API(bool)
 proxy_GetProperty(JSContext *cx, JS::HandleObject obj, JS::HandleObject receiver, JS::HandleId id,
                   JS::MutableHandleValue vp);
 extern JS_FRIEND_API(bool)
-proxy_SetProperty(JSContext *cx, JS::HandleObject obj, JS::HandleId id,
+proxy_SetProperty(JSContext *cx, JS::HandleObject obj, JS::HandleObject receiver, JS::HandleId id,
                   JS::MutableHandleValue bp, bool strict);
 extern JS_FRIEND_API(bool)
 proxy_GetOwnPropertyDescriptor(JSContext *cx, JS::HandleObject obj, JS::HandleId id,
                                JS::MutableHandle<JSPropertyDescriptor> desc);
-extern JS_FRIEND_API(bool)
-proxy_SetPropertyAttributes(JSContext *cx, JS::HandleObject obj, JS::HandleId id,
-                            unsigned *attrsp);
 extern JS_FRIEND_API(bool)
 proxy_DeleteProperty(JSContext *cx, JS::HandleObject obj, JS::HandleId id, bool *succeeded);
 
@@ -2547,24 +2546,6 @@ JS_FRIEND_API(bool)
 ForwardToNative(JSContext *cx, JSNative native, const JS::CallArgs &args);
 
 /*
- * Helper function. To approximate a call to the [[DefineOwnProperty]] internal
- * method described in ES5, first call this, then call JS_DefinePropertyById.
- *
- * JS_DefinePropertyById by itself does not enforce the invariants on
- * non-configurable properties when obj->isNative(). This function performs the
- * relevant checks (specified in ES5 8.12.9 [[DefineOwnProperty]] steps 1-11),
- * but only if obj is native.
- *
- * The reason for the messiness here is that ES5 uses [[DefineOwnProperty]] as
- * a sort of extension point, but there is no hook in js::Class,
- * js::ProxyHandler, or the JSAPI with precisely the right semantics for it.
- */
-extern JS_FRIEND_API(bool)
-CheckDefineProperty(JSContext *cx, JS::HandleObject obj, JS::HandleId id, JS::HandleValue value,
-                    unsigned attrs,
-                    JSPropertyOp getter = nullptr, JSStrictPropertyOp setter = nullptr);
-
-/*
  * Helper function for HTMLDocument and HTMLFormElement.
  *
  * These are the only two interfaces that have [OverrideBuiltins], a named
@@ -2643,6 +2624,17 @@ GetObjectEnvironmentObjectForFunction(JSFunction *fun);
  */
 extern JS_FRIEND_API(JSPrincipals *)
 GetSavedFramePrincipals(JS::HandleObject savedFrame);
+
+/*
+ * Get the first SavedFrame object in this SavedFrame stack whose principals are
+ * subsumed by the cx's principals. If there is no such frame, return nullptr.
+ *
+ * Do NOT pass a non-SavedFrame object here.
+ *
+ * The savedFrame and cx do not need to be in the same compartment.
+ */
+extern JS_FRIEND_API(JSObject *)
+GetFirstSubsumedSavedFrame(JSContext *cx, JS::HandleObject savedFrame);
 
 } /* namespace js */
 

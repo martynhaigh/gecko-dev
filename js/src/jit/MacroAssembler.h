@@ -425,6 +425,17 @@ class MacroAssembler : public MacroAssemblerSpecific
     }
 
     template <typename T>
+    void storeObjectOrNull(Register src, const T &dest) {
+        Label notNull, done;
+        branchTestPtr(Assembler::NonZero, src, src, &notNull);
+        storeValue(NullValue(), dest);
+        jump(&done);
+        bind(&notNull);
+        storeValue(JSVAL_TYPE_OBJECT, src, dest);
+        bind(&done);
+    }
+
+    template <typename T>
     void storeConstantOrRegister(ConstantOrRegister src, const T &dest) {
         if (src.constant())
             storeValue(src.value(), dest);
@@ -1251,6 +1262,12 @@ class MacroAssembler : public MacroAssemblerSpecific
         MOZ_ASSERT(framePushed() == aic.initialStack);
         PopRegsInMask(liveRegs);
     }
+
+    // Align the stack pointer based on the number of arguments which are pushed
+    // on the stack, such that the JitFrameLayout would be correctly aligned on
+    // the JitStackAlignment.
+    void alignJitStackBasedOnNArgs(Register nargs);
+    void alignJitStackBasedOnNArgs(uint32_t nargs);
 
     void assertStackAlignment(uint32_t alignment, int32_t offset = 0) {
 #ifdef DEBUG

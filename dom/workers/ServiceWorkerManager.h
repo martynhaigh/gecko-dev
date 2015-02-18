@@ -8,6 +8,7 @@
 #include "nsIServiceWorkerManager.h"
 #include "nsCOMPtr.h"
 
+#include "ipc/IPCMessageUtils.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/LinkedList.h"
 #include "mozilla/Preferences.h"
@@ -17,6 +18,10 @@
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/ServiceWorkerBinding.h" // For ServiceWorkerState
 #include "mozilla/dom/ServiceWorkerCommon.h"
+#include "mozilla/dom/ServiceWorkerRegistrar.h"
+#include "mozilla/dom/ServiceWorkerRegistrarTypes.h"
+#include "mozilla/ipc/BackgroundUtils.h"
+#include "nsIIPCBackgroundChildCreateCallback.h"
 #include "nsClassHashtable.h"
 #include "nsDataHashtable.h"
 #include "nsRefPtrHashtable.h"
@@ -26,6 +31,11 @@
 class nsIScriptError;
 
 namespace mozilla {
+
+namespace ipc {
+class BackgroundChild;
+}
+
 namespace dom {
 
 class ServiceWorkerRegistration;
@@ -39,6 +49,7 @@ class ServiceWorkerJobQueue;
 
 class ServiceWorkerJob : public nsISupports
 {
+protected:
   // The queue keeps the jobs alive, so they can hold a rawptr back to the
   // queue.
   ServiceWorkerJobQueue* mQueue;
@@ -131,6 +142,8 @@ public:
   // the URLs of the following three workers.
   nsCString mScriptSpec;
 
+  nsCOMPtr<nsIPrincipal> mPrincipal;
+
   nsRefPtr<ServiceWorkerInfo> mActiveWorker;
   nsRefPtr<ServiceWorkerInfo> mWaitingWorker;
   nsRefPtr<ServiceWorkerInfo> mInstallingWorker;
@@ -139,9 +152,9 @@ public:
   // removed since documents may be controlled. It is marked as
   // pendingUninstall and when all controlling documents go away, removed.
   bool mPendingUninstall;
-  bool mWaitingToActivate;
 
-  explicit ServiceWorkerRegistrationInfo(const nsACString& aScope);
+  explicit ServiceWorkerRegistrationInfo(const nsACString& aScope,
+                                         nsIPrincipal* aPrincipal);
 
   already_AddRefed<ServiceWorkerInfo>
   Newest()
@@ -218,6 +231,12 @@ public:
     return mScriptSpec;
   }
 
+  void SetScriptSpec(const nsCString& aSpec)
+  {
+    MOZ_ASSERT(!aSpec.IsEmpty());
+    mScriptSpec = aSpec;
+  }
+
   explicit ServiceWorkerInfo(ServiceWorkerRegistrationInfo* aReg,
                              const nsACString& aScriptSpec)
     : mRegistration(aReg)
@@ -266,28 +285,26 @@ public:
  * installation, querying and event dispatch of ServiceWorkers for all the
  * origins in the process.
  */
-class ServiceWorkerManager MOZ_FINAL : public nsIServiceWorkerManager
+class ServiceWorkerManager MOZ_FINAL
+  : public nsIServiceWorkerManager
+  , public nsIIPCBackgroundChildCreateCallback
 {
-  friend class ActivationRunnable;
-  friend class ServiceWorkerRegistrationInfo;
-  friend class ServiceWorkerRegisterJob;
   friend class GetReadyPromiseRunnable;
   friend class GetRegistrationsRunnable;
   friend class GetRegistrationRunnable;
-  friend class QueueFireUpdateFoundRunnable;
+  friend class ServiceWorkerRegisterJob;
+  friend class ServiceWorkerRegistrationInfo;
   friend class ServiceWorkerUnregisterJob;
 
 public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSISERVICEWORKERMANAGER
+  NS_DECL_NSIIPCBACKGROUNDCHILDCREATECALLBACK
   NS_DECLARE_STATIC_IID_ACCESSOR(NS_SERVICEWORKERMANAGER_IMPL_IID)
 
   static ServiceWorkerManager* FactoryCreate()
   {
     AssertIsOnMainThread();
-    if (!Preferences::GetBool("dom.serviceWorkers.enabled")) {
-      return nullptr;
-    }
 
     ServiceWorkerManager* res = new ServiceWorkerManager;
     NS_ADDREF(res);
@@ -325,11 +342,13 @@ public:
   }
 
   ServiceWorkerRegistrationInfo*
-  CreateNewRegistration(const nsCString& aScope);
+  CreateNewRegistration(const nsCString& aScope, nsIPrincipal* aPrincipal);
 
   void
   RemoveRegistration(ServiceWorkerRegistrationInfo* aRegistration)
   {
+    MOZ_ASSERT(aRegistration);
+    MOZ_ASSERT(!aRegistration->IsControllingDocuments());
     MOZ_ASSERT(mServiceWorkerRegistrationInfos.Contains(aRegistration->mScope));
     ServiceWorkerManager::RemoveScope(mOrderedScopes, aRegistration->mScope);
     mServiceWorkerRegistrationInfos.Remove(aRegistration->mScope);
@@ -340,6 +359,9 @@ public:
   {
     return mJobQueues.LookupOrAdd(aScope);
   }
+
+  void StoreRegistration(nsIPrincipal* aPrincipal,
+                         ServiceWorkerRegistrationInfo* aRegistration);
 
   void
   FinishFetch(ServiceWorkerRegistrationInfo* aRegistration);
@@ -364,6 +386,9 @@ public:
   static already_AddRefed<ServiceWorkerManager>
   GetInstance();
 
+ void LoadRegistrations(
+                 const nsTArray<ServiceWorkerRegistrationData>& aRegistrations);
+
 private:
   ServiceWorkerManager();
   ~ServiceWorkerManager();
@@ -381,7 +406,8 @@ private:
                                ServiceWorker** aServiceWorker);
 
   NS_IMETHOD
-  CreateServiceWorker(const nsACString& aScriptSpec,
+  CreateServiceWorker(nsIPrincipal* aPrincipal,
+                      const nsACString& aScriptSpec,
                       const nsACString& aScope,
                       ServiceWorker** aServiceWorker);
 
@@ -450,12 +476,29 @@ private:
     nsRefPtr<Promise> mPromise;
   };
 
+  void AppendPendingOperation(nsIRunnable* aRunnable);
+  void AppendPendingOperation(ServiceWorkerJobQueue* aQueue,
+                              ServiceWorkerJob* aJob);
+
+  bool HasBackgroundActor() const
+  {
+    return !!mActor;
+  }
+
   static PLDHashOperator
   CheckPendingReadyPromisesEnumerator(nsISupports* aSupports,
                                       nsAutoPtr<PendingReadyPromise>& aData,
                                       void* aUnused);
 
   nsClassHashtable<nsISupportsHashKey, PendingReadyPromise> mPendingReadyPromises;
+ 
+  void
+  MaybeRemoveRegistration(ServiceWorkerRegistrationInfo* aRegistration);
+
+  mozilla::ipc::PBackgroundChild* mActor;
+
+  struct PendingOperation;
+  nsTArray<PendingOperation> mPendingOperations;
 };
 
 NS_DEFINE_STATIC_IID_ACCESSOR(ServiceWorkerManager,

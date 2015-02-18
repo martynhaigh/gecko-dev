@@ -160,14 +160,14 @@ public:
                                                    uint32_t aModifierFlags,
                                                    const nsAString& aCharacters,
                                                    const nsAString& aUnmodifiedCharacters);
-  virtual nsresult        SynthesizeNativeMouseEvent(nsIntPoint aPoint,
+  virtual nsresult        SynthesizeNativeMouseEvent(mozilla::LayoutDeviceIntPoint aPoint,
                                                      uint32_t aNativeMessage,
                                                      uint32_t aModifierFlags);
 
-  virtual nsresult        SynthesizeNativeMouseMove(nsIntPoint aPoint)
+  virtual nsresult        SynthesizeNativeMouseMove(mozilla::LayoutDeviceIntPoint aPoint)
                           { return SynthesizeNativeMouseEvent(aPoint, MOUSEEVENTF_MOVE, 0); }
 
-  virtual nsresult        SynthesizeNativeMouseScrollEvent(nsIntPoint aPoint,
+  virtual nsresult        SynthesizeNativeMouseScrollEvent(mozilla::LayoutDeviceIntPoint aPoint,
                                                            uint32_t aNativeMessage,
                                                            double aDeltaX,
                                                            double aDeltaY,
@@ -490,8 +490,6 @@ protected:
   // Always use the helper method to read this property.  See bug 603793.
   static TriStateBool   sHasBogusPopupsDropShadowOnMultiMonitor;
   static bool           HasBogusPopupsDropShadowOnMultiMonitor();
-
-  static uint32_t       sOOPPPluginFocusEvent;
 
   // Non-client margin settings
   // Pre-calculated outward offset applied to default frames

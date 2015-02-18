@@ -179,8 +179,7 @@ lazilyLoadedObserverScripts.forEach(function (aScript) {
     "Reader:ListStatusRequest",
     "Reader:RemoveFromList",
     "Reader:Share",
-    "Reader:ShowToast",
-    "Reader:ToolbarVisibility",
+    "Reader:ToolbarHidden",
     "Reader:SystemUIVisibility",
     "Reader:UpdateReaderButton",
   ], "chrome://browser/content/Reader.js"],
@@ -7656,8 +7655,9 @@ var Distribution = {
     }
 
     // Apply a lightweight theme if necessary
-    if (prefs["lightweightThemes.isThemeSelected"])
+    if (prefs && prefs["lightweightThemes.isThemeSelected"]) {
       Services.obs.notifyObservers(null, "lightweight-theme-apply", "");
+    }
 
     let localizedString = Cc["@mozilla.org/pref-localizedstring;1"].createInstance(Ci.nsIPrefLocalizedString);
     let localizeablePrefs = aData["LocalizablePreferences"];

@@ -488,8 +488,8 @@ CreatePrototypeObjectForComplexTypeInstance(JSContext *cx, HandleObject ctorProt
         return nullptr;
 
     return NewObjectWithProto<TypedProto>(cx,
-                                          &*ctorPrototypePrototype,
-                                          nullptr,
+                                          ctorPrototypePrototype,
+                                          NullPtr(),
                                           TenuredObject);
 }
 
@@ -586,7 +586,7 @@ ArrayMetaTypeDescr::create(JSContext *cx,
                            int32_t length)
 {
     Rooted<ArrayTypeDescr*> obj(cx);
-    obj = NewObjectWithProto<ArrayTypeDescr>(cx, arrayTypePrototype, nullptr, SingletonObject);
+    obj = NewObjectWithProto<ArrayTypeDescr>(cx, arrayTypePrototype, NullPtr(), SingletonObject);
     if (!obj)
         return nullptr;
 
@@ -778,11 +778,11 @@ StructMetaTypeDescr::create(JSContext *cx,
     int32_t alignment = 1;             // Alignment of struct.
     bool opaque = false;               // Opacity of struct.
 
-    userFieldOffsets = NewObjectWithProto<PlainObject>(cx, nullptr, nullptr, TenuredObject);
+    userFieldOffsets = NewObjectWithProto<PlainObject>(cx, NullPtr(), NullPtr(), TenuredObject);
     if (!userFieldOffsets)
         return nullptr;
 
-    userFieldTypes = NewObjectWithProto<PlainObject>(cx, nullptr, nullptr, TenuredObject);
+    userFieldTypes = NewObjectWithProto<PlainObject>(cx, NullPtr(), NullPtr(), TenuredObject);
     if (!userFieldTypes)
         return nullptr;
 
@@ -912,7 +912,7 @@ StructMetaTypeDescr::create(JSContext *cx,
         return nullptr;
 
     Rooted<StructTypeDescr*> descr(cx);
-    descr = NewObjectWithProto<StructTypeDescr>(cx, structTypePrototype, nullptr,
+    descr = NewObjectWithProto<StructTypeDescr>(cx, structTypePrototype, NullPtr(),
                                                 SingletonObject);
     if (!descr)
         return nullptr;
@@ -927,7 +927,7 @@ StructMetaTypeDescr::create(JSContext *cx,
     {
         RootedObject fieldNamesVec(cx);
         fieldNamesVec = NewDenseCopiedArray(cx, fieldNames.length(),
-                                            fieldNames.begin(), nullptr,
+                                            fieldNames.begin(), NullPtr(),
                                             TenuredObject);
         if (!fieldNamesVec)
             return nullptr;
@@ -939,7 +939,7 @@ StructMetaTypeDescr::create(JSContext *cx,
     {
         RootedObject fieldTypeVec(cx);
         fieldTypeVec = NewDenseCopiedArray(cx, fieldTypeObjs.length(),
-                                           fieldTypeObjs.begin(), nullptr,
+                                           fieldTypeObjs.begin(), NullPtr(),
                                            TenuredObject);
         if (!fieldTypeVec)
             return nullptr;
@@ -951,7 +951,7 @@ StructMetaTypeDescr::create(JSContext *cx,
     {
         RootedObject fieldOffsetsVec(cx);
         fieldOffsetsVec = NewDenseCopiedArray(cx, fieldOffsets.length(),
-                                              fieldOffsets.begin(), nullptr,
+                                              fieldOffsets.begin(), NullPtr(),
                                               TenuredObject);
         if (!fieldOffsetsVec)
             return nullptr;
@@ -1154,7 +1154,7 @@ DefineSimpleTypeDescr(JSContext *cx,
         return false;
 
     Rooted<T*> descr(cx);
-    descr = NewObjectWithProto<T>(cx, funcProto, global, SingletonObject);
+    descr = NewObjectWithProto<T>(cx, funcProto, GlobalObject::upcast(global), SingletonObject);
     if (!descr)
         return false;
 
@@ -1174,7 +1174,7 @@ DefineSimpleTypeDescr(JSContext *cx,
     // Create the typed prototype for the scalar type. This winds up
     // not being user accessible, but we still create one for consistency.
     Rooted<TypedProto*> proto(cx);
-    proto = NewObjectWithProto<TypedProto>(cx, objProto, nullptr, TenuredObject);
+    proto = NewObjectWithProto<TypedProto>(cx, objProto, NullPtr(), TenuredObject);
     if (!proto)
         return false;
     descr->initReservedSlot(JS_DESCR_SLOT_TYPROTO, ObjectValue(*proto));
@@ -1209,7 +1209,8 @@ DefineMetaTypeDescr(JSContext *cx,
 
     // Create ctor.prototype, which inherits from Function.__proto__
 
-    RootedObject proto(cx, NewObjectWithProto<PlainObject>(cx, funcProto, global,
+    RootedObject proto(cx, NewObjectWithProto<PlainObject>(cx, funcProto,
+                                                           GlobalObject::upcast(global),
                                                            SingletonObject));
     if (!proto)
         return nullptr;
@@ -1221,7 +1222,7 @@ DefineMetaTypeDescr(JSContext *cx,
         return nullptr;
     RootedObject protoProto(cx);
     protoProto = NewObjectWithProto<PlainObject>(cx, objProto,
-                                                 global, SingletonObject);
+                                                 GlobalObject::upcast(global), SingletonObject);
     if (!protoProto)
         return nullptr;
 
@@ -1268,7 +1269,8 @@ GlobalObject::initTypedObjectModule(JSContext *cx, Handle<GlobalObject*> global)
         return false;
 
     Rooted<TypedObjectModuleObject*> module(cx);
-    module = NewObjectWithProto<TypedObjectModuleObject>(cx, objProto, global);
+    module = NewObjectWithProto<TypedObjectModuleObject>(cx, objProto,
+                                                         GlobalObject::upcast(global));
     if (!module)
         return false;
 
@@ -1766,14 +1768,55 @@ bool
 TypedObject::obj_defineProperty(JSContext *cx, HandleObject obj, HandleId id, HandleValue v,
                                 PropertyOp getter, StrictPropertyOp setter, unsigned attrs)
 {
-    return ReportPropertyError(cx, JSMSG_UNDEFINED_PROP, id);
+    Rooted<TypedObject *> typedObj(cx, &obj->as<TypedObject>());
+    return ReportTypedObjTypeError(cx, JSMSG_OBJECT_NOT_EXTENSIBLE, typedObj);
+}
+
+bool
+TypedObject::obj_hasProperty(JSContext *cx, HandleObject obj, HandleId id, bool *foundp)
+{
+    Rooted<TypedObject *> typedObj(cx, &obj->as<TypedObject>());
+    switch (typedObj->typeDescr().kind()) {
+      case type::Scalar:
+      case type::Reference:
+      case type::Simd:
+        break;
+
+      case type::Array: {
+        if (JSID_IS_ATOM(id, cx->names().length)) {
+            *foundp = true;
+            return true;
+        }
+        uint32_t index;
+        // Elements are not inherited from the prototype.
+        if (js_IdIsIndex(id, &index)) {
+            *foundp = (index < uint32_t(typedObj->length()));
+            return true;
+        }
+        break;
+      }
+
+      case type::Struct:
+        size_t index;
+        if (typedObj->typeDescr().as<StructTypeDescr>().fieldIndex(id, &index)) {
+            *foundp = true;
+            return true;
+        }
+    }
+
+    RootedObject proto(cx, obj->getProto());
+    if (!proto) {
+        *foundp = false;
+        return true;
+    }
+
+    return HasProperty(cx, proto, id, foundp);
 }
 
 bool
 TypedObject::obj_getProperty(JSContext *cx, HandleObject obj, HandleObject receiver,
                              HandleId id, MutableHandleValue vp)
 {
-    MOZ_ASSERT(obj->is<TypedObject>());
     Rooted<TypedObject *> typedObj(cx, &obj->as<TypedObject>());
 
     // Dispatch elements to obj_getElement:
@@ -1862,6 +1905,7 @@ TypedObject::obj_getArrayElement(JSContext *cx,
                                  uint32_t index,
                                  MutableHandleValue vp)
 {
+    // Elements are not inherited from the prototype.
     if (index >= (size_t) typedObj->length()) {
         vp.setUndefined();
         return true;
@@ -1873,15 +1917,10 @@ TypedObject::obj_getArrayElement(JSContext *cx,
 }
 
 bool
-TypedObject::obj_setProperty(JSContext *cx, HandleObject obj, HandleId id,
+TypedObject::obj_setProperty(JSContext *cx, HandleObject obj, HandleObject receiver, HandleId id,
                              MutableHandleValue vp, bool strict)
 {
-    MOZ_ASSERT(obj->is<TypedObject>());
     Rooted<TypedObject *> typedObj(cx, &obj->as<TypedObject>());
-
-    uint32_t index;
-    if (js_IdIsIndex(id, &index))
-        return obj_setElement(cx, obj, index, vp, strict);
 
     switch (typedObj->typeDescr().kind()) {
       case type::Scalar:
@@ -1891,13 +1930,34 @@ TypedObject::obj_setProperty(JSContext *cx, HandleObject obj, HandleId id,
       case type::Simd:
         break;
 
-      case type::Array:
+      case type::Array: {
         if (JSID_IS_ATOM(id, cx->names().length)) {
-            JS_ReportErrorNumber(cx, js_GetErrorMessage,
-                                 nullptr, JSMSG_CANT_REDEFINE_ARRAY_LENGTH);
-            return false;
+            if (obj == receiver) {
+                JS_ReportErrorNumber(cx, js_GetErrorMessage,
+                                     nullptr, JSMSG_CANT_REDEFINE_ARRAY_LENGTH);
+                return false;
+            }
+            return SetNonWritableProperty(cx, id, strict);
+        }
+
+        uint32_t index;
+        if (js_IdIsIndex(id, &index)) {
+            if (obj != receiver)
+                return SetPropertyByDefining(cx, obj, receiver, id, vp, strict, false);
+
+            if (index >= uint32_t(typedObj->length())) {
+                JS_ReportErrorNumber(cx, js_GetErrorMessage,
+                                     nullptr, JSMSG_TYPEDOBJECT_BINARYARRAY_BAD_INDEX);
+                return false;
+            }
+
+            Rooted<TypeDescr*> elementType(cx);
+            elementType = &typedObj->typeDescr().as<ArrayTypeDescr>().elementType();
+            size_t offset = elementType->size() * index;
+            return ConvertAndCopyTo(cx, elementType, typedObj, offset, NullPtr(), vp);
         }
         break;
+      }
 
       case type::Struct: {
         Rooted<StructTypeDescr*> descr(cx, &typedObj->typeDescr().as<StructTypeDescr>());
@@ -1906,6 +1966,9 @@ TypedObject::obj_setProperty(JSContext *cx, HandleObject obj, HandleId id,
         if (!descr->fieldIndex(id, &fieldIndex))
             break;
 
+        if (obj != receiver)
+            return SetPropertyByDefining(cx, obj, receiver, id, vp, strict, false);
+
         size_t offset = descr->fieldOffset(fieldIndex);
         Rooted<TypeDescr*> fieldType(cx, &descr->fieldDescr(fieldIndex));
         RootedAtom fieldName(cx, &descr->fieldName(fieldIndex));
@@ -1913,48 +1976,7 @@ TypedObject::obj_setProperty(JSContext *cx, HandleObject obj, HandleId id,
       }
     }
 
-    return ReportTypedObjTypeError(cx, JSMSG_OBJECT_NOT_EXTENSIBLE, typedObj);
-}
-
-bool
-TypedObject::obj_setElement(JSContext *cx, HandleObject obj, uint32_t index,
-                            MutableHandleValue vp, bool strict)
-{
-    MOZ_ASSERT(obj->is<TypedObject>());
-    Rooted<TypedObject *> typedObj(cx, &obj->as<TypedObject>());
-    Rooted<TypeDescr *> descr(cx, &typedObj->typeDescr());
-
-    switch (descr->kind()) {
-      case type::Scalar:
-      case type::Reference:
-      case type::Simd:
-      case type::Struct:
-        break;
-
-      case type::Array:
-        return obj_setArrayElement(cx, typedObj, descr, index, vp);
-    }
-
-    return ReportTypedObjTypeError(cx, JSMSG_OBJECT_NOT_EXTENSIBLE, typedObj);
-}
-
-/*static*/ bool
-TypedObject::obj_setArrayElement(JSContext *cx,
-                                Handle<TypedObject*> typedObj,
-                                Handle<TypeDescr*> descr,
-                                uint32_t index,
-                                MutableHandleValue vp)
-{
-    if (index >= (size_t) typedObj->length()) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage,
-                             nullptr, JSMSG_TYPEDOBJECT_BINARYARRAY_BAD_INDEX);
-        return false;
-    }
-
-    Rooted<TypeDescr*> elementType(cx);
-    elementType = &descr->as<ArrayTypeDescr>().elementType();
-    size_t offset = elementType->size() * index;
-    return ConvertAndCopyTo(cx, elementType, typedObj, offset, NullPtr(), vp);
+    return SetPropertyOnProto(cx, obj, receiver, id, vp, strict);
 }
 
 bool
@@ -2038,22 +2060,6 @@ IsOwnId(JSContext *cx, HandleObject obj, HandleId id)
     }
 
     return false;
-}
-
-bool
-TypedObject::obj_setPropertyAttributes(JSContext *cx, HandleObject obj, HandleId id,
-                                       unsigned *attrsp)
-{
-    if (IsOwnId(cx, obj, id))
-        return ReportPropertyError(cx, JSMSG_CANT_REDEFINE_PROP, id);
-
-    RootedObject proto(cx, obj->getProto());
-    if (!proto) {
-        *attrsp = 0;
-        return true;
-    }
-
-    return SetPropertyAttributes(cx, proto, id, attrsp);
 }
 
 bool
@@ -2328,10 +2334,10 @@ LazyArrayBufferTable::sizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf)
         {                                                \
             TypedObject::obj_lookupProperty,             \
             TypedObject::obj_defineProperty,             \
+            TypedObject::obj_hasProperty,                \
             TypedObject::obj_getProperty,                \
             TypedObject::obj_setProperty,                \
             TypedObject::obj_getOwnPropertyDescriptor,   \
-            TypedObject::obj_setPropertyAttributes,      \
             TypedObject::obj_deleteProperty,             \
             nullptr, nullptr, /* watch/unwatch */        \
             nullptr,   /* getElements */                 \

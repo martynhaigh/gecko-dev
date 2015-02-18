@@ -2518,6 +2518,89 @@ TryEliminateTypeBarrier(MTypeBarrier *barrier, bool *eliminated)
     return true;
 }
 
+static bool
+TryOptimizeLoadObjectOrNull(MDefinition *def, MDefinitionVector *peliminateList)
+{
+    if (def->type() != MIRType_Value)
+        return true;
+
+    // Check if this definition can only produce object or null values.
+    TemporaryTypeSet *types = def->resultTypeSet();
+    if (!types)
+        return true;
+    if (types->baseFlags() & ~(TYPE_FLAG_NULL | TYPE_FLAG_ANYOBJECT))
+        return true;
+
+    MDefinitionVector eliminateList(def->block()->graph().alloc());
+
+    for (MUseDefIterator iter(def); iter; ++iter) {
+        MDefinition *ndef = iter.def();
+        switch (ndef->op()) {
+          case MDefinition::Op_Compare:
+            if (ndef->toCompare()->compareType() != MCompare::Compare_Null)
+                return true;
+            break;
+          case MDefinition::Op_Test:
+            break;
+          case MDefinition::Op_PostWriteBarrier:
+            break;
+          case MDefinition::Op_StoreFixedSlot:
+            break;
+          case MDefinition::Op_StoreSlot:
+            break;
+          case MDefinition::Op_ToObjectOrNull:
+            if (!eliminateList.append(ndef->toToObjectOrNull()))
+                return false;
+            break;
+          case MDefinition::Op_Unbox:
+            MOZ_ASSERT(ndef->type() == MIRType_Object);
+            break;
+          case MDefinition::Op_TypeBarrier:
+            // For now, only handle type barriers which are not consumed
+            // anywhere and only test that the value is null.
+            if (ndef->hasUses() || ndef->resultTypeSet()->getKnownMIRType() != MIRType_Null)
+                return true;
+            break;
+          default:
+            return true;
+        }
+    }
+
+    // On punboxing systems we are better off leaving the value boxed if it
+    // is only stored back to the heap.
+#ifdef JS_PUNBOX64
+    bool foundUse = false;
+    for (MUseDefIterator iter(def); iter; ++iter) {
+        MDefinition *ndef = iter.def();
+        if (!ndef->isStoreFixedSlot() && !ndef->isStoreSlot()) {
+            foundUse = true;
+            break;
+        }
+    }
+    if (!foundUse)
+        return true;
+#endif // JS_PUNBOX64
+
+    def->setResultType(MIRType_ObjectOrNull);
+
+    // Fixup the result type of MTypeBarrier uses.
+    for (MUseDefIterator iter(def); iter; ++iter) {
+        MDefinition *ndef = iter.def();
+        if (ndef->isTypeBarrier())
+            ndef->setResultType(MIRType_ObjectOrNull);
+    }
+
+    // Eliminate MToObjectOrNull instruction uses.
+    for (size_t i = 0; i < eliminateList.length(); i++) {
+        MDefinition *ndef = eliminateList[i];
+        ndef->replaceAllUsesWith(def);
+        if (!peliminateList->append(ndef))
+            return false;
+    }
+
+    return true;
+}
+
 static inline MDefinition *
 PassthroughOperand(MDefinition *def)
 {
@@ -2565,6 +2648,8 @@ jit::EliminateRedundantChecks(MIRGraph &graph)
         }
     }
 
+    MDefinitionVector eliminateList(graph.alloc());
+
     // Starting from each self-dominating block, traverse the CFG in pre-order.
     while (!worklist.empty()) {
         MBasicBlock *block = worklist.popCopy();
@@ -2580,18 +2665,28 @@ jit::EliminateRedundantChecks(MIRGraph &graph)
 
             bool eliminated = false;
 
-            if (def->isBoundsCheck()) {
+            switch (def->op()) {
+              case MDefinition::Op_BoundsCheck:
                 if (!TryEliminateBoundsCheck(checks, index, def->toBoundsCheck(), &eliminated))
                     return false;
-            } else if (def->isTypeBarrier()) {
+                break;
+              case MDefinition::Op_TypeBarrier:
                 if (!TryEliminateTypeBarrier(def->toTypeBarrier(), &eliminated))
                     return false;
-            } else {
+                break;
+              case MDefinition::Op_LoadFixedSlot:
+              case MDefinition::Op_LoadSlot:
+              case MDefinition::Op_LoadUnboxedObjectOrNull:
+                if (!TryOptimizeLoadObjectOrNull(def, &eliminateList))
+                    return false;
+                break;
+              default:
                 // Now that code motion passes have finished, replace
                 // instructions which pass through one of their operands
                 // (and perform additional checks) with that operand.
                 if (MDefinition *passthrough = PassthroughOperand(def))
                     def->replaceAllUsesWith(passthrough);
+                break;
             }
 
             if (eliminated)
@@ -2601,6 +2696,12 @@ jit::EliminateRedundantChecks(MIRGraph &graph)
     }
 
     MOZ_ASSERT(index == graph.numBlocks());
+
+    for (size_t i = 0; i < eliminateList.length(); i++) {
+        MDefinition *def = eliminateList[i];
+        def->block()->discardDef(def);
+    }
+
     return true;
 }
 

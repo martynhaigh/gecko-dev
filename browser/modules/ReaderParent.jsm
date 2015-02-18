@@ -15,6 +15,8 @@ Cu.import("resource://gre/modules/Task.jsm");
 
 XPCOMUtils.defineLazyModuleGetter(this, "ReaderMode", "resource://gre/modules/ReaderMode.jsm");
 
+const gStringBundle = Services.strings.createBundle("chrome://browser/locale/readerMode.properties");
+
 let ReaderParent = {
 
   MESSAGES: [
@@ -24,8 +26,6 @@ let ReaderParent = {
     "Reader:ListStatusRequest",
     "Reader:RemoveFromList",
     "Reader:Share",
-    "Reader:ShowToast",
-    "Reader:ToolbarVisibility",
     "Reader:SystemUIVisibility",
     "Reader:UpdateReaderButton",
   ],
@@ -68,15 +68,7 @@ let ReaderParent = {
         // XXX: To implement.
         break;
 
-      case "Reader:ShowToast":
-        // XXX: To implement.
-        break;
-
       case "Reader:SystemUIVisibility":
-        // XXX: To implement.
-        break;
-
-      case "Reader:ToolbarVisibility":
         // XXX: To implement.
         break;
 
@@ -101,13 +93,23 @@ let ReaderParent = {
     if (browser.currentURI.spec.startsWith("about:reader")) {
       button.setAttribute("readeractive", true);
       button.hidden = false;
+      button.setAttribute("tooltiptext", gStringBundle.GetStringFromName("readerMode.exit"));
     } else {
       button.removeAttribute("readeractive");
+      button.setAttribute("tooltiptext", gStringBundle.GetStringFromName("readerMode.enter"));
       button.hidden = !browser.isArticle;
     }
   },
 
-  toggleReaderMode: function(event) {
+  handleReaderButtonEvent: function(event) {
+    event.stopPropagation();
+
+    if ((event.type == "click" && event.button != 0) ||
+        (event.type == "keypress" && event.charCode != Ci.nsIDOMKeyEvent.DOM_VK_SPACE &&
+         event.keyCode != Ci.nsIDOMKeyEvent.DOM_VK_RETURN)) {
+      return; // Left click, space or enter only
+    }
+
     let win = event.target.ownerDocument.defaultView;
     let url = win.gBrowser.selectedBrowser.currentURI.spec;
     if (url.startsWith("about:reader")) {

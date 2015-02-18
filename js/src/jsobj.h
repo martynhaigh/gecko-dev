@@ -941,13 +941,6 @@ extern bool
 HasOwnProperty(JSContext *cx, HandleObject obj, HandleId id, bool *result);
 
 /*
- * Deprecated. Search the prototype chain for `obj[id]` and redefine it to have
- * the given property attributes.
- */
-inline bool
-SetPropertyAttributes(JSContext *cx, HandleObject obj, HandleId id, unsigned *attrsp);
-
-/*
  * Set a watchpoint: a synchronous callback when the given property of the
  * given object is set.
  *
@@ -1134,7 +1127,7 @@ GetInitialHeap(NewObjectKind newKind, const Class *clasp)
 // Specialized call for constructing |this| with a known function callee,
 // and a known prototype.
 extern JSObject *
-CreateThisForFunctionWithProto(JSContext *cx, js::HandleObject callee, JSObject *proto,
+CreateThisForFunctionWithProto(JSContext *cx, js::HandleObject callee, HandleObject proto,
                                NewObjectKind newKind = GenericObject);
 
 // Specialized call for constructing |this| with a known function callee.
@@ -1205,6 +1198,9 @@ namespace js {
 bool
 LookupPropertyPure(ExclusiveContext *cx, JSObject *obj, jsid id, JSObject **objp,
                    Shape **propp);
+
+bool
+GetPropertyPure(ExclusiveContext *cx, JSObject *obj, jsid id, Value *vp);
 
 bool
 GetOwnPropertyDescriptor(JSContext *cx, HandleObject obj, HandleId id,
