@@ -14,6 +14,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
+import android.widget.Toast;
 
 public class TabQueue extends Locales.LocaleAwareActivity {
     private static final String LOGTAG = "Gecko" + TabQueue.class.getSimpleName();
@@ -67,6 +68,10 @@ public class TabQueue extends Locales.LocaleAwareActivity {
      */
     private void abortDueToNoURL() {
         Log.d(LOGTAG, "Unable to process tab queue insertion. No URL found!");
+        Toast t = new Toast(getBaseContext());
+        t.setText("Unable to process tab queue insertion. No URL found!");
+        t.setDuration(Toast.LENGTH_SHORT);
+        t.show();
         finish();
     }
 }
