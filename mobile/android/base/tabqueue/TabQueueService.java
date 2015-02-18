@@ -15,6 +15,7 @@ import android.content.res.Resources;
 import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.IBinder;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -27,6 +28,7 @@ import android.widget.TextView;
  *   url is added to a file which is then read in fennec on next launch.
  */
 public class TabQueueService extends Service {
+     private static final String LOGTAG = "Gecko" + TabQueueService.class.getSimpleName();
 
     private WindowManager windowManager;
     private View layout;
@@ -141,6 +143,7 @@ public class TabQueueService extends Service {
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
+        Log.d(LOGTAG, "Adding URL to list: " + intentData);
         // TODO Add url to list here.
 
     }
