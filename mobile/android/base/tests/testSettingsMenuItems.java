@@ -12,8 +12,6 @@ import org.mozilla.gecko.Actions;
 import org.mozilla.gecko.AppConstants;
 import org.mozilla.gecko.util.HardwareUtils;
 
-import android.util.Log;
-
 /** This patch tests the Sections present in the Settings Menu and the
  *  default values for them
  */
