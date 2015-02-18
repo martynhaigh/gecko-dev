@@ -30,17 +30,17 @@ public class testSettingsMenuItems extends PixelTest {
     // Customize menu items.
     String[][] PATH_CUSTOMIZE = { { StringHelper.CUSTOMIZE_SECTION_LABEL, "Home, search, tabs, import"} };
     String[][] OPTIONS_CUSTOMIZE = {
-            { "Home" },
-            { "Search", "", "Show search suggestions", "Installed search engines"},
-            { StringHelper.TABS_LABEL, "Don't restore after quitting " + StringHelper.BRAND_NAME, "Always restore", "Don't restore after quitting " + StringHelper.BRAND_NAME },
-            { StringHelper.IMPORT_FROM_ANDROID_LABEL, "", "Bookmarks", "History", "Import" },
+        { "Home" },
+        { "Search", "", "Show search suggestions", "Installed search engines"},
+        { StringHelper.TABS_LABEL, "Don't restore after quitting " + StringHelper.BRAND_NAME, "Always restore", "Don't restore after quitting " + StringHelper.BRAND_NAME },
+        { StringHelper.IMPORT_FROM_ANDROID_LABEL, "", "Bookmarks", "History", "Import" },
     };
 
     // Home panel menu items.
     String[][] PATH_HOME = { { StringHelper.CUSTOMIZE_SECTION_LABEL }, { "Home", "Customize your homepage" } };
     String[][] OPTIONS_HOME = {
-            { "Panels" },
-            { "Automatic updates", "Enabled", "Enabled", "Only over Wi-Fi" },
+      { "Panels" },
+      { "Automatic updates", "Enabled", "Enabled", "Only over Wi-Fi" },
     };
 
     // Display menu items.
