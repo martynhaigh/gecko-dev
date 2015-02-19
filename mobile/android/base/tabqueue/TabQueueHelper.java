@@ -8,7 +8,6 @@ package org.mozilla.gecko.tabqueue;
 import org.mozilla.gecko.GeckoProfile;
 
 import android.text.TextUtils;
-import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONException;
 
