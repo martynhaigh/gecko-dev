@@ -8,6 +8,7 @@ package org.mozilla.gecko.tabqueue;
 import org.mozilla.gecko.GeckoProfile;
 
 import android.text.TextUtils;
+import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONException;
 
@@ -21,7 +22,7 @@ public class TabQueueHelper {
 
     /**
      * Reads file and converts any content to JSON, adds passed in url to the data and writes back to the file,
-     * creating the file if it doesn't already exist.
+     * creating the file if it doesn't already exist.  This should not be run on the main thread.
      *
      * @param profile
      * @param url     URL to add

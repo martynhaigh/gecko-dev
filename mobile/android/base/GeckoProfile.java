@@ -616,7 +616,7 @@ public final class GeckoProfile {
         return null;
     }
 
-    public void writeFile(String filename, String data)  {
+    public void writeFile(final String filename, final String data) {
         File file = new File(getDir(), filename);
         synchronized (this) {
             if (!file.exists()) {
