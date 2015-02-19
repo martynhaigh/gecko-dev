@@ -149,10 +149,7 @@ public class TabQueueService extends Service {
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
-        // TODO Add url to list here.
-        Log.d(LOGTAG, "Adding URL to list: " + intentData);
-
-        TabQueueHelper.queueUrl(getApplicationContext(), GeckoProfile.get(getApplicationContext()), intentData);
+        TabQueueHelper.queueUrl(GeckoProfile.get(getApplicationContext()), intentData);
 
     }
 }
