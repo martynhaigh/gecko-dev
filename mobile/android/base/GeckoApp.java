@@ -1839,7 +1839,7 @@ public abstract class GeckoApp
             // We need to ensure that if we receive a VIEW action and there are tabs queued then the queued tabs are below
             // the tab loaded from the intent. We process the tab queue first and request a callback from the JS - the
             // listener will open the url from the intent as normal when the tab queue has been processed.
-            if (AppConstants.NIGHTLY_BUILD && TabQueueHelper.shouldOpenTabQueueUrls(this)) {
+            if (AppConstants.NIGHTLY_BUILD && AppConstants.MOZ_ANDROID_TAB_QUEUE && TabQueueHelper.shouldOpenTabQueueUrls(this)) {
                 EventDispatcher.getInstance().registerGeckoThreadListener(new NativeEventListener() {
                     @Override
                     public void handleMessage(String event, NativeJSObject message, EventCallback callback) {

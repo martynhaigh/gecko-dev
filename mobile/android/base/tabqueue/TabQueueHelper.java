@@ -22,6 +22,7 @@ import android.content.SharedPreferences;
 import android.os.StrictMode;
 import android.support.v4.app.NotificationCompat;
 import android.text.TextUtils;
+import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -29,6 +30,8 @@ import org.json.JSONObject;
 import java.io.IOException;
 
 public class TabQueueHelper {
+    private static final String LOGTAG = "Gecko" + TabQueueHelper.class.getSimpleName();
+
 
     // result codes for returning from the prompt
     public static final int TAB_QUEUE_TRY_IT = 201;
@@ -54,17 +57,18 @@ public class TabQueueHelper {
      * Check if we should show the tab queue prompt
      */
     public static boolean shouldShowTabQueuePrompt(Context context) {
-
+        Log.d("MTEST" + LOGTAG, "TabQueueHelper - shouldShowTabQueuePrompt - [context]");
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
+            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
 
-            boolean tabQueueEnabled = prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
+            boolean tabQueueEnabled = prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE, false);
             int timesPromptShown = prefs.getInt(PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, 0);
 
             // exit early if the feature is enabled or the user has seen the
             // prompt more than MAX_TIMES_TO_SHOW_PROMPT times.
             if (tabQueueEnabled || timesPromptShown >= MAX_TIMES_TO_SHOW_PROMPT) {
+                Log.d("MTEST" + LOGTAG, "TabQueueHelper - shouldShowTabQueuePrompt - NEVER AGAIN!");
                 return false;
             }
 
@@ -73,29 +77,37 @@ public class TabQueueHelper {
             if (timesOpened < EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT) {
                 // Allow a few external links to open before we prompt the user
                 prefs.edit().putInt(PREF_TAB_QUEUE_LAUNCHES, timesOpened).apply();
+                Log.d("MTEST" + LOGTAG, "TabQueueHelper - shouldShowTabQueuePrompt - false");
+
                 return false;
             } else if (timesOpened == EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT) {
+                Log.d("MTEST" + LOGTAG, "TabQueueHelper - shouldShowTabQueuePrompt - true");
+
                 // Show the prompt
                 return true;
             }
         } finally {
             StrictMode.setThreadPolicy(savedPolicy);
         }
+        Log.d("MTEST" + LOGTAG, "TabQueueHelper - shouldShowTabQueuePrompt - false");
 
         return false;
     }
 
     static public void showTabQueuePrompt(Activity activity) {
+        Log.d("MTEST" + LOGTAG, "TabQueueHelper - showTabQueuePrompt - [activity]");
+
         activity.startActivityForResult(new Intent(activity, TabQueuePrompt.class), ACTIVITY_REQUEST_TAB_QUEUE);
     }
 
     static public boolean shouldOpenTabQueueUrls(Context context) {
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
+            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
 
-            boolean tabQueueEnabled = prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, false);
+            boolean tabQueueEnabled = prefs.getBoolean(GeckoPreferences.PREFS_TAB_QUEUE, false);
             int tabsQueued = prefs.getInt(PREF_TAB_QUEUE_COUNT, 0);
+            Log.d("MTEST" + LOGTAG, "shouldOpenTabQueueUrls ! " + (tabQueueEnabled && tabsQueued > 0));
 
             return tabQueueEnabled && tabsQueued > 0;
         } finally {
@@ -104,9 +116,12 @@ public class TabQueueHelper {
     }
 
     static public int getTabQueueLength(Context context) {
+        Log.d("MTEST" + LOGTAG, "getTabQueueLength ! ");
+
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
+            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
+            Log.d("MTEST" + LOGTAG, "getTabQueueLength ! " + prefs.getInt(PREF_TAB_QUEUE_COUNT, 0));
 
             return prefs.getInt(PREF_TAB_QUEUE_COUNT, 0);
         } finally {
@@ -122,6 +137,8 @@ public class TabQueueHelper {
      * @param url     URL to add
      */
     static public void queueUrl(Context context, GeckoProfile profile, String url) {
+        Log.d("MTEST" + LOGTAG, "TabQueueHelper - queueUrl - " + url);
+
         String readingListContent = null;
         try {
             readingListContent = profile.readFile(FILE_NAME);
@@ -163,7 +180,7 @@ public class TabQueueHelper {
         // any urls to open
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
         try {
-            final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
+            final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
 
             int openInBackgroundCount = prefs.getInt(TabQueueHelper.PREF_TAB_QUEUE_COUNT, 0);
             prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_COUNT, openInBackgroundCount + 1).apply();
@@ -181,6 +198,7 @@ public class TabQueueHelper {
      * @param performCallback Specify is the JS will perform a callback on the "Tabs:TabsOpened" event after opening the passed in tabs
      */
     static public void openQueuedUrls(Context context, GeckoProfile profile, boolean performCallback) {
+        Log.d("MTEST" + LOGTAG, "TabQueueHelper - openQueuedUrls");
         //remove the notification
         NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         notificationManager.cancel(TAB_QUEUE_NOTIFICATION_ID);
@@ -252,7 +270,7 @@ public class TabQueueHelper {
 
             final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
             try {
-                final SharedPreferences prefs = GeckoSharedPrefs.forProfile(context);
+                final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
                 prefs.edit().remove(PREF_TAB_QUEUE_COUNT).apply();
             } finally {
                 StrictMode.setThreadPolicy(savedPolicy);

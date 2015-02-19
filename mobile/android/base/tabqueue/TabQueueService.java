@@ -167,6 +167,7 @@ public class TabQueueService extends Service {
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
+        getProfile();
 
         Log.d(LOGTAG, "Adding URL to list: " + intentData);
         if (mProfile == null) {

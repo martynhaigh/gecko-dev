@@ -924,7 +924,7 @@ public class BrowserApp extends GeckoApp
         checkFirstrun(this, new SafeIntent(getIntent()));
 
         // Process loading queue
-        if (AppConstants.NIGHTLY_BUILD) {
+        if (AppConstants.NIGHTLY_BUILD && AppConstants.MOZ_ANDROID_TAB_QUEUE) {
             if (TabQueueHelper.shouldOpenTabQueueUrls(getApplicationContext())) {
                 TabQueueHelper.openQueuedUrls(getApplicationContext(), mProfile, false);
             }
@@ -949,6 +949,13 @@ public class BrowserApp extends GeckoApp
 
         EventDispatcher.getInstance().unregisterGeckoThreadListener((GeckoEventListener)this,
             "Prompt:ShowTop");
+
+        // Process loading queue
+        if (AppConstants.NIGHTLY_BUILD && AppConstants.MOZ_ANDROID_TAB_QUEUE) {
+            if (TabQueueHelper.shouldOpenTabQueueUrls(getApplicationContext())) {
+                TabQueueHelper.openQueuedUrls(getApplicationContext(), mProfile, false);
+            }
+        }
     }
 
     @Override
@@ -2384,8 +2391,8 @@ public class BrowserApp extends GeckoApp
                 if (resultCode == TabQueueHelper.TAB_QUEUE_TRY_IT) {
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
-                        final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
-                        prefs.edit().putBoolean(GeckoPreferences.PREFS_TAB_QUEUE_ENABLED, true).apply();
+                        final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
+                        prefs.edit().putBoolean(GeckoPreferences.PREFS_TAB_QUEUE, true).apply();
 
                         // by making this one more than EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT we ensure the prompt will never show again
                         prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_LAUNCHES, TabQueueHelper.EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT + 1).apply();
@@ -2401,7 +2408,7 @@ public class BrowserApp extends GeckoApp
                 } else if (resultCode == TabQueueHelper.TAB_QUEUE_CANCEL) {
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
-                        final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
+                        final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
                         prefs.edit().remove(TabQueueHelper.PREF_TAB_QUEUE_LAUNCHES).apply();
 
                         int timesPromptShown = prefs.getInt(TabQueueHelper.PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, 0) + 1;
@@ -2414,7 +2421,7 @@ public class BrowserApp extends GeckoApp
                     // Lets make sure the user never sees the prompt again
                     final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
                     try {
-                        final SharedPreferences prefs = GeckoSharedPrefs.forProfile(this);
+                        final SharedPreferences prefs = GeckoSharedPrefs.forApp(this);
 
                         prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_LAUNCHES, TabQueueHelper.EXTERNAL_LAUNCHES_BEFORE_SHOWING_PROMPT + 1).apply();
                         prefs.edit().putInt(TabQueueHelper.PREF_TAB_QUEUE_TIMES_PROMPT_SHOWN, TabQueueHelper.MAX_TIMES_TO_SHOW_PROMPT + 1).apply();
@@ -3344,7 +3351,7 @@ public class BrowserApp extends GeckoApp
         }
 
         // We only want to show the prompt if the browser has been opened from an external url
-        if (AppConstants.NIGHTLY_BUILD && mInitialized && isViewAction) {
+        if (AppConstants.NIGHTLY_BUILD && AppConstants.MOZ_ANDROID_TAB_QUEUE && mInitialized && isViewAction) {
             if (TabQueueHelper.shouldShowTabQueuePrompt(BrowserApp.this)) {
                 TabQueueHelper.showTabQueuePrompt(BrowserApp.this);
             }
@@ -3363,7 +3370,7 @@ public class BrowserApp extends GeckoApp
         }
 
         // If the user has clicked the tab queue notification the load the tabs and open the tab tray
-        if(AppConstants.NIGHTLY_BUILD && mInitialized && openTabQueueUrls) {
+        if(AppConstants.NIGHTLY_BUILD  && AppConstants.MOZ_ANDROID_TAB_QUEUE && mInitialized && openTabQueueUrls) {
             TabQueueHelper.openQueuedUrls(this, mProfile, false);
             showNormalTabs();
         }
