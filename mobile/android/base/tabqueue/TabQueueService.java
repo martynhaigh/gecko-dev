@@ -153,7 +153,8 @@ public class TabQueueService extends Service {
         (new Thread() {
             @Override
             public void run() {
-                TabQueueHelper.queueUrl(GeckoProfile.get(getApplicationContext()), intentData);
+                int tabsQueued = TabQueueHelper.queueUrl(GeckoProfile.get(getApplicationContext()), intentData);
+                TabQueueHelper.showNotification(getApplicationContext(), tabsQueued);
             }
         }).start();
 

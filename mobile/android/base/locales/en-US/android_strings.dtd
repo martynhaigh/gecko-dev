@@ -179,6 +179,10 @@
 
 <!ENTITY tab_queue_toast_message "Open later">
 <!ENTITY tab_queue_toast_action "Open now">
+<!ENTITY tab_queue_notification_title_singular "Tab Queued">
+<!ENTITY tab_queue_notification_title_plural "Tabs Queued">
+<!ENTITY tab_queue_notification_message_singular "\u0025d tab queued">
+<!ENTITY tab_queue_notification_message_plural "\u0025d tabs queued">
 
 <!ENTITY pref_char_encoding "Character encoding">
 <!ENTITY pref_char_encoding_on "Show menu">
