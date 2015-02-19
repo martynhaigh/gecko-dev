@@ -13,6 +13,13 @@ import org.mozilla.gecko.R;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
+
+import android.text.TextUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+
+import java.io.IOException;
+
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.StrictMode;
@@ -58,6 +65,36 @@ public class TabQueueHelper {
             } catch (JSONException e) {
                 e.printStackTrace();
             }
+
+    /**
+     * Reads file and converts any content to JSON, adds passed in url to the data and writes back to the file,
+     * creating the file if it doesn't already exist.  This should not be run on the main thread.
+     *
+     * @param profile
+     * @param url     URL to add
+     */
+    static public void queueUrl(GeckoProfile profile, String url) {
+
+        String readingListContent = null;
+        try {
+            readingListContent = profile.readFile(FILE_NAME);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        JSONArray jsonArray = new JSONArray();
+        if (!TextUtils.isEmpty(readingListContent)) {
+            try {
+                jsonArray = new JSONArray(readingListContent);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+
+        jsonArray.put(url);
+
+        profile.writeFile(FILE_NAME, jsonArray.toString());
+    }
         }
 
         jsonArray.put(url);

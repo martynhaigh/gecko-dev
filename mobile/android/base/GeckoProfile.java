@@ -5,9 +5,11 @@
 
 package org.mozilla.gecko;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
@@ -612,6 +614,27 @@ public final class GeckoProfile {
             Log.e(LOGTAG, "Unable to read session file", ioe);
         }
         return null;
+    }
+
+    public void writeFile(final String filename, final String data) {
+        File file = new File(getDir(), filename);
+        synchronized (this) {
+            if (!file.exists()) {
+                try {
+                    file.createNewFile();
+                } catch (IOException e) {
+                    Log.e(LOGTAG, "Unable to create file", e);
+                }
+            }
+            try {
+                //BufferedWriter for performance
+                BufferedWriter buf = new BufferedWriter(new FileWriter(file, false));
+                buf.write(data);
+                buf.close();
+            } catch (IOException e) {
+                Log.e(LOGTAG, "Unable to write to file", e);
+            }
+        }
     }
 
     public String readFile(String filename) throws IOException {

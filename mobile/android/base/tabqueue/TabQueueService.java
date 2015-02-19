@@ -6,6 +6,7 @@
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.BrowserApp;
+import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.mozglue.ContextUtils;
 
@@ -32,7 +33,7 @@ import android.widget.TextView;
  * whilst still allowing the user to interact with the background application.
  */
 public class TabQueueService extends Service {
-     private static final String LOGTAG = "Gecko" + TabQueueService.class.getSimpleName();
+    private static final String LOGTAG = "Gecko" + TabQueueService.class.getSimpleName();
 
     private WindowManager windowManager;
     private View layout;
@@ -139,7 +140,7 @@ public class TabQueueService extends Service {
         windowManager.removeView(layout);
     }
 
-    private void addUrlToList(Intent intentParam) {
+    private void addUrlToList(final Intent intentParam) {
         if (intentParam == null) {
             // This should never happen, but lets return silently instead of crash if it does!
             return;
@@ -148,8 +149,13 @@ public class TabQueueService extends Service {
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
-        // TODO Add url to list here.
-        Log.d(LOGTAG, "Adding URL to list: " + intentData);
+        // As we're doing disk IO, lets run this stuff in a separate thread.
+        (new Thread() {
+            @Override
+            public void run() {
+                TabQueueHelper.queueUrl(GeckoProfile.get(getApplicationContext()), intentData);
+            }
+        }).start();
 
     }
 }
