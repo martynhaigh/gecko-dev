@@ -6,6 +6,7 @@
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.BrowserApp;
+import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.mozglue.ContextUtils;
 
@@ -150,6 +151,8 @@ public class TabQueueService extends Service {
 
         // TODO Add url to list here.
         Log.d(LOGTAG, "Adding URL to list: " + intentData);
+
+        TabQueueHelper.queueUrl(getApplicationContext(), GeckoProfile.get(getApplicationContext()), intentData);
 
     }
 }
