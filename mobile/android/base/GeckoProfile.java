@@ -617,7 +617,6 @@ public final class GeckoProfile {
     }
 
     public void writeFile(String filename, String data)  {
-        Log.d("MTEST" + LOGTAG, "GeckoProfile - writeFile - " + filename + " - " + data);
         File file = new File(getDir(), filename);
         synchronized (this) {
             if (!file.exists()) {
