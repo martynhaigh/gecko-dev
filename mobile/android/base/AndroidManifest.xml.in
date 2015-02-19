@@ -266,6 +266,7 @@
                   android:label="@MOZ_APP_DISPLAYNAME@"
                   android:noHistory="true"
                   android:excludeFromRecents="true"
+                  android:launchMode="singleTask"
                   android:theme="@style/TabQueueActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
