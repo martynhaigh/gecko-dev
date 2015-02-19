@@ -146,7 +146,6 @@ public class TabQueueHelper {
     /**
      * Add a url to the tab queue, create a notification
      *
-     * @param context
      * @param profile
      * @param url     URL to add
      */
@@ -172,6 +171,7 @@ public class TabQueueHelper {
 
         profile.writeFile(FILE_NAME, jsonArray.toString());
 
+        return jsonArray.length();
     }
 
     
