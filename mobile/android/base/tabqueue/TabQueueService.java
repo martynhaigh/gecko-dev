@@ -171,7 +171,5 @@ public class TabQueueService extends Service {
                 TabQueueHelper.showNotification(getApplicationContext(), tabsQueued);
             }
         }).start();
-
-        TabQueueHelper.queueUrl(getApplicationContext(), mProfile, intentData);
     }
 }

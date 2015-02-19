@@ -6,20 +6,6 @@
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.BrowserApp;
-import org.mozilla.gecko.GeckoProfile;
-import org.mozilla.gecko.R;
-
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.content.Context;
-import android.content.Intent;
-import android.support.v4.app.NotificationCompat;
-import android.text.TextUtils;
-import org.json.JSONArray;
-import org.json.JSONException;
-
-import java.io.IOException;
-import org.mozilla.gecko.BrowserApp;
 import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoEvent;
 import org.mozilla.gecko.GeckoProfile;
@@ -174,10 +160,11 @@ public class TabQueueHelper {
         return jsonArray.length();
     }
 
-    
+
     /**
      * Displays a notification showing the total number of tabs queue.  If there is already a notification displayed, it
      * will be replaced.
+     *
      * @param context
      * @param tabsQueued
      */
@@ -197,8 +184,8 @@ public class TabQueueHelper {
 
         NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         notificationManager.notify(TabQueueHelper.TAB_QUEUE_NOTIFICATION_ID, builder.build());
-        
-        
+
+
         // Store the number of URLs queued so that we don't have to read the FILE_NAME to see if we have
         // any urls to open
         final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
@@ -211,95 +198,7 @@ public class TabQueueHelper {
             StrictMode.setThreadPolicy(savedPolicy);
         }
     }
-    
-    /**
-     * Opens the file with filename of {@link TabQueueHelper#FILE_NAME} and constructs a JSON object to send to
-     * the JS which will open the tabs and optionally send a callback notification.
-     *
-     * @param context
-     * @param profile
-     * @param performCallback Specify is the JS will perform a callback on the "Tabs:TabsOpened" event after opening the passed in tabs
-     */
-    static public void openQueuedUrls(Context context, GeckoProfile profile, boolean performCallback) {
-        Log.d("MTEST" + LOGTAG, "TabQueueHelper - openQueuedUrls");
-        //remove the notification
-        NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        notificationManager.cancel(TAB_QUEUE_NOTIFICATION_ID);
 
-        // exit early if we don't have any tabs queued
-        if (getTabQueueLength(context) < 1) {
-            return;
-        }
-
-        String readingList = null;
-        try {
-            readingList = profile.readFile(FILE_NAME);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        if (!TextUtils.isEmpty(readingList)) {
-            JSONArray jsonArray;
-
-            try {
-                jsonArray = new JSONArray(readingList);
-            } catch (JSONException e) {
-                jsonArray = null;
-                e.printStackTrace();
-            }
-
-            if (jsonArray != null) {
-                JSONArray dataArray = new JSONArray();
-                JSONObject jsonObject;
-
-                for (int i = 0; i < jsonArray.length(); i++) {
-                    String site;
-                    try {
-                        site = jsonArray.getString(i);
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                        continue;
-                    }
-
-                    if (!TextUtils.isEmpty(site)) {
-                        jsonObject = new JSONObject();
-
-                        // construct the object as expected by the JS
-                        try {
-                            jsonObject.put("url", site);
-                            jsonObject.put("isPrivate", false);
-                            jsonObject.put("desktopMode", false);
-                            dataArray.put(jsonObject);
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                        }
-                    } else {
-                        // NO-OP
-                    }
-                }
-
-                JSONObject data = new JSONObject();
-                try {
-                    data.put("urls", dataArray);
-                    data.put("performCallback", performCallback);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-
-                GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Tabs:OpenMultiple", data.toString()));
-            }
-
-            profile.deleteFile(FILE_NAME);
-
-            final StrictMode.ThreadPolicy savedPolicy = StrictMode.allowThreadDiskReads();
-            try {
-                final SharedPreferences prefs = GeckoSharedPrefs.forApp(context);
-                prefs.edit().remove(PREF_TAB_QUEUE_COUNT).apply();
-            } finally {
-                StrictMode.setThreadPolicy(savedPolicy);
-            }
-        }
-    }
     /**
      * Opens the file with filename of {@link TabQueueHelper#FILE_NAME} and constructs a JSON object to send to
      * the JS which will open the tabs and optionally send a callback notification.
