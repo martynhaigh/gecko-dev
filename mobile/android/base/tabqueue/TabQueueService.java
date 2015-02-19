@@ -36,7 +36,7 @@ import java.util.regex.Pattern;
  * whilst still allowing the user to interact with the background application.
  */
 public class TabQueueService extends Service {
-     private static final String LOGTAG = "Gecko" + TabQueueService.class.getSimpleName();
+    private static final String LOGTAG = "Gecko" + TabQueueService.class.getSimpleName();
 
     private WindowManager windowManager;
     private View layout;
@@ -167,39 +167,13 @@ public class TabQueueService extends Service {
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
-        getProfile();
-
-        Log.d(LOGTAG, "Adding URL to list: " + intentData);
-        if (mProfile == null) {
-            String profileName = null;
-            String profilePath = null;
-            if (args != null) {
-                Pattern p;
-                Matcher m;
-                if (args.contains("-P")) {
-                    p = Pattern.compile("(?:-P\\s*)(\\w*)(\\s*)");
-                    m = p.matcher(args);
-                    if (m.find()) {
-                        profileName = m.group(1);
-                    }
-                }
-
-                if (args.contains("-profile")) {
-                    p = Pattern.compile("(?:-profile\\s*)(\\S*)(\\s*)");
-                    m = p.matcher(args);
-                    if (m.find()) {
-                        profilePath = m.group(1);
-                    }
-                    if (profileName == null) {
-                        profileName = GeckoProfile.DEFAULT_PROFILE;
-                    }
-                    GeckoProfile.sIsUsingCustomProfile = true;
-                }
-                if (profileName != null || profilePath != null) {
-                    mProfile = GeckoProfile.get(this, profileName, profilePath);
-                }
+        // As we're doing disk IO, lets run this stuff in a separate thread.
+        (new Thread() {
+            @Override
+            public void run() {
+                TabQueueHelper.queueUrl(GeckoProfile.get(getApplicationContext()), intentData);
             }
-        }
+        }).start();
 
         TabQueueHelper.queueUrl(getApplicationContext(), mProfile, intentData);
     }

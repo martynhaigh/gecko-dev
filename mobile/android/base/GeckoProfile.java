@@ -616,6 +616,27 @@ public final class GeckoProfile {
         return null;
     }
 
+    public void writeFile(final String filename, final String data) {
+        File file = new File(getDir(), filename);
+        synchronized (this) {
+            if (!file.exists()) {
+                try {
+                    file.createNewFile();
+                } catch (IOException e) {
+                    Log.e(LOGTAG, "Unable to create file", e);
+                }
+            }
+            try {
+                //BufferedWriter for performance
+                BufferedWriter buf = new BufferedWriter(new FileWriter(file, false));
+                buf.write(data);
+                buf.close();
+            } catch (IOException e) {
+                Log.e(LOGTAG, "Unable to write to file", e);
+            }
+        }
+    }
+
     public void writeFile(String filename, String data)  {
         File logFile = new File(getDir(), filename);
         if (!logFile.exists()) {

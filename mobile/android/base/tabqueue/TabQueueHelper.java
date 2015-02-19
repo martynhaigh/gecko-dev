@@ -5,6 +5,13 @@
 
 package org.mozilla.gecko.tabqueue;
 
+import org.mozilla.gecko.GeckoProfile;
+
+import android.text.TextUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+
+import java.io.IOException;
 import org.mozilla.gecko.BrowserApp;
 import org.mozilla.gecko.GeckoAppShell;
 import org.mozilla.gecko.GeckoEvent;
