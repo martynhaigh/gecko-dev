@@ -16,16 +16,12 @@ import android.content.res.Resources;
 import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.IBinder;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 
 /**
