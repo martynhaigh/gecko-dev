@@ -632,7 +632,7 @@ public final class GeckoProfile {
                     bufferedWriter.close();
                 }
             } catch (IOException e) {
-                Log.e(LOGTAG, "Unable to write to file", e);
+                Log.e(LOGTAG, "Error writing to file", e);
             }
         }
     }

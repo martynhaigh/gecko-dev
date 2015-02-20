@@ -23,7 +23,7 @@ public class TabQueueHelper {
 
     /**
      * Reads file and converts any content to JSON, adds passed in url to the data and writes back to the file,
-     * creating the file if it doesn't already exist.  This should not be run on the main thread.
+     * creating the file if it doesn't already exist.  This should not be run on the ui thread.
      *
      * @param profile
      * @param url     URL to add

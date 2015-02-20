@@ -157,7 +157,7 @@ public class TabQueueService extends Service {
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
-        // As we're doing disk IO, lets run this stuff in a separate thread.
+        // As we're doing disk IO, let's run this stuff in a separate thread.
         executorService.submit(new Runnable() {
             @Override
             public void run() {
