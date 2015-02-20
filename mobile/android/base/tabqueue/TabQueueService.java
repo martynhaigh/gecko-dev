@@ -24,6 +24,13 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * On launch this service displays a view over the currently running activity with an action
@@ -41,6 +48,8 @@ public class TabQueueService extends Service {
     private final Handler handler = new Handler();
     private WindowManager.LayoutParams layoutParams;
     private HideRunnable hideRunnable;
+    private ExecutorService executorService;
+
 
 
     @Override
@@ -52,6 +61,7 @@ public class TabQueueService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        executorService = Executors.newSingleThreadExecutor();
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
@@ -142,7 +152,7 @@ public class TabQueueService extends Service {
 
     private void addUrlToList(final Intent intentParam) {
         if (intentParam == null) {
-            // This should never happen, but lets return silently instead of crash if it does!
+            // This should never happen, but let's return silently instead of crashing if it does.
             return;
         }
         final ContextUtils.SafeIntent intent = new ContextUtils.SafeIntent(intentParam);
@@ -150,12 +160,11 @@ public class TabQueueService extends Service {
         final String intentData = intent.getDataString();
 
         // As we're doing disk IO, lets run this stuff in a separate thread.
-        (new Thread() {
+        executorService.submit(new Runnable() {
             @Override
             public void run() {
                 TabQueueHelper.queueUrl(GeckoProfile.get(getApplicationContext()), intentData);
             }
-        }).start();
-
+        });
     }
 }

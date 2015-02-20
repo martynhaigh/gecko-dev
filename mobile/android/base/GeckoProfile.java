@@ -29,6 +29,7 @@ import org.mozilla.gecko.mozglue.RobocopTarget;
 import org.mozilla.gecko.firstrun.FirstrunPane;
 import org.mozilla.gecko.util.INIParser;
 import org.mozilla.gecko.util.INISection;
+import org.mozilla.gecko.util.IOUtils;
 
 import android.app.Activity;
 import android.content.ContentResolver;
@@ -74,8 +75,8 @@ public final class GeckoProfile {
     /**
      * Access to this member should be synchronized to avoid
      * races during creation -- particularly between getDir and GeckoView#init.
-     *
-     * Not final because this is lazily computed. 
+     * <p/>
+     * Not final because this is lazily computed.
      */
     private File mProfileDir;
 
@@ -92,7 +93,9 @@ public final class GeckoProfile {
         LOCKED,
         UNLOCKED,
         UNDEFINED
-    };
+    }
+
+    ;
 
     /**
      * Warning: has a side-effect of setting sIsUsingCustomProfile.
@@ -117,7 +120,7 @@ public final class GeckoProfile {
             final Pattern p = Pattern.compile("(?:-profile\\s*)(\\S*)(\\s*)");
             final Matcher m = p.matcher(args);
             if (m.find()) {
-                profilePath =  m.group(1);
+                profilePath = m.group(1);
             }
 
             if (profileName == null) {
@@ -138,7 +141,8 @@ public final class GeckoProfile {
         boolean isGeckoApp = false;
         try {
             isGeckoApp = context instanceof GeckoApp;
-        } catch (NoClassDefFoundError ex) {}
+        } catch (NoClassDefFoundError ex) {
+        }
 
         if (isGeckoApp) {
             // Check for a cached profile on this context already
@@ -196,7 +200,7 @@ public final class GeckoProfile {
             if (profile != null)
                 return profile;
         }
-        return get(context, profileName, (File)null);
+        return get(context, profileName, (File) null);
     }
 
     @RobocopTarget
@@ -213,6 +217,7 @@ public final class GeckoProfile {
 
     // Extension hook.
     private static volatile BrowserDB.Factory sDBFactory;
+
     public static void setBrowserDBFactory(BrowserDB.Factory factory) {
         sDBFactory = factory;
     }
@@ -303,7 +308,7 @@ public final class GeckoProfile {
         if (success) {
             // Clear all shared prefs for the given profile.
             GeckoSharedPrefs.forProfileName(context, profileName)
-                            .edit().clear().apply();
+                    .edit().clear().apply();
         }
 
         return success;
@@ -405,7 +410,7 @@ public final class GeckoProfile {
         if (success) {
             // Clear all shared prefs for the guest profile.
             GeckoSharedPrefs.forProfileName(context, GUEST_PROFILE)
-                            .edit().clear().apply();
+                    .edit().clear().apply();
         }
     }
 
@@ -484,7 +489,7 @@ public final class GeckoProfile {
                 mLocked = LockState.UNLOCKED;
             }
             return result;
-        } catch(IOException ex) {
+        } catch (IOException ex) {
             Log.e(LOGTAG, "Error locking profile", ex);
         }
         mLocked = LockState.UNLOCKED;
@@ -516,7 +521,7 @@ public final class GeckoProfile {
                 mLocked = LockState.LOCKED;
             }
             return result;
-        } catch(IOException ex) {
+        } catch (IOException ex) {
             Log.e(LOGTAG, "Error unlocking profile", ex);
         }
 
@@ -575,7 +580,7 @@ public final class GeckoProfile {
 
     /**
      * Moves the session file to the backup session file.
-     *
+     * <p/>
      * sessionstore.js should hold the current session, and sessionstore.bak
      * should hold the previous session (where it is used to read the "tabs
      * from last time"). Normally, sessionstore.js is moved to sessionstore.bak
@@ -593,14 +598,13 @@ public final class GeckoProfile {
 
     /**
      * Get the string from a session file.
-     *
+     * <p/>
      * The session can either be read from sessionstore.js or sessionstore.bak.
      * In general, sessionstore.js holds the current session, and
      * sessionstore.bak holds the previous session.
      *
      * @param readBackup if true, the session is read from sessionstore.bak;
      *                   otherwise, the session is read from sessionstore.js
-     *
      * @return the session string
      */
     public String readSessionFile(boolean readBackup) {
@@ -618,19 +622,19 @@ public final class GeckoProfile {
 
     public void writeFile(final String filename, final String data) {
         File file = new File(getDir(), filename);
-        synchronized (this) {
-            if (!file.exists()) {
-                try {
-                    file.createNewFile();
-                } catch (IOException e) {
-                    Log.e(LOGTAG, "Unable to create file", e);
-                }
-            }
+        BufferedWriter bufferedWriter = null;
+        try {
+            // BufferedWriter for performance.
+            bufferedWriter = new BufferedWriter(new FileWriter(file, false));
+            bufferedWriter.write(data);
+        } catch (IOException e) {
+            Log.e(LOGTAG, "Unable to write to file", e);
+        } finally {
             try {
-                //BufferedWriter for performance
-                BufferedWriter buf = new BufferedWriter(new FileWriter(file, false));
-                buf.write(data);
-                buf.close();
+                if (bufferedWriter != null) {
+                    bufferedWriter.flush();
+                    bufferedWriter.close();
+                }
             } catch (IOException e) {
                 Log.e(LOGTAG, "Unable to write to file", e);
             }
@@ -680,7 +684,7 @@ public final class GeckoProfile {
 
             final INIParser parser = GeckoProfileDirectories.getProfilesINI(mMozillaDir);
             final Hashtable<String, INISection> sections = parser.getSections();
-            for (Enumeration<INISection> e = sections.elements(); e.hasMoreElements();) {
+            for (Enumeration<INISection> e = sections.elements(); e.hasMoreElements(); ) {
                 final INISection section = e.nextElement();
                 String name = section.getStringProperty("Name");
 
@@ -693,7 +697,7 @@ public final class GeckoProfile {
                     try {
                         int sectionNumber = Integer.parseInt(section.getName().substring("Profile".length()));
                         String curSection = "Profile" + sectionNumber;
-                        String nextSection = "Profile" + (sectionNumber+1);
+                        String nextSection = "Profile" + (sectionNumber + 1);
 
                         sections.remove(curSection);
 
@@ -702,7 +706,7 @@ public final class GeckoProfile {
                             sectionNumber++;
 
                             curSection = nextSection;
-                            nextSection = "Profile" + (sectionNumber+1);
+                            nextSection = "Profile" + (sectionNumber + 1);
                         }
                     } catch (NumberFormatException nex) {
                         // uhm, malformed Profile thing; we can't do much.
@@ -727,11 +731,9 @@ public final class GeckoProfile {
 
     /**
      * @return the default profile name for this application, or
-     *         {@link GeckoProfile#DEFAULT_PROFILE} if none could be found.
-     *
-     * @throws NoMozillaDirectoryException
-     *             if the Mozilla directory did not exist and could not be
-     *             created.
+     * {@link GeckoProfile#DEFAULT_PROFILE} if none could be found.
+     * @throws NoMozillaDirectoryException if the Mozilla directory did not exist and could not be
+     *                                     created.
      */
     public static String getDefaultProfileName(final Context context) throws NoMozillaDirectoryException {
         // Have we read the default profile from the INI already?
@@ -842,10 +844,10 @@ public final class GeckoProfile {
     /**
      * This method is called once, immediately before creation of the profile
      * directory completes.
-     *
+     * <p/>
      * It queues up work to be done in the background to prepare the profile,
      * such as adding default bookmarks.
-     *
+     * <p/>
      * This is public for use *from tests only*!
      */
     @RobocopTarget
