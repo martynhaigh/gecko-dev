@@ -50,8 +50,6 @@ public class TabQueueService extends Service {
     private HideRunnable hideRunnable;
     private ExecutorService executorService;
 
-
-
     @Override
     public IBinder onBind(Intent intent) {
         // Not used
