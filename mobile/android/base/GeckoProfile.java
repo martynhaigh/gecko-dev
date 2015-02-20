@@ -628,7 +628,6 @@ public final class GeckoProfile {
         } finally {
             try {
                 if (bufferedWriter != null) {
-                    bufferedWriter.flush();
                     bufferedWriter.close();
                 }
             } catch (IOException e) {
