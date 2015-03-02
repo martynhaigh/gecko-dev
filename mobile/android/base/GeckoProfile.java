@@ -620,7 +620,6 @@ public final class GeckoProfile {
         File file = new File(getDir(), filename);
         BufferedWriter bufferedWriter = null;
         try {
-            // BufferedWriter for performance.
             bufferedWriter = new BufferedWriter(new FileWriter(file, false));
             bufferedWriter.write(data);
         } catch (IOException e) {
