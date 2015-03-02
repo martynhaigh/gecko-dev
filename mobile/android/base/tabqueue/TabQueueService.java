@@ -24,6 +24,9 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 
 /**
  * On launch this service displays a view over the currently running activity with an action
@@ -47,6 +50,7 @@ public class TabQueueService extends Service {
     private Handler tabQueueHandler;
     private GeckoProfile mProfile;
     private WindowManager.LayoutParams toastLayoutParams;
+    private ExecutorService executorService;
     private StopServiceRunnable stopServiceRunnable;
 
     @Override
@@ -58,6 +62,7 @@ public class TabQueueService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        executorService = Executors.newSingleThreadExecutor();
 
         HandlerThread thread = new HandlerThread("TabQueueHandlerThread");
         thread.start();
@@ -169,13 +174,13 @@ public class TabQueueService extends Service {
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
-        // As we're doing disk IO, lets run this stuff in a separate thread.
-        (new Thread() {
+        // As we're doing disk IO, let's run this stuff in a separate thread.
+        executorService.submit(new Runnable() {
             @Override
             public void run() {
                 int tabsQueued = TabQueueHelper.queueUrl(GeckoProfile.get(getApplicationContext()), intentData);
                 TabQueueHelper.showNotification(getApplicationContext(), tabsQueued);
             }
-        }).start();
+        });
     }
 }

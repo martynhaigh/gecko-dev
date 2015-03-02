@@ -618,21 +618,19 @@ public final class GeckoProfile {
 
     public void writeFile(final String filename, final String data) {
         File file = new File(getDir(), filename);
-        synchronized (this) {
-            if (!file.exists()) {
-                try {
-                    file.createNewFile();
-                } catch (IOException e) {
-                    Log.e(LOGTAG, "Unable to create file", e);
-                }
-            }
+        BufferedWriter bufferedWriter = null;
+        try {
+            bufferedWriter = new BufferedWriter(new FileWriter(file, false));
+            bufferedWriter.write(data);
+        } catch (IOException e) {
+            Log.e(LOGTAG, "Unable to write to file", e);
+        } finally {
             try {
-                //BufferedWriter for performance
-                BufferedWriter buf = new BufferedWriter(new FileWriter(file, false));
-                buf.write(data);
-                buf.close();
+                if (bufferedWriter != null) {
+                    bufferedWriter.close();
+                }
             } catch (IOException e) {
-                Log.e(LOGTAG, "Unable to write to file", e);
+                Log.e(LOGTAG, "Error writing to file", e);
             }
         }
     }
