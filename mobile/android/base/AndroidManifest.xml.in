@@ -175,6 +175,8 @@
             <!-- The main reason for the Tab Queue build flag is to not mess with the VIEW intent filter
                  before the rest of the plumbing is in place -->
 
+            <!-- The entry point for Intent.VIEW actions will move to the TabQueue activity -->
+
             <!-- Default browser intents -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -252,9 +254,7 @@
         <!-- The main reason for the Tab Queue build flag is to not mess with the VIEW intent filter
              before the rest of the plumbing is in place -->
 
-        <service android:name="org.mozilla.gecko.tabqueue.TabQueueService"
-                 android:label="Tab Queue Service">
-        </service>
+        <service android:name="org.mozilla.gecko.tabqueue.TabQueueService" />
 
         <activity android:name="org.mozilla.gecko.tabqueue.TabQueuePrompt"
                   android:label="@MOZ_APP_DISPLAYNAME@"
