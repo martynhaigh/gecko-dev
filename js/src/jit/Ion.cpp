@@ -495,6 +495,13 @@ JitRuntime::Mark(JSTracer *trc)
         JitCode *code = i.get<JitCode>();
         MarkJitCodeRoot(trc, &code, "wrapper");
     }
+
+    // Mark all heap the jitcode global table map.
+    if (trc->runtime()->hasJitRuntime() &&
+        trc->runtime()->jitRuntime()->hasJitcodeGlobalTable())
+    {
+        trc->runtime()->jitRuntime()->getJitcodeGlobalTable()->mark(trc);
+    }
 }
 
 void
@@ -533,6 +540,12 @@ JitCompartment::sweep(FreeOp *fop, JSCompartment *compartment)
 
     if (regExpTestStub_ && !IsJitCodeMarked(&regExpTestStub_))
         regExpTestStub_ = nullptr;
+
+    for (size_t i = 0; i <= SimdTypeDescr::LAST_TYPE; i++) {
+        ReadBarrieredObject &obj = simdTemplateObjects_[i];
+        if (obj && IsObjectAboutToBeFinalized(obj.unsafeGet()))
+            obj.set(nullptr);
+    }
 }
 
 void
@@ -654,7 +667,7 @@ JitCode::finalize(FreeOp *fop)
     // If this jitcode has a bytecode map, de-register it.
     if (hasBytecodeMap_) {
         MOZ_ASSERT(rt->jitRuntime()->hasJitcodeGlobalTable());
-        rt->jitRuntime()->getJitcodeGlobalTable()->removeEntry(raw(), rt);
+        rt->jitRuntime()->getJitcodeGlobalTable()->releaseEntry(raw(), rt);
     }
 
     // Buffer can be freed at any time hereafter. Catch use-after-free bugs.
@@ -744,7 +757,7 @@ IonScript::New(JSContext *cx, RecompileInfo recompileInfo,
     if (snapshotsListSize >= MAX_BUFFER_SIZE ||
         (bailoutEntries >= MAX_BUFFER_SIZE / sizeof(uint32_t)))
     {
-        js_ReportOutOfMemory(cx);
+        ReportOutOfMemory(cx);
         return nullptr;
     }
 
@@ -2098,7 +2111,7 @@ Compile(JSContext *cx, HandleScript script, BaselineFrame *osrFrame, jsbytecode 
         return Method_CantCompile;
 
     if (reason == AbortReason_Alloc) {
-        js_ReportOutOfMemory(cx);
+        ReportOutOfMemory(cx);
         return Method_Error;
     }
 
@@ -2452,6 +2465,11 @@ static void
 InvalidateActivation(FreeOp *fop, const JitActivationIterator &activations, bool invalidateAll)
 {
     JitSpew(JitSpew_IonInvalidate, "BEGIN invalidating activation");
+
+#ifdef CHECK_OSIPOINT_REGISTERS
+    if (js_JitOptions.checkOsiPointRegisters)
+        activations->asJit()->setCheckRegs(false);
+#endif
 
     size_t frameno = 1;
 

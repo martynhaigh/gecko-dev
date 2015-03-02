@@ -355,7 +355,7 @@ class JS_FRIEND_API(BaseProxyHandler)
  * to add an override in CrossCompartmentWrapper. If you don't, you risk
  * compartment mismatches. See bug 945826 comment 0.
  */
-class JS_PUBLIC_API(DirectProxyHandler) : public BaseProxyHandler
+class JS_FRIEND_API(DirectProxyHandler) : public BaseProxyHandler
 {
   public:
     explicit MOZ_CONSTEXPR DirectProxyHandler(const void *aFamily, bool aHasPrototype = false,
@@ -581,7 +581,7 @@ class MOZ_STACK_CLASS ProxyOptions {
 
 JS_FRIEND_API(JSObject *)
 NewProxyObject(JSContext *cx, const BaseProxyHandler *handler, HandleValue priv,
-               JSObject *proto, JSObject *parent, const ProxyOptions &options = ProxyOptions());
+               JSObject *proto, const ProxyOptions &options = ProxyOptions());
 
 JSObject *
 RenewProxyObject(JSContext *cx, JSObject *obj, BaseProxyHandler *handler, Value priv);
@@ -674,9 +674,9 @@ inline void assertEnteredPolicy(JSContext *cx, JSObject *obj, jsid id,
 {}
 #endif
 
-} /* namespace js */
-
 extern JS_FRIEND_API(JSObject *)
-js_InitProxyClass(JSContext *cx, JS::HandleObject obj);
+InitProxyClass(JSContext *cx, JS::HandleObject obj);
+
+} /* namespace js */
 
 #endif /* js_Proxy_h */

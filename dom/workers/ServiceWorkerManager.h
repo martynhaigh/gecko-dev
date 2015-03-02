@@ -380,8 +380,8 @@ public:
               uint32_t aFlags);
 
   void
-  GetServicedClients(const nsCString& aScope,
-                     nsTArray<uint64_t>* aControlledDocuments);
+  GetAllClients(const nsCString& aScope,
+                nsTArray<uint64_t>* aControlledDocuments);
 
   static already_AddRefed<ServiceWorkerManager>
   GetInstance();
@@ -398,6 +398,9 @@ private:
 
   nsresult
   Update(ServiceWorkerRegistrationInfo* aRegistration);
+
+  nsresult
+  GetDocumentRegistration(nsIDocument* aDoc, ServiceWorkerRegistrationInfo** aRegistrationInfo);
 
   NS_IMETHOD
   CreateServiceWorkerForWindow(nsPIDOMWindow* aWindow,

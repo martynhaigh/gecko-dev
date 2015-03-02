@@ -66,6 +66,17 @@ function check_telemetry() {
   do_check_eq(histogram.counts[13], 1); // MOZILLA_PKIX_ERROR_INADEQUATE_KEY_SIZE
   do_check_eq(histogram.counts[14], 2); // MOZILLA_PKIX_ERROR_NOT_YET_VALID_CERTIFICATE
   do_check_eq(histogram.counts[15], 1); // MOZILLA_PKIX_ERROR_NOT_YET_VALID_ISSUER_CERTIFICATE
+  do_check_eq(histogram.counts[16], 2); // SEC_ERROR_INVALID_TIME
+
+  let keySizeHistogram = Cc["@mozilla.org/base/telemetry;1"]
+                           .getService(Ci.nsITelemetry)
+                           .getHistogramById("CERT_CHAIN_KEY_SIZE_STATUS")
+                           .snapshot();
+  do_check_eq(keySizeHistogram.counts[0], 0);
+  do_check_eq(keySizeHistogram.counts[1], 0); // 0 successful verifications of 2048-bit keys
+  do_check_eq(keySizeHistogram.counts[2], 4); // 4 successful verifications of 1024-bit keys
+  do_check_eq(keySizeHistogram.counts[3], 47); // 47 verification failures
+
   run_next_test();
 }
 
@@ -97,6 +108,9 @@ function add_simple_tests() {
                          Ci.nsICertOverrideService.ERROR_TIME,
                          getXPCOMStatusFromNSS(
                            MOZILLA_PKIX_ERROR_NOT_YET_VALID_CERTIFICATE));
+  add_cert_override_test("before-epoch.example.com",
+                         Ci.nsICertOverrideService.ERROR_TIME,
+                         getXPCOMStatusFromNSS(SEC_ERROR_INVALID_TIME));
   add_cert_override_test("selfsigned.example.com",
                          Ci.nsICertOverrideService.ERROR_UNTRUSTED,
                          getXPCOMStatusFromNSS(SEC_ERROR_UNKNOWN_ISSUER));
@@ -110,6 +124,9 @@ function add_simple_tests() {
                          Ci.nsICertOverrideService.ERROR_UNTRUSTED,
                          getXPCOMStatusFromNSS(
                            MOZILLA_PKIX_ERROR_NOT_YET_VALID_ISSUER_CERTIFICATE));
+  add_cert_override_test("before-epoch-issuer.example.com",
+                         Ci.nsICertOverrideService.ERROR_TIME,
+                         getXPCOMStatusFromNSS(SEC_ERROR_INVALID_TIME));
   add_cert_override_test("md5signature.example.com",
                          Ci.nsICertOverrideService.ERROR_UNTRUSTED,
                          getXPCOMStatusFromNSS(
