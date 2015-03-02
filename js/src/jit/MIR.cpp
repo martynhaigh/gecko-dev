@@ -922,6 +922,24 @@ MSimdSplatX4::foldsTo(TempAllocator &alloc)
 }
 
 MDefinition *
+MSimdUnbox::foldsTo(TempAllocator &alloc)
+{
+    MDefinition *in = input();
+
+    if (in->isSimdBox()) {
+        // If the operand is a MSimdBox, then we just reuse the operand of the
+        // MSimdBox as long as the type corresponds to what we are supposed to
+        // unbox.
+        in = in->toSimdBox()->input();
+        if (in->type() != type())
+            return this;
+        return in;
+    }
+
+    return this;
+}
+
+MDefinition *
 MSimdSwizzle::foldsTo(TempAllocator &alloc)
 {
     if (lanesMatch(0, 1, 2, 3))
@@ -2931,10 +2949,10 @@ MUrsh::NewAsmJS(TempAllocator &alloc, MDefinition *left, MDefinition *right)
 }
 
 MResumePoint *
-MResumePoint::New(TempAllocator &alloc, MBasicBlock *block, jsbytecode *pc, MResumePoint *parent,
+MResumePoint::New(TempAllocator &alloc, MBasicBlock *block, jsbytecode *pc,
                   Mode mode)
 {
-    MResumePoint *resume = new(alloc) MResumePoint(block, pc, parent, mode);
+    MResumePoint *resume = new(alloc) MResumePoint(block, pc, mode);
     if (!resume->init(alloc))
         return nullptr;
     resume->inherit(block);
@@ -2945,7 +2963,7 @@ MResumePoint *
 MResumePoint::New(TempAllocator &alloc, MBasicBlock *block, MResumePoint *model,
                   const MDefinitionVector &operands)
 {
-    MResumePoint *resume = new(alloc) MResumePoint(block, model->pc(), model->caller(), model->mode());
+    MResumePoint *resume = new(alloc) MResumePoint(block, model->pc(), model->mode());
 
     // Allocate the same number of operands as the original resume point, and
     // copy operands from the operands vector and not the not from the current
@@ -2964,7 +2982,7 @@ MResumePoint *
 MResumePoint::Copy(TempAllocator &alloc, MResumePoint *src)
 {
     MResumePoint *resume = new(alloc) MResumePoint(src->block(), src->pc(),
-                                                   src->caller(), src->mode());
+                                                   src->mode());
     // Copy the operands from the original resume point, and not from the
     // current block stack.
     if (!resume->operands_.init(alloc, src->numAllocatedOperands()))
@@ -2976,11 +2994,9 @@ MResumePoint::Copy(TempAllocator &alloc, MResumePoint *src)
     return resume;
 }
 
-MResumePoint::MResumePoint(MBasicBlock *block, jsbytecode *pc, MResumePoint *caller,
-                           Mode mode)
+MResumePoint::MResumePoint(MBasicBlock *block, jsbytecode *pc, Mode mode)
   : MNode(block),
     pc_(pc),
-    caller_(caller),
     instruction_(nullptr),
     mode_(mode)
 {
@@ -2991,6 +3007,12 @@ bool
 MResumePoint::init(TempAllocator &alloc)
 {
     return operands_.init(alloc, block()->stackDepth());
+}
+
+MResumePoint*
+MResumePoint::caller() const
+{
+    return block_->callerResumePoint();
 }
 
 void
@@ -4829,6 +4851,17 @@ jit::PropertyWriteNeedsTypeBarrier(TempAllocator &alloc, CompilerConstraintList 
     }
 
     MOZ_ASSERT(excluded);
+
+    // If the excluded object is a group with an unboxed layout, make sure it
+    // does not have a corresponding native group. Objects with the native
+    // group might appear even though they are not in the type set.
+    if (excluded->isGroup()) {
+        if (UnboxedLayout *layout = excluded->group()->maybeUnboxedLayout()) {
+            if (layout->nativeGroup())
+                return true;
+            excluded->watchStateChangeForUnboxedConvertedToNative(constraints);
+        }
+    }
 
     *pobj = AddGroupGuard(alloc, current, *pobj, excluded, /* bailOnEquality = */ true);
     return false;
