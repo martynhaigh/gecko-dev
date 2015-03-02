@@ -180,6 +180,12 @@ public class testSettingsMenuItems extends PixelTest {
             settingsMap.get(PATH_CUSTOMIZE).add(autoUpdateUi);
         }
 
+        // Tab Queue
+        if (AppConstants.NIGHTLY_BUILD && AppConstants.MOZ_ANDROID_TAB_QUEUE) {
+            String[] tabQueue = { StringHelper.TAB_QUEUE_LABEL, "Prevent tabs from opening immediately, but open all queued tabs the next time " + StringHelper.BRAND_NAME + " loads." };
+            settingsMap.get(PATH_CUSTOMIZE).add(tabQueue);
+        }
+
         // Crash reporter
         if (AppConstants.MOZ_CRASHREPORTER) {
             String[] crashReporterUi = { "Crash Reporter", StringHelper.BRAND_NAME + " submits crash reports to help Mozilla make your browser more stable and secure" };
@@ -231,7 +237,7 @@ public class testSettingsMenuItems extends PixelTest {
                     String itemDefault = "^" + item[1] + "$";
                     foundText = waitForPreferencesText(itemDefault);
                     mAsserter.ok(foundText, "Waiting for settings item default " + itemDefault
-                                 + " in section " + section,
+ " in section " + section,
                                  "The " + itemDefault + " default is present in section " + section);
                 }
                 // Check item choices, if they exist.
@@ -242,7 +248,7 @@ public class testSettingsMenuItems extends PixelTest {
                         String itemChoice = "^" + item[i] + "$";
                         foundText = waitForPreferencesText(itemChoice);
                         mAsserter.ok(foundText, "Waiting for settings item choice " + itemChoice
-                                     + " in section " + section,
+ " in section " + section,
                                      "The " + itemChoice + " choice is present in section " + section);
                     }
 
