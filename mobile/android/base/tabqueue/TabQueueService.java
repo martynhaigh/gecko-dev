@@ -16,13 +16,15 @@ import android.content.res.Resources;
 import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.IBinder;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 /**
@@ -41,7 +43,7 @@ public class TabQueueService extends Service {
     private final Handler handler = new Handler();
     private WindowManager.LayoutParams layoutParams;
     private HideRunnable hideRunnable;
-
+    private ExecutorService executorService;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -52,6 +54,7 @@ public class TabQueueService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        executorService = Executors.newSingleThreadExecutor();
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
@@ -142,20 +145,19 @@ public class TabQueueService extends Service {
 
     private void addUrlToList(final Intent intentParam) {
         if (intentParam == null) {
-            // This should never happen, but lets return silently instead of crash if it does!
+            // This should never happen, but let's return silently instead of crashing if it does.
             return;
         }
         final ContextUtils.SafeIntent intent = new ContextUtils.SafeIntent(intentParam);
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
-        // As we're doing disk IO, lets run this stuff in a separate thread.
-        (new Thread() {
+        // As we're doing disk IO, let's run this stuff in a separate thread.
+        executorService.submit(new Runnable() {
             @Override
             public void run() {
                 TabQueueHelper.queueUrl(GeckoProfile.get(getApplicationContext()), intentData);
             }
-        }).start();
-
+        });
     }
 }

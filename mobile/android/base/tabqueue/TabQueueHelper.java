@@ -6,8 +6,10 @@
 package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.GeckoProfile;
+import org.mozilla.gecko.util.ThreadUtils;
 
 import android.text.TextUtils;
+import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONException;
 
@@ -21,27 +23,26 @@ public class TabQueueHelper {
 
     /**
      * Reads file and converts any content to JSON, adds passed in url to the data and writes back to the file,
-     * creating the file if it doesn't already exist.  This should not be run on the main thread.
+     * creating the file if it doesn't already exist.  This should not be run on the ui thread.
      *
      * @param profile
      * @param url     URL to add
      */
-    static public void queueUrl(GeckoProfile profile, String url) {
+    public static void queueUrl(GeckoProfile profile, String url) {
+        ThreadUtils.assertNotOnUiThread();
 
-        String readingListContent = null;
+        String readingListContent = "";
         try {
             readingListContent = profile.readFile(FILE_NAME);
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.e(LOGTAG, "Error reading Tab Queue file contents.", e);
         }
-
-        JSONArray jsonArray = new JSONArray();
-        if (!TextUtils.isEmpty(readingListContent)) {
-            try {
-                jsonArray = new JSONArray(readingListContent);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
+        JSONArray jsonArray;
+        try {
+            jsonArray = new JSONArray(readingListContent);
+        } catch (JSONException e) {
+            jsonArray = new JSONArray();
+            Log.e(LOGTAG, "Error converting Tab Queue data to JSON.", e);
         }
 
         jsonArray.put(url);
