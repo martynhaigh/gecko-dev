@@ -52,6 +52,7 @@
 #include "nsIAuthPrompt2.h"
 #include "nsIChannelEventSink.h"
 #include "nsIAsyncVerifyRedirectCallback.h"
+#include "nsIServiceWorkerManager.h"
 #include "nsIScriptSecurityManager.h"
 #include "nsIScriptObjectPrincipal.h"
 #include "nsIScrollableFrame.h"
@@ -1041,6 +1042,7 @@ NS_INTERFACE_MAP_BEGIN(nsDocShell)
   NS_INTERFACE_MAP_ENTRY(nsILinkHandler)
   NS_INTERFACE_MAP_ENTRY(nsIClipboardCommands)
   NS_INTERFACE_MAP_ENTRY(nsIDOMStorageManager)
+  NS_INTERFACE_MAP_ENTRY(nsINetworkInterceptController)
 NS_INTERFACE_MAP_END_INHERITING(nsDocLoader)
 
 ///*****************************************************************************
@@ -4973,8 +4975,15 @@ nsDocShell::DisplayLoadError(nsresult aError, nsIURI* aURI,
     }
     tsi = do_QueryInterface(securityInfo);
     if (tsi) {
-      // Usually we should have aFailedChannel and get a detailed message
-      tsi->GetErrorMessage(getter_Copies(messageStr));
+      uint32_t securityState;
+      tsi->GetSecurityState(&securityState);
+      if (securityState & nsIWebProgressListener::STATE_USES_SSL_3) {
+        error.AssignLiteral("sslv3Used");
+        addHostPort = true;
+      } else {
+        // Usually we should have aFailedChannel and get a detailed message
+        tsi->GetErrorMessage(getter_Copies(messageStr));
+      }
     } else {
       // No channel, let's obtain the generic error message
       if (nsserr) {
@@ -7920,7 +7929,7 @@ nsDocShell::CreateAboutBlankContentViewer(nsIPrincipal* aPrincipal,
   mFiredUnloadEvent = false;
 
   nsCOMPtr<nsIDocumentLoaderFactory> docFactory =
-    nsContentUtils::FindInternalContentViewer("text/html");
+    nsContentUtils::FindInternalContentViewer(NS_LITERAL_CSTRING("text/html"));
 
   if (docFactory) {
     nsCOMPtr<nsIPrincipal> principal;
@@ -8878,7 +8887,7 @@ nsDocShell::RestoreFromHistory()
 }
 
 nsresult
-nsDocShell::CreateContentViewer(const char* aContentType,
+nsDocShell::CreateContentViewer(const nsACString& aContentType,
                                 nsIRequest* aRequest,
                                 nsIStreamListener** aContentHandler)
 {
@@ -9074,7 +9083,7 @@ nsDocShell::CreateContentViewer(const char* aContentType,
 }
 
 nsresult
-nsDocShell::NewContentViewerObj(const char* aContentType,
+nsDocShell::NewContentViewerObj(const nsACString& aContentType,
                                 nsIRequest* aRequest, nsILoadGroup* aLoadGroup,
                                 nsIStreamListener** aContentHandler,
                                 nsIContentViewer** aViewer)
@@ -13809,10 +13818,6 @@ nsDocShell::GetAppManifestURL(nsAString& aAppManifestURL)
 NS_IMETHODIMP
 nsDocShell::GetAsyncPanZoomEnabled(bool* aOut)
 {
-  if (TabChild* tabChild = TabChild::GetFrom(this)) {
-    *aOut = tabChild->IsAsyncPanZoomEnabled();
-    return NS_OK;
-  }
   *aOut = Preferences::GetBool("layers.async-pan-zoom.enabled", false);
   return NS_OK;
 }
@@ -13919,6 +13924,52 @@ nsDocShell::MaybeNotifyKeywordSearchLoading(const nsString& aProvider,
     }
   }
 #endif
+}
+
+NS_IMETHODIMP
+nsDocShell::ShouldPrepareForIntercept(nsIURI* aURI, bool aIsNavigate, bool* aShouldIntercept)
+{
+  *aShouldIntercept = false;
+  nsCOMPtr<nsIServiceWorkerManager> swm = mozilla::services::GetServiceWorkerManager();
+  if (!swm) {
+    return NS_OK;
+  }
+
+  if (aIsNavigate) {
+    return swm->IsAvailableForURI(aURI, aShouldIntercept);
+  }
+
+  nsCOMPtr<nsIDocument> doc = GetDocument();
+  if (!doc) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  return swm->IsControlled(doc, aShouldIntercept);
+}
+
+NS_IMETHODIMP
+nsDocShell::ChannelIntercepted(nsIInterceptedChannel* aChannel)
+{
+  nsCOMPtr<nsIServiceWorkerManager> swm = mozilla::services::GetServiceWorkerManager();
+  if (!swm) {
+    aChannel->Cancel();
+    return NS_OK;
+  }
+
+  bool isNavigation = false;
+  nsresult rv = aChannel->GetIsNavigation(&isNavigation);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  nsCOMPtr<nsIDocument> doc;
+
+  if (!isNavigation) {
+    doc = GetDocument();
+    if (!doc) {
+      return NS_ERROR_NOT_AVAILABLE;
+    }
+  }
+
+  return swm->DispatchFetchEvent(doc, aChannel);
 }
 
 NS_IMETHODIMP

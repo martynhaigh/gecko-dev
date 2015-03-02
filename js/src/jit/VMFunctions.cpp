@@ -36,10 +36,9 @@ namespace jit {
 // run before the constructors for static VMFunctions.
 /* static */ VMFunction *VMFunction::functions;
 
-AutoDetectInvalidation::AutoDetectInvalidation(JSContext *cx, MutableHandleValue rval,
-                                               IonScript *ionScript)
+AutoDetectInvalidation::AutoDetectInvalidation(JSContext *cx, MutableHandleValue rval)
   : cx_(cx),
-    ionScript_(ionScript ? ionScript : GetTopJitJSScript(cx)->ionScript()),
+    ionScript_(GetTopJitJSScript(cx)->ionScript()),
     rval_(rval),
     disabled_(false)
 { }
@@ -193,10 +192,12 @@ MutatePrototype(JSContext *cx, HandlePlainObject obj, HandleValue value)
 }
 
 bool
-InitProp(JSContext *cx, HandleNativeObject obj, HandlePropertyName name, HandleValue value)
+InitProp(JSContext *cx, HandleNativeObject obj, HandlePropertyName name, HandleValue value,
+         jsbytecode *pc)
 {
     RootedId id(cx, NameToId(name));
-    return NativeDefineProperty(cx, obj, id, value, nullptr, nullptr, JSPROP_ENUMERATE);
+    unsigned propAttrs = GetInitDataPropAttrs(JSOp(*pc));
+    return NativeDefineProperty(cx, obj, id, value, nullptr, nullptr, propAttrs);
 }
 
 template<bool Equal>

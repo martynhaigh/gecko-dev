@@ -66,7 +66,6 @@ class TabParent : public PBrowserParent
                 , public TabContext
 {
     typedef mozilla::dom::ClonedMessageData ClonedMessageData;
-    typedef mozilla::layout::ScrollingBehavior ScrollingBehavior;
 
     virtual ~TabParent();
 
@@ -192,6 +191,11 @@ public:
     virtual bool RecvEndIMEComposition(const bool& aCancel,
                                        bool* aNoCompositionEvent,
                                        nsString* aComposition) MOZ_OVERRIDE;
+    virtual bool RecvStartPluginIME(const WidgetKeyboardEvent& aKeyboardEvent,
+                                    const int32_t& aPanelX,
+                                    const int32_t& aPanelY,
+                                    nsString* aCommitted) MOZ_OVERRIDE;
+    virtual bool RecvSetPluginFocused(const bool& aFocused) MOZ_OVERRIDE;
     virtual bool RecvGetInputContext(int32_t* aIMEEnabled,
                                      int32_t* aIMEOpen,
                                      intptr_t* aNativeIMEContext) MOZ_OVERRIDE;
@@ -264,6 +268,7 @@ public:
     bool MapEventCoordinatesForChildProcess(mozilla::WidgetEvent* aEvent);
     void MapEventCoordinatesForChildProcess(const LayoutDeviceIntPoint& aOffset,
                                             mozilla::WidgetEvent* aEvent);
+    LayoutDeviceToCSSScale GetLayoutDeviceToCSSScale();
 
     virtual bool RecvRequestNativeKeyBindings(const mozilla::WidgetKeyboardEvent& aEvent,
                                               MaybeNativeKeyBinding* aBindings) MOZ_OVERRIDE;
@@ -394,7 +399,6 @@ protected:
     virtual bool RecvRemotePaintIsReady() MOZ_OVERRIDE;
 
     virtual bool RecvGetRenderFrameInfo(PRenderFrameParent* aRenderFrame,
-                                        ScrollingBehavior* aScrolling,
                                         TextureFactoryIdentifier* aTextureFactoryIdentifier,
                                         uint64_t* aLayersId) MOZ_OVERRIDE;
 
@@ -447,9 +451,6 @@ private:
 
     CSSPoint AdjustTapToChildWidget(const CSSPoint& aPoint);
 
-    // When true, we create a pan/zoom controller for our frame and
-    // notify it of input events targeting us.
-    bool UseAsyncPanZoom();
     // Update state prior to routing an APZ-aware event to the child process.
     // |aOutTargetGuid| will contain the identifier
     // of the APZC instance that handled the event. aOutTargetGuid may be

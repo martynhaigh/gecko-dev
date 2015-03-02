@@ -9,7 +9,6 @@
 #ifndef jsscript_h
 #define jsscript_h
 
-#include "mozilla/Atomics.h"
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/PodOperations.h"
 #include "mozilla/UniquePtr.h"
@@ -745,7 +744,7 @@ GeneratorKindFromBits(unsigned val) {
 /*
  * NB: after a successful XDR_DECODE, XDRScript callers must do any required
  * subsequent set-up of owning function or script object and then call
- * js_CallNewScriptHook.
+ * CallNewScriptHook.
  */
 template<XDRMode mode>
 bool
@@ -2050,7 +2049,7 @@ struct SharedScriptData
 {
     uint32_t length;
     uint32_t natoms;
-    mozilla::Atomic<bool, mozilla::ReleaseAcquire> marked;
+    bool marked;
     jsbytecode data[1];
 
     static SharedScriptData *new_(ExclusiveContext *cx, uint32_t codeLength,
@@ -2121,16 +2120,16 @@ struct GSNCache;
 jssrcnote *
 GetSrcNote(GSNCache &cache, JSScript *script, jsbytecode *pc);
 
-} /* namespace js */
-
 extern jssrcnote *
-js_GetSrcNote(JSContext *cx, JSScript *script, jsbytecode *pc);
+GetSrcNote(JSContext *cx, JSScript *script, jsbytecode *pc);
 
 extern jsbytecode *
-js_LineNumberToPC(JSScript *script, unsigned lineno);
+LineNumberToPC(JSScript *script, unsigned lineno);
 
 extern JS_FRIEND_API(unsigned)
-js_GetScriptLineExtent(JSScript *script);
+GetScriptLineExtent(JSScript *script);
+
+} /* namespace js */
 
 namespace js {
 

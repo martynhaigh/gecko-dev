@@ -153,6 +153,15 @@ class LMoveGroup : public LInstructionHelper<0, 0, 0>
         return LAllocation();
 #endif
     }
+
+    bool uses(Register reg) {
+        for (size_t i = 0; i < numMoves(); i++) {
+            LMove move = getMove(i);
+            if (*move.from() == LGeneralReg(reg) || *move.to() == LGeneralReg(reg))
+                return true;
+        }
+        return false;
+    }
 };
 
 
@@ -209,6 +218,21 @@ class LSimdSplatX4 : public LInstructionHelper<1, 1, 0>
 
     MSimdSplatX4 *mir() const {
         return mir_->toSimdSplatX4();
+    }
+};
+
+// Reinterpret the bits of a SIMD value with a different type.
+class LSimdReinterpretCast : public LInstructionHelper<1, 1, 0>
+{
+  public:
+    LIR_HEADER(SimdReinterpretCast)
+    explicit LSimdReinterpretCast(const LAllocation &v)
+    {
+        setOperand(0, v);
+    }
+
+    MSimdReinterpretCast *mir() const {
+        return mir_->toSimdReinterpretCast();
     }
 };
 
@@ -510,6 +534,9 @@ class LSimdBinaryBitwiseX4 : public LInstructionHelper<1, 2, 0>
     }
     MSimdBinaryBitwise::Operation operation() const {
         return mir_->toSimdBinaryBitwise()->operation();
+    }
+    const char *extraName() const {
+        return MSimdBinaryBitwise::OperationName(operation());
     }
     MIRType type() const {
         return mir_->type();
@@ -4649,6 +4676,22 @@ class LStoreUnboxedPointer : public LInstructionHelper<0, 3, 0>
     }
     const LAllocation *value() {
         return getOperand(2);
+    }
+};
+
+// If necessary, convert an unboxed object in a particular group to its native
+// representation.
+class LConvertUnboxedObjectToNative : public LInstructionHelper<0, 1, 0>
+{
+  public:
+    LIR_HEADER(ConvertUnboxedObjectToNative)
+
+    explicit LConvertUnboxedObjectToNative(const LAllocation &object) {
+        setOperand(0, object);
+    }
+
+    MConvertUnboxedObjectToNative *mir() {
+        return mir_->toConvertUnboxedObjectToNative();
     }
 };
 

@@ -640,11 +640,17 @@ nsDOMWindowUtils::GetWidgetModifiers(int32_t aModifiers)
   if (aModifiers & nsIDOMWindowUtils::MODIFIER_FN) {
     result |= mozilla::MODIFIER_FN;
   }
+  if (aModifiers & nsIDOMWindowUtils::MODIFIER_FNLOCK) {
+    result |= mozilla::MODIFIER_FNLOCK;
+  }
   if (aModifiers & nsIDOMWindowUtils::MODIFIER_NUMLOCK) {
     result |= mozilla::MODIFIER_NUMLOCK;
   }
   if (aModifiers & nsIDOMWindowUtils::MODIFIER_SCROLLLOCK) {
     result |= mozilla::MODIFIER_SCROLLLOCK;
+  }
+  if (aModifiers & nsIDOMWindowUtils::MODIFIER_SYMBOL) {
+    result |= mozilla::MODIFIER_SYMBOL;
   }
   if (aModifiers & nsIDOMWindowUtils::MODIFIER_SYMBOLLOCK) {
     result |= mozilla::MODIFIER_SYMBOLLOCK;
@@ -2370,31 +2376,6 @@ nsDOMWindowUtils::IsInModalState(bool *retval)
   NS_ENSURE_STATE(window);
 
   *retval = static_cast<nsGlobalWindow*>(window.get())->IsInModalState();
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsDOMWindowUtils::GetParent(JS::Handle<JS::Value> aObject,
-                            JSContext* aCx,
-                            JS::MutableHandle<JS::Value> aParent)
-{
-  MOZ_RELEASE_ASSERT(nsContentUtils::IsCallerChrome());
-
-  // First argument must be an object.
-  if (aObject.isPrimitive()) {
-    return NS_ERROR_XPC_BAD_CONVERT_JS;
-  }
-
-  JS::Rooted<JSObject*> parent(aCx, JS_GetParent(&aObject.toObject()));
-
-  // Outerize if necessary.
-  if (parent) {
-    if (js::ObjectOp outerize = js::GetObjectClass(parent)->ext.outerObject) {
-      parent = outerize(aCx, parent);
-    }
-  }
-
-  aParent.setObject(*parent);
   return NS_OK;
 }
 

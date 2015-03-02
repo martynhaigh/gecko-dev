@@ -8,6 +8,7 @@
 
 #include "mozilla/ArrayUtils.h"
 #include "mozilla/BasicEvents.h"
+#include "mozilla/EventDispatcher.h"
 #include "mozilla/gfx/PathHelpers.h"
 #include "mozilla/Likely.h"
 #include "mozilla/Maybe.h"
@@ -3238,7 +3239,7 @@ nsLayoutUtils::PaintFrame(nsRenderingContext* aRenderingContext, nsIFrame* aFram
   if (gfxPrefs::DumpClientLayers()) {
     std::stringstream ss;
     FrameLayerBuilder::DumpRetainedLayerTree(layerManager, ss, false);
-    printf_stderr("%s", ss.str().c_str());
+    print_stderr(ss);
   }
 #endif
 
@@ -4882,15 +4883,26 @@ nsLayoutUtils::ComputeSizeWithIntrinsicDimensions(WritingMode aWM,
         tentBSize = nsPresContext::CSSPixelsToAppUnits(150);
       }
 
-      nsSize autoSize =
-        ComputeAutoSizeWithIntrinsicDimensions(minISize, minBSize,
-                                               maxISize, maxBSize,
-                                               tentISize, tentBSize);
-      // The nsSize that ComputeAutoSizeWithIntrinsicDimensions returns will
-      // actually contain logical values if the parameters passed to it were
-      // logical coordinates, so we do NOT perform a physical-to-logical
-      // conversion here, but just assign the fields directly to our result.
-      return LogicalSize(aWM, autoSize.width, autoSize.height);
+      if (aIntrinsicRatio != nsSize(0, 0)) {
+        nsSize autoSize =
+          ComputeAutoSizeWithIntrinsicDimensions(minISize, minBSize,
+                                                 maxISize, maxBSize,
+                                                 tentISize, tentBSize);
+        // The nsSize that ComputeAutoSizeWithIntrinsicDimensions returns will
+        // actually contain logical values if the parameters passed to it were
+        // logical coordinates, so we do NOT perform a physical-to-logical
+        // conversion here, but just assign the fields directly to our result.
+        iSize = autoSize.width;
+        bSize = autoSize.height;
+      } else {
+        // No intrinsic ratio, so just clamp the dimensions
+        // independently without calling
+        // ComputeAutoSizeWithIntrinsicDimensions, which deals with
+        // propagating these changes to the other dimension (and would
+        // be incorrect when there is no intrinsic ratio).
+        iSize = NS_CSS_MINMAX(tentISize, minISize, maxISize);
+        bSize = NS_CSS_MINMAX(tentBSize, minBSize, maxBSize);
+      }
     } else {
 
       // 'auto' iSize, non-'auto' bSize
@@ -5853,6 +5865,20 @@ ComputeSnappedImageDrawingParameters(gfxContext*     aCtx,
 
     gfxRect anchoredDestRect(anchorPoint, scaledDest);
     gfxRect anchoredImageRect(imageSpaceAnchorPoint, imageSize);
+
+    // Calculate anchoredDestRect with snapped fill rect when the devPixelFill rect
+    // corresponds to just a single tile in that direction
+    if (fill.Width() != devPixelFill.Width() &&
+        devPixelDest.x == devPixelFill.x &&
+        devPixelDest.XMost() == devPixelFill.XMost()) {
+      anchoredDestRect.width = fill.width;
+    }
+    if (fill.Height() != devPixelFill.Height() &&
+        devPixelDest.y == devPixelFill.y &&
+        devPixelDest.YMost() == devPixelFill.YMost()) {
+      anchoredDestRect.height = fill.height;
+    }
+
     transform = TransformBetweenRects(anchoredImageRect, anchoredDestRect);
     invTransform = TransformBetweenRects(anchoredDestRect, anchoredImageRect);
   }

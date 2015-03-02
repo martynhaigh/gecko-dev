@@ -398,15 +398,15 @@ IsNormalObjectField(ExclusiveContext *cx, ParseNode *pn)
 {
     return pn->isKind(PNK_COLON) &&
            pn->getOp() == JSOP_INITPROP &&
-           BinaryLeft(pn)->isKind(PNK_NAME) &&
-           BinaryLeft(pn)->name() != cx->names().proto;
+           BinaryLeft(pn)->isKind(PNK_OBJECT_PROPERTY_NAME);
 }
 
 static inline PropertyName *
 ObjectNormalFieldName(ExclusiveContext *cx, ParseNode *pn)
 {
     MOZ_ASSERT(IsNormalObjectField(cx, pn));
-    return BinaryLeft(pn)->name();
+    MOZ_ASSERT(BinaryLeft(pn)->isKind(PNK_OBJECT_PROPERTY_NAME));
+    return BinaryLeft(pn)->pn_atom->asPropertyName();
 }
 
 static inline ParseNode *
@@ -1481,7 +1481,7 @@ class MOZ_STACK_CLASS ModuleCompiler
                                            errorString_.get());
         }
         if (errorOverRecursed_)
-            js_ReportOverRecursed(cx_);
+            ReportOverRecursed(cx_);
     }
 
     bool init() {
@@ -1548,7 +1548,7 @@ class MOZ_STACK_CLASS ModuleCompiler
         // "use strict" should be added to the source if we are in an implicit
         // strict context, see also comment above addUseStrict in
         // js::FunctionToString.
-        bool strict = parser_.pc->sc->strict && !parser_.pc->sc->hasExplicitUseStrict();
+        bool strict = parser_.pc->sc->strict() && !parser_.pc->sc->hasExplicitUseStrict();
         module_ = cx_->new_<AsmJSModule>(parser_.ss, srcStart, srcBodyStart, strict,
                                          cx_->canUseSignalHandlers());
         if (!module_)
@@ -2519,7 +2519,9 @@ class FunctionCompiler
         const JitCompileOptions options;
         mirGen_ = lifo_.new_<MIRGenerator>(CompileCompartment::get(cx()->compartment()),
                                            options, alloc_,
-                                           graph_, info_, optimizationInfo);
+                                           graph_, info_, optimizationInfo,
+                                           &m().onOutOfBoundsLabel(),
+                                           m().usesSignalHandlersForOOB());
 
         if (!newBlock(/* pred = */ nullptr, &curBlock_, fn_))
             return false;
@@ -2871,7 +2873,7 @@ class FunctionCompiler
         if (inDeadCode())
             return nullptr;
 
-        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK && !m().usesSignalHandlersForOOB();
+        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK;
         MOZ_ASSERT(!Scalar::isSimdType(accessType), "SIMD loads should use loadSimdHeap");
         MAsmJSLoadHeap *load = MAsmJSLoadHeap::New(alloc(), accessType, ptr, needsBoundsCheck);
         curBlock_->add(load);
@@ -2884,11 +2886,10 @@ class FunctionCompiler
         if (inDeadCode())
             return nullptr;
 
-        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK && !m().usesSignalHandlersForOOB();
+        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK;
         MOZ_ASSERT(Scalar::isSimdType(accessType), "loadSimdHeap can only load from a SIMD view");
-        Label *outOfBoundsLabel = &m().onOutOfBoundsLabel();
         MAsmJSLoadHeap *load = MAsmJSLoadHeap::New(alloc(), accessType, ptr, needsBoundsCheck,
-                                                   outOfBoundsLabel, numElems);
+                                                   numElems);
         curBlock_->add(load);
         return load;
     }
@@ -2898,7 +2899,7 @@ class FunctionCompiler
         if (inDeadCode())
             return;
 
-        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK && !m().usesSignalHandlersForOOB();
+        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK;
         MOZ_ASSERT(!Scalar::isSimdType(accessType), "SIMD stores should use loadSimdHeap");
         MAsmJSStoreHeap *store = MAsmJSStoreHeap::New(alloc(), accessType, ptr, v, needsBoundsCheck);
         curBlock_->add(store);
@@ -2910,11 +2911,10 @@ class FunctionCompiler
         if (inDeadCode())
             return;
 
-        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK && !m().usesSignalHandlersForOOB();
+        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK;
         MOZ_ASSERT(Scalar::isSimdType(accessType), "storeSimdHeap can only load from a SIMD view");
-        Label *outOfBoundsLabel = &m().onOutOfBoundsLabel();
         MAsmJSStoreHeap *store = MAsmJSStoreHeap::New(alloc(), accessType, ptr, v, needsBoundsCheck,
-                                                      outOfBoundsLabel, numElems);
+                                                      numElems);
         curBlock_->add(store);
     }
 
@@ -2931,9 +2931,8 @@ class FunctionCompiler
         if (inDeadCode())
             return nullptr;
 
-        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK && !m().usesSignalHandlersForOOB();
+        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK;
         MAsmJSLoadHeap *load = MAsmJSLoadHeap::New(alloc(), accessType, ptr, needsBoundsCheck,
-                                                   /* outOfBoundsLabel = */ nullptr,
                                                    /* numElems */ 0,
                                                    MembarBeforeLoad, MembarAfterLoad);
         curBlock_->add(load);
@@ -2945,9 +2944,8 @@ class FunctionCompiler
         if (inDeadCode())
             return;
 
-        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK && !m().usesSignalHandlersForOOB();
+        bool needsBoundsCheck = chk == NEEDS_BOUNDS_CHECK;
         MAsmJSStoreHeap *store = MAsmJSStoreHeap::New(alloc(), accessType, ptr, v, needsBoundsCheck,
-                                                      /* outOfBoundsLabel = */ nullptr,
                                                       /* numElems = */ 0,
                                                       MembarBeforeStore, MembarAfterStore);
         curBlock_->add(store);
@@ -8183,12 +8181,14 @@ StackDecrementForCall(MacroAssembler &masm, uint32_t alignment, const VectorT &a
 }
 
 #if defined(JS_CODEGEN_ARM)
-// The ARM system ABI also includes d15 in the non volatile float registers.
+// The ARM system ABI also includes d15 & s31 in the non volatile float registers.
 // Also exclude lr (a.k.a. r14) as we preserve it manually)
 static const RegisterSet NonVolatileRegs =
     RegisterSet(GeneralRegisterSet(Registers::NonVolatileMask &
                                    ~(uint32_t(1) << Registers::lr)),
-                FloatRegisterSet(FloatRegisters::NonVolatileMask | (1ULL << FloatRegisters::d15)));
+                FloatRegisterSet(FloatRegisters::NonVolatileMask
+                                 | (1ULL << FloatRegisters::d15)
+                                 | (1ULL << FloatRegisters::s31)));
 #else
 static const RegisterSet NonVolatileRegs =
     RegisterSet(GeneralRegisterSet(Registers::NonVolatileMask),
@@ -8371,11 +8371,11 @@ GenerateEntry(ModuleCompiler &m, unsigned exportIndex)
         break;
       case RetType::Int32x4:
         // We don't have control on argv alignment, do an unaligned access.
-        masm.storeUnalignedInt32x4(ReturnSimdReg, Address(argv, 0));
+        masm.storeUnalignedInt32x4(ReturnInt32x4Reg, Address(argv, 0));
         break;
       case RetType::Float32x4:
         // We don't have control on argv alignment, do an unaligned access.
-        masm.storeUnalignedFloat32x4(ReturnSimdReg, Address(argv, 0));
+        masm.storeUnalignedFloat32x4(ReturnFloat32x4Reg, Address(argv, 0));
         break;
     }
 

@@ -1255,8 +1255,7 @@ BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
               const nsLineList::iterator* aForFrameLine,
               nsTextFrame::TextRunType aWhichTextRun)
 {
-  NS_ASSERTION(aForFrame || aLineContainer,
-               "One of aForFrame or aLineContainer must be set!");
+  MOZ_ASSERT(aForFrame, "for no frame?");
   NS_ASSERTION(!aForFrameLine || aLineContainer,
                "line but no line container");
   
@@ -1268,24 +1267,20 @@ BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
     }
     aLineContainer = FindLineContainer(lineContainerChild);
   } else {
-    NS_ASSERTION(!aForFrame ||
-                 (aLineContainer == FindLineContainer(aForFrame) ||
-                  aLineContainer->GetType() == nsGkAtoms::rubyTextContainerFrame ||
+    NS_ASSERTION((aLineContainer == FindLineContainer(aForFrame) ||
                   (aLineContainer->GetType() == nsGkAtoms::letterFrame &&
                    aLineContainer->IsFloating())),
                  "Wrong line container hint");
   }
 
-  if (aForFrame) {
-    if (aForFrame->HasAnyStateBits(TEXT_IS_IN_TOKEN_MATHML)) {
-      aLineContainer->AddStateBits(TEXT_IS_IN_TOKEN_MATHML);
-      if (aForFrame->HasAnyStateBits(NS_FRAME_IS_IN_SINGLE_CHAR_MI)) {
-        aLineContainer->AddStateBits(NS_FRAME_IS_IN_SINGLE_CHAR_MI);
-      }
+  if (aForFrame->HasAnyStateBits(TEXT_IS_IN_TOKEN_MATHML)) {
+    aLineContainer->AddStateBits(TEXT_IS_IN_TOKEN_MATHML);
+    if (aForFrame->HasAnyStateBits(NS_FRAME_IS_IN_SINGLE_CHAR_MI)) {
+      aLineContainer->AddStateBits(NS_FRAME_IS_IN_SINGLE_CHAR_MI);
     }
-    if (aForFrame->HasAnyStateBits(NS_FRAME_MATHML_SCRIPT_DESCENDANT)) {
-      aLineContainer->AddStateBits(NS_FRAME_MATHML_SCRIPT_DESCENDANT);
-    }
+  }
+  if (aForFrame->HasAnyStateBits(NS_FRAME_MATHML_SCRIPT_DESCENDANT)) {
+    aLineContainer->AddStateBits(NS_FRAME_MATHML_SCRIPT_DESCENDANT);
   }
 
   nsPresContext* presContext = aLineContainer->PresContext();
@@ -1295,13 +1290,26 @@ BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
   nsBlockFrame* block = nsLayoutUtils::GetAsBlock(aLineContainer);
 
   if (!block) {
-    NS_ASSERTION(!aLineContainer->GetPrevInFlow() && !aLineContainer->GetNextInFlow(),
-                 "Breakable non-block line containers not supported");
+    nsIFrame* textRunContainer = aLineContainer;
+    if (aLineContainer->GetType() == nsGkAtoms::rubyTextContainerFrame) {
+      textRunContainer = aForFrame;
+      while (textRunContainer &&
+             textRunContainer->GetType() != nsGkAtoms::rubyTextFrame) {
+        textRunContainer = textRunContainer->GetParent();
+      }
+      MOZ_ASSERT(textRunContainer &&
+                 textRunContainer->GetParent() == aLineContainer);
+    } else {
+      NS_ASSERTION(
+        !aLineContainer->GetPrevInFlow() && !aLineContainer->GetNextInFlow(),
+        "Breakable non-block line containers other than "
+        "ruby text container is not supported");
+    }
     // Just loop through all the children of the linecontainer ... it's really
     // just one line
     scanner.SetAtStartOfLine();
     scanner.SetCommonAncestorWithLastFrame(nullptr);
-    nsIFrame* child = aLineContainer->GetFirstPrincipalChild();
+    nsIFrame* child = textRunContainer->GetFirstPrincipalChild();
     while (child) {
       scanner.ScanFrame(child);
       child = child->GetNextSibling();
@@ -4531,26 +4539,11 @@ nsTextFrame::CharacterDataChanged(CharacterDataChangeInfo* aInfo)
   return NS_OK;
 }
 
-/* virtual */ void
-nsTextFrame::DidSetStyleContext(nsStyleContext* aOldStyleContext)
-{
-  // A belt-and-braces check just in case we never get the
-  // MarkIntrinsicISizesDirty call from the style system.
-  if (StyleText()->mTextTransform == NS_STYLE_TEXT_TRANSFORM_CAPITALIZE &&
-      mTextRun &&
-      !(mTextRun->GetFlags() & nsTextFrameUtils::TEXT_IS_TRANSFORMED)) {
-    NS_ERROR("the current textrun doesn't match the style");
-    // The current textrun is now of the wrong type.
-    ClearTextRuns();
-  }
-  nsFrame::DidSetStyleContext(aOldStyleContext);
-}
-
-class nsDisplayTextGeometry : public nsDisplayItemGenericGeometry
+class nsDisplayTextGeometry : public nsCharClipGeometry
 {
 public:
-  nsDisplayTextGeometry(nsDisplayItem* aItem, nsDisplayListBuilder* aBuilder)
-    : nsDisplayItemGenericGeometry(aItem, aBuilder)
+  nsDisplayTextGeometry(nsCharClipDisplayItem* aItem, nsDisplayListBuilder* aBuilder)
+    : nsCharClipGeometry(aItem, aBuilder)
   {
     nsTextFrame* f = static_cast<nsTextFrame*>(aItem->Frame());
     f->GetTextDecorations(f->PresContext(), nsTextFrame::eResolvedColors, mDecorations);
@@ -4621,6 +4614,8 @@ public:
     nsRect newRect = geometry->mBounds;
     nsRect oldRect = GetBounds(aBuilder, &snap);
     if (decorations != geometry->mDecorations ||
+        mLeftEdge != geometry->mLeftEdge ||
+        mRightEdge != geometry->mRightEdge ||
         !oldRect.IsEqualInterior(newRect) ||
         !geometry->mBorderRect.IsEqualInterior(GetBorderRect())) {
       aInvalidRegion->Or(oldRect, newRect);
@@ -5221,18 +5216,13 @@ PaintDecorationLine(nsIFrame* aFrame,
 {
   nscolor lineColor = aOverrideColor ? *aOverrideColor : aColor;
   if (aCallbacks) {
-    if (aDecorationType == eNormalDecoration) {
-      aCallbacks->NotifyBeforeDecorationLine(lineColor);
-    } else {
-      aCallbacks->NotifyBeforeSelectionDecorationLine(lineColor);
-    }
-    nsCSSRendering::DecorationLineToPath(aFrame, aCtx, aDirtyRect, lineColor,
-      aPt, aICoordInFrame, aLineSize, aAscent, aOffset, aDecoration, aStyle,
+    Rect path = nsCSSRendering::DecorationLineToPath(ToRect(aDirtyRect),
+      ToPoint(aPt), ToSize(aLineSize), aAscent, aOffset, aDecoration, aStyle,
       aVertical, aDescentLimit);
     if (aDecorationType == eNormalDecoration) {
-      aCallbacks->NotifyDecorationLinePathEmitted();
+      aCallbacks->PaintDecorationLine(path, lineColor);
     } else {
-      aCallbacks->NotifySelectionDecorationLinePathEmitted();
+      aCallbacks->PaintSelectionDecorationLine(path, lineColor);
     }
   } else {
     nsCSSRendering::PaintDecorationLine(aFrame, *aCtx->GetDrawTarget(),
@@ -8516,6 +8506,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   bool emptyTextAtStartOfLine = atStartOfLine && length == 0;
   if (!breakAfter && charsFit == length && !emptyTextAtStartOfLine &&
       transformedOffset + transformedLength == mTextRun->GetLength() &&
+      !StyleContext()->IsInlineDescendantOfRuby() &&
       (mTextRun->GetFlags() & nsTextFrameUtils::TEXT_HAS_TRAILING_BREAK)) {
     // We placed all the text in the textrun and we have a break opportunity at
     // the end of the textrun. We need to record it because the following

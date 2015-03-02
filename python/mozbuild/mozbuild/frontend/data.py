@@ -853,6 +853,24 @@ class FinalTargetFiles(ContextDerived):
         self.target = target
 
 
+class GeneratedFile(ContextDerived):
+    """Represents a generated file."""
+
+    __slots__ = (
+        'script',
+        'method',
+        'output',
+        'inputs',
+    )
+
+    def __init__(self, context, script, method, output, inputs):
+        ContextDerived.__init__(self, context)
+        self.script = script
+        self.method = method
+        self.output = output
+        self.inputs = inputs
+
+
 class ClassPathEntry(object):
     """Represents a classpathentry in an Android Eclipse project."""
 

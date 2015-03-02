@@ -97,6 +97,20 @@ public:
     return mRefCnt;
   }
 
+#ifdef DEBUG
+  void FrameAddRef() {
+    ++mFrameRefCnt;
+  }
+
+  void FrameRelease() {
+    --mFrameRefCnt;
+  }
+
+  uint32_t FrameRefCnt() const {
+    return mFrameRefCnt;
+  }
+#endif
+
   bool HasSingleReference() const {
     NS_ASSERTION(mRefCnt != 0,
                  "do not call HasSingleReference on a newly created "
@@ -310,8 +324,6 @@ public:
   #include "nsStyleStructList.h"
   #undef STYLE_STRUCT
 
-  void* GetUniqueStyleData(const nsStyleStructID& aSID);
-
   /**
    * Compute the style changes needed during restyling when this style
    * context is being replaced by aOther.  (This is nonsymmetric since
@@ -420,6 +432,9 @@ private:
 
   void AddChild(nsStyleContext* aChild);
   void RemoveChild(nsStyleContext* aChild);
+
+  void* GetUniqueStyleData(const nsStyleStructID& aSID);
+  void* CreateEmptyStyleData(const nsStyleStructID& aSID);
 
   void ApplyStyleFixups(bool aSkipParentDisplayBasedStyleFixup);
 
@@ -551,6 +566,9 @@ private:
   uint32_t                mRefCnt;
 
 #ifdef DEBUG
+  uint32_t                mFrameRefCnt; // number of frames that use this
+                                        // as their style context
+
   nsStyleStructID         mComputingStruct;
 
   static bool DependencyAllowed(nsStyleStructID aOuterSID,

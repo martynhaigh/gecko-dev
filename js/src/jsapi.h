@@ -598,59 +598,6 @@ class HandleValueArray
     }
 };
 
-// Container for futex methods, used to implement the Atomics primitives.
-//
-// Client code calls JS_SetContextFutexAPI to install an instance of a
-// subclass of PerRuntimeFutexAPI on the runtime.  Implementations
-// of the Atomics primitives will use that object, if it is present
-// (and fail, if not).
-//
-// The API may differ among clients; for example, the APIs installed by
-// a worker and by the main window event thread are possibly different.
-
-class PerRuntimeFutexAPI
-{
-  public:
-    virtual ~PerRuntimeFutexAPI() {}
-
-    // Acquire the GLOBAL lock for all futex resources in all domains.
-    virtual void lock() = 0;
-
-    // Release the GLOBAL lock.
-    virtual void unlock() = 0;
-
-    enum WakeResult {
-        Woken,                  // Woken by futexWait
-        Timedout,               // Woken by timeout
-        ErrorException,         // Propagate a pending exception
-        InterruptForTerminate,  // Woken by a request to terminate the worker, throw an uncatchable
-        WaitingNotAllowed,      // wait() was not allowed to block on this thread (permanently)
-        ErrorTooLong            // Implementation limit
-    };
-
-    // Block the thread.
-    //
-    // The lock must be held around this call, see lock() and unlock().
-    virtual WakeResult wait(double timeout_ns) = 0;
-
-    // Wake the thread represented by this PerRuntimeFutexAPI.
-    //
-    // The lock must be held around this call, see lock() and unlock().
-    // Since the sleeping thread also needs that lock to wake up, the
-    // thread will not actually wake up until the caller of wake()
-    // releases the lock.
-    virtual void wake() = 0;
-};
-
-JS_PUBLIC_API(JS::PerRuntimeFutexAPI *)
-GetRuntimeFutexAPI(JSRuntime *rt);
-
-// Transfers ownership of fx to rt; if rt's futexAPI field is not null when rt is
-// deleted then rt's destructor will delete that value.  If fx is null in this
-// call then ownership of a held nonnull value is transfered away from rt.
-JS_PUBLIC_API(void)
-SetRuntimeFutexAPI(JSRuntime *rt, JS::PerRuntimeFutexAPI *fx);
-
 }  /* namespace JS */
 
 /************************************************************************/
@@ -791,8 +738,7 @@ typedef bool
  * guaranteed not to wrap a function.
  */
 typedef JSObject *
-(* JSWrapObjectCallback)(JSContext *cx, JS::HandleObject existing, JS::HandleObject obj,
-                         JS::HandleObject parent);
+(* JSWrapObjectCallback)(JSContext *cx, JS::HandleObject existing, JS::HandleObject obj);
 
 /*
  * Callback used by the wrap hook to ask the embedding to prepare an object
@@ -2198,7 +2144,7 @@ inline int CheckIsStrictPropertyOp(JSStrictPropertyOp op);
 #define JS_SELF_HOSTED_GET(name, getterName, flags) \
     {name, \
      uint8_t(JS_CHECK_ACCESSOR_FLAGS(flags) | JSPROP_SHARED | JSPROP_GETTER), \
-     { nullptr, JS_CAST_STRING_TO(getterName, const JSJitInfo *) }, \
+     { { nullptr, JS_CAST_STRING_TO(getterName, const JSJitInfo *) } }, \
      JSNATIVE_WRAPPER(nullptr) }
 #define JS_SELF_HOSTED_GETSET(name, getterName, setterName, flags) \
     {name, \
@@ -2297,9 +2243,6 @@ JS_SetPrototype(JSContext *cx, JS::HandleObject obj, JS::HandleObject proto);
 
 extern JS_PUBLIC_API(JSObject *)
 JS_GetParent(JSObject *obj);
-
-extern JS_PUBLIC_API(bool)
-JS_SetParent(JSContext *cx, JS::HandleObject obj, JS::HandleObject parent);
 
 extern JS_PUBLIC_API(JSObject *)
 JS_GetConstructor(JSContext *cx, JS::Handle<JSObject*> proto);
@@ -2516,7 +2459,7 @@ extern JS_PUBLIC_API(void)
 JS_FireOnNewGlobalObject(JSContext *cx, JS::HandleObject global);
 
 extern JS_PUBLIC_API(JSObject *)
-JS_NewObject(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> parent = JS::NullPtr());
+JS_NewObject(JSContext *cx, const JSClass *clasp);
 
 /* Queries the [[Extensible]] property of the object. */
 extern JS_PUBLIC_API(bool)
@@ -2533,8 +2476,7 @@ JS_GetObjectRuntime(JSObject *obj);
  * If proto is JS::NullPtr, the JS object will have `null` as [[Prototype]].
  */
 extern JS_PUBLIC_API(JSObject *)
-JS_NewObjectWithGivenProto(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> proto,
-                           JS::Handle<JSObject*> parent = JS::NullPtr());
+JS_NewObjectWithGivenProto(JSContext *cx, const JSClass *clasp, JS::Handle<JSObject*> proto);
 
 // Creates a new plain object, like `new Object()`, with Object.prototype as [[Prototype]].
 extern JS_PUBLIC_API(JSObject *)
@@ -3693,7 +3635,7 @@ JS_DecompileFunctionBody(JSContext *cx, JS::Handle<JSFunction*> fun, unsigned in
  * names) of the execution context for script.
  *
  * Using obj as the variables object is problematic if obj's parent (which is
- * the scope chain link; see JS_SetParent and JS_NewObject) is not null: in
+ * the scope chain link) is not null, which in practice is always true: in
  * this case, variables created by 'var x = 0', e.g., go in obj, but variables
  * created by assignment to an unbound id, 'x = 0', go in the last object on
  * the scope chain linked by parent.
@@ -5098,12 +5040,86 @@ SetOutOfMemoryCallback(JSRuntime *rt, OutOfMemoryCallback cb, void *data);
 
 
 /*
- * Capture the current call stack as a chain of SavedFrame objects, and set
- * |stackp| to the SavedFrame for the newest stack frame. If |maxFrameCount| is
- * non-zero, capture at most the youngest |maxFrameCount| frames.
+ * Capture the current call stack as a chain of SavedFrame JSObjects, and set
+ * |stackp| to the SavedFrame for the youngest stack frame, or nullptr if there
+ * are no JS frames on the stack. If |maxFrameCount| is non-zero, capture at
+ * most the youngest |maxFrameCount| frames.
  */
 extern JS_PUBLIC_API(bool)
 CaptureCurrentStack(JSContext *cx, MutableHandleObject stackp, unsigned maxFrameCount = 0);
+
+/*
+ * Accessors for working with SavedFrame JSObjects
+ *
+ * Each of these functions assert that if their `HandleObject savedFrame`
+ * argument is non-null, its JSClass is the SavedFrame class (or it is a
+ * cross-compartment or Xray wrapper around an object with the SavedFrame class)
+ * and the object is not the SavedFrame.prototype object.
+ *
+ * Each of these functions will find the first SavedFrame object in the chain
+ * whose underlying stack frame principals are subsumed by the cx's current
+ * compartment's principals, and operate on that SavedFrame object. This
+ * prevents leaking information about privileged frames to un-privileged
+ * callers. As a result, the SavedFrame in parameters do _NOT_ need to be in the
+ * same compartment as the cx, and the various out parameters are _NOT_
+ * guaranteed to be in the same compartment as cx.
+ *
+ * Additionally, it may be the case that there is no such SavedFrame object
+ * whose captured frame's principals are subsumed by the caller's compartment's
+ * principals! If the `HandleObject savedFrame` argument is null, or the
+ * caller's principals do not subsume any of the chained SavedFrame object's
+ * principals, `SavedFrameResult::AccessDenied` is returned and a (hopefully)
+ * sane default value is chosen for the out param.
+ */
+
+enum class SavedFrameResult {
+    Ok,
+    AccessDenied
+};
+
+/*
+ * Given a SavedFrame JSObject, get its source property. Defaults to the empty
+ * string.
+ */
+extern JS_PUBLIC_API(SavedFrameResult)
+GetSavedFrameSource(JSContext *cx, HandleObject savedFrame, MutableHandleString sourcep);
+
+/*
+ * Given a SavedFrame JSObject, get its line property. Defaults to 0.
+ */
+extern JS_PUBLIC_API(SavedFrameResult)
+GetSavedFrameLine(JSContext *cx, HandleObject savedFrame, uint32_t *linep);
+
+/*
+ * Given a SavedFrame JSObject, get its column property. Defaults to 0.
+ */
+extern JS_PUBLIC_API(SavedFrameResult)
+GetSavedFrameColumn(JSContext *cx, HandleObject savedFrame, uint32_t *columnp);
+
+/*
+ * Given a SavedFrame JSObject, get its functionDisplayName string, or nullptr
+ * if SpiderMonkey was unable to infer a name for the captured frame's
+ * function. Defaults to nullptr.
+ */
+extern JS_PUBLIC_API(SavedFrameResult)
+GetSavedFrameFunctionDisplayName(JSContext *cx, HandleObject savedFrame, MutableHandleString namep);
+
+/*
+ * Given a SavedFrame JSObject, get its parent SavedFrame object or nullptr if
+ * it is the oldest frame in the stack. The `parentp` out parameter is _NOT_
+ * guaranteed to be in the cx's compartment. Defaults to nullptr.
+ */
+extern JS_PUBLIC_API(SavedFrameResult)
+GetSavedFrameParent(JSContext *cx, HandleObject savedFrame, MutableHandleObject parentp);
+
+/*
+ * Given a SavedFrame JSObject stack, stringify it in the same format as
+ * Error.prototype.stack. The stringified stack out parameter is placed in the
+ * cx's compartment. Defaults to the empty string.
+ */
+extern JS_PUBLIC_API(bool)
+StringifySavedFrameStack(JSContext *cx, HandleObject stack, MutableHandleString stringp);
+
 
 } /* namespace JS */
 

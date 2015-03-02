@@ -74,7 +74,7 @@ js::ToSimdConstant(JSContext *cx, HandleValue v, jit::SimdConstant *out)
 {
     typedef typename V::Elem Elem;
     if (!IsVectorObject<V>(v)) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_SIMD_NOT_A_VECTOR);
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_SIMD_NOT_A_VECTOR);
         return false;
     }
 
@@ -101,7 +101,7 @@ static bool GetSimdLane(JSContext *cx, unsigned argc, Value *vp)
 
     CallArgs args = CallArgsFromVp(argc, vp);
     if (!IsVectorObject<SimdType>(args.thisv())) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
                              SimdTypeDescr::class_.name, laneNames[lane],
                              InformalValueTypeName(args.thisv()));
         return false;
@@ -138,7 +138,7 @@ static bool SignMask(JSContext *cx, unsigned argc, Value *vp)
 
     CallArgs args = CallArgsFromVp(argc, vp);
     if (!args.thisv().isObject() || !args.thisv().toObject().is<TypedObject>()) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
                              SimdTypeDescr::class_.name, "signMask",
                              InformalValueTypeName(args.thisv()));
         return false;
@@ -147,7 +147,7 @@ static bool SignMask(JSContext *cx, unsigned argc, Value *vp)
     TypedObject &typedObj = args.thisv().toObject().as<TypedObject>();
     TypeDescr &descr = typedObj.typeDescr();
     if (descr.kind() != type::Simd || descr.as<SimdTypeDescr>().type() != SimdType::type) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
                              SimdTypeDescr::class_.name, "signMask",
                              InformalValueTypeName(args.thisv()));
         return false;
@@ -486,7 +486,7 @@ SIMDObject::initClass(JSContext *cx, Handle<GlobalObject *> global)
 }
 
 JSObject *
-js_InitSIMDClass(JSContext *cx, HandleObject obj)
+js::InitSIMDClass(JSContext *cx, HandleObject obj)
 {
     MOZ_ASSERT(obj->is<GlobalObject>());
     Rooted<GlobalObject *> global(cx, &obj->as<GlobalObject>());
@@ -495,7 +495,7 @@ js_InitSIMDClass(JSContext *cx, HandleObject obj)
 
 template<typename V>
 JSObject *
-js::CreateSimd(JSContext *cx, typename V::Elem *data)
+js::CreateSimd(JSContext *cx, const typename V::Elem *data)
 {
     typedef typename V::Elem Elem;
     Rooted<TypeDescr*> typeDescr(cx, &V::GetTypeDescr(*cx->global()));
@@ -510,9 +510,9 @@ js::CreateSimd(JSContext *cx, typename V::Elem *data)
     return result;
 }
 
-template JSObject *js::CreateSimd<Float32x4>(JSContext *cx, Float32x4::Elem *data);
-template JSObject *js::CreateSimd<Float64x2>(JSContext *cx, Float64x2::Elem *data);
-template JSObject *js::CreateSimd<Int32x4>(JSContext *cx, Int32x4::Elem *data);
+template JSObject *js::CreateSimd<Float32x4>(JSContext *cx, const Float32x4::Elem *data);
+template JSObject *js::CreateSimd<Float64x2>(JSContext *cx, const Float64x2::Elem *data);
+template JSObject *js::CreateSimd<Int32x4>(JSContext *cx, const Int32x4::Elem *data);
 
 namespace js {
 // Unary SIMD operators
@@ -644,7 +644,7 @@ struct ShiftRightLogical {
 static inline bool
 ErrorBadArgs(JSContext *cx)
 {
-    JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_TYPED_ARRAY_BAD_ARGS);
+    JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_TYPED_ARRAY_BAD_ARGS);
     return false;
 }
 
@@ -1017,26 +1017,27 @@ Select(JSContext *cx, unsigned argc, Value *vp)
 template<class VElem, unsigned NumElem>
 static bool
 TypedArrayFromArgs(JSContext *cx, const CallArgs &args,
-                   MutableHandle<TypedArrayObject*> typedArray, int32_t *byteStart)
+                   MutableHandleObject typedArray, int32_t *byteStart)
 {
     if (!args[0].isObject())
         return ErrorBadArgs(cx);
 
     JSObject &argobj = args[0].toObject();
-    if (!argobj.is<TypedArrayObject>())
+    if (!IsAnyTypedArray(&argobj))
         return ErrorBadArgs(cx);
 
-    typedArray.set(&argobj.as<TypedArrayObject>());
+    typedArray.set(&argobj);
 
     int32_t index;
     if (!ToInt32(cx, args[1], &index))
         return false;
 
-    *byteStart = index * typedArray->bytesPerElement();
-    if (*byteStart < 0 || (uint32_t(*byteStart) + NumElem * sizeof(VElem)) > typedArray->byteLength())
+    *byteStart = index * AnyTypedArrayBytesPerElement(typedArray);
+    if (*byteStart < 0 ||
+        (uint32_t(*byteStart) + NumElem * sizeof(VElem)) > AnyTypedArrayByteLength(typedArray))
     {
         // Keep in sync with AsmJS OnOutOfBounds function.
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_BAD_INDEX);
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_BAD_INDEX);
         return false;
     }
 
@@ -1054,7 +1055,7 @@ Load(JSContext *cx, unsigned argc, Value *vp)
         return ErrorBadArgs(cx);
 
     int32_t byteStart;
-    Rooted<TypedArrayObject*> typedArray(cx);
+    RootedObject typedArray(cx);
     if (!TypedArrayFromArgs<Elem, NumElem>(cx, args, &typedArray, &byteStart))
         return false;
 
@@ -1064,7 +1065,7 @@ Load(JSContext *cx, unsigned argc, Value *vp)
     if (!result)
         return false;
 
-    Elem *src = reinterpret_cast<Elem*>(static_cast<char*>(typedArray->viewData()) + byteStart);
+    Elem *src = reinterpret_cast<Elem*>(static_cast<char*>(AnyTypedArrayViewData(typedArray)) + byteStart);
     Elem *dst = reinterpret_cast<Elem*>(result->typedMem());
     memcpy(dst, src, sizeof(Elem) * NumElem);
 
@@ -1083,7 +1084,7 @@ Store(JSContext *cx, unsigned argc, Value *vp)
         return ErrorBadArgs(cx);
 
     int32_t byteStart;
-    Rooted<TypedArrayObject*> typedArray(cx);
+    RootedObject typedArray(cx);
     if (!TypedArrayFromArgs<Elem, NumElem>(cx, args, &typedArray, &byteStart))
         return false;
 
@@ -1091,7 +1092,7 @@ Store(JSContext *cx, unsigned argc, Value *vp)
         return ErrorBadArgs(cx);
 
     Elem *src = TypedObjectMemory<Elem*>(args[2]);
-    Elem *dst = reinterpret_cast<Elem*>(static_cast<char*>(typedArray->viewData()) + byteStart);
+    Elem *dst = reinterpret_cast<Elem*>(static_cast<char*>(AnyTypedArrayViewData(typedArray)) + byteStart);
     memcpy(dst, src, sizeof(Elem) * NumElem);
 
     args.rval().setObject(args[2].toObject());

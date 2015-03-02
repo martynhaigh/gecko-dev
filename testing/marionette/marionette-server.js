@@ -26,14 +26,7 @@ loader.loadSubScript("chrome://marionette/content/ChromeUtils.js", utils);
 loader.loadSubScript("chrome://marionette/content/atoms.js", utils);
 loader.loadSubScript("chrome://marionette/content/marionette-sendkeys.js", utils);
 
-// SpecialPowers requires insecure automation-only features that we put behind a pref.
-Services.prefs.setBoolPref('security.turn_off_all_security_so_that_viruses_can_take_over_this_computer',
-                           true);
 let specialpowers = {};
-loader.loadSubScript("chrome://specialpowers/content/SpecialPowersObserver.js",
-                     specialpowers);
-specialpowers.specialPowersObserver = new specialpowers.SpecialPowersObserver();
-specialpowers.specialPowersObserver.init();
 
 Cu.import("resource://gre/modules/FileUtils.jsm");
 Cu.import("resource://gre/modules/NetUtil.jsm");
@@ -57,6 +50,7 @@ loader.loadSubScript("resource://gre/modules/devtools/transport/transport.js");
 let bypassOffline = false;
 let qemu = "0";
 let device = null;
+const SECURITY_PREF = 'security.turn_off_all_security_so_that_viruses_can_take_over_this_computer';
 
 XPCOMUtils.defineLazyServiceGetter(this, "cookieManager",
                                    "@mozilla.org/cookiemanager;1",
@@ -164,6 +158,7 @@ function MarionetteServerConnection(aPrefix, aTransport, aServer)
   this.currentFrameElement = null;
   this.testName = null;
   this.mozBrowserClose = null;
+  this.enabled_security_pref = false;
   this.sandbox = null;
   this.oopFrameId = null; // frame ID of current remote frame, used for mozbrowserclose events
   this.sessionCapabilities = {
@@ -193,6 +188,7 @@ function MarionetteServerConnection(aPrefix, aTransport, aServer)
   };
 
   this.observing = null;
+  this._browserIds = new WeakMap();
 }
 
 MarionetteServerConnection.prototype = {
@@ -587,9 +583,27 @@ MarionetteServerConnection.prototype = {
     this.command_id = this.getCommandId();
     this.newSessionCommandId = this.command_id;
 
+    // SpecialPowers requires insecure automation-only features that we put behind a pref
+    let security_pref_value = false;
+    try {
+      security_pref_value = Services.prefs.getBoolPref(SECURITY_PREF);
+    } catch(e) {}
+    if (!security_pref_value) {
+      this.enabled_security_pref = true;
+      Services.prefs.setBoolPref(SECURITY_PREF, true);
+    }
+
+    if (!specialpowers.hasOwnProperty('specialPowersObserver')) {
+      loader.loadSubScript("chrome://specialpowers/content/SpecialPowersObserver.js",
+                           specialpowers);
+      specialpowers.specialPowersObserver = new specialpowers.SpecialPowersObserver();
+      specialpowers.specialPowersObserver.init();
+      specialpowers.specialPowersObserver._loadFrameScript();
+    }
+
     this.scriptTimeout = 10000;
     if (aRequest && aRequest.parameters) {
-      this.sessionId = aRequest.parameters.session_id ? aRequest.parameters.session_id : null;
+      this.sessionId = aRequest.parameters.sessionId || aRequest.parameters.session_id || null;
       logger.info("Session Id is set to: " + this.sessionId);
       try {
         this.setSessionCapabilities(aRequest.parameters.capabilities);
@@ -1419,6 +1433,28 @@ MarionetteServerConnection.prototype = {
     }
   },
 
+  /**
+   * Retrieves a listener id for the given xul browser element. In case
+   * the browser is not known, an attempt is made to retrieve the id from
+   * a CPOW, and null is returned if this fails.
+   */
+  getIdForBrowser: function (browser) {
+    if (browser === null) {
+      return null;
+    }
+    let permKey = browser.permanentKey;
+    if (this._browserIds.has(permKey)) {
+      return this._browserIds.get(permKey);
+    }
+
+    let winId = browser.outerWindowID;
+    if (winId) {
+      winId += "";
+      this._browserIds.set(permKey, winId);
+      return winId;
+    }
+    return null;
+  },
 
   /**
    * Get a list of top-level browsing contexts. On desktop this typically
@@ -1438,12 +1474,8 @@ MarionetteServerConnection.prototype = {
       if (win.gBrowser && appName != 'B2G') {
         let tabbrowser = win.gBrowser;
         for (let i = 0; i < tabbrowser.browsers.length; ++i) {
-          let contentWindow = tabbrowser.getBrowserAtIndex(i).contentWindowAsCPOW;
-          if (contentWindow !== null) {
-            let winId = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor)
-                                     .getInterface(Ci.nsIDOMWindowUtils)
-                                     .outerWindowID;
-            winId += (appName == "B2G") ? "-b2g" : "";
+          let winId = this.getIdForBrowser(tabbrowser.getBrowserAtIndex(i));
+          if (winId !== null) {
             res.push(winId);
           }
         }
@@ -1583,15 +1615,11 @@ MarionetteServerConnection.prototype = {
       if (win.gBrowser && appName != 'B2G') {
         let tabbrowser = win.gBrowser;
         for (let i = 0; i < tabbrowser.browsers.length; ++i) {
-          let contentWindow = tabbrowser.getBrowserAtIndex(i).contentWindowAsCPOW;
-          if (contentWindow) {
-            let contentWindowId = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor)
-                                               .getInterface(Ci.nsIDOMWindowUtils)
-                                               .outerWindowID;
-            contentWindowId += (appName == "B2G") ? "-b2g" : "";
-            if (checkWindow.call(this, win, outerId, contentWindowId, i)) {
-              return;
-            }
+          let browser = tabbrowser.getBrowserAtIndex(i);
+          let contentWindowId = this.getIdForBrowser(browser);
+          if (contentWindowId !== null &&
+              checkWindow.call(this, win, outerId, contentWindowId, i)) {
+            return;
           }
         }
       } else {
@@ -3148,8 +3176,8 @@ MarionetteServerConnection.prototype = {
         let mainContent = (this.curBrowser.mainContentId == null);
         if (!browserType || browserType != "content") {
           //curBrowser holds all the registered frames in knownFrames
-          let listenerId = message.json.value;
-          reg.id = this.curBrowser.register(this.generateFrameId(listenerId), listenerId);
+          let listenerId = this.generateFrameId(message.json.value);
+          reg.id = this.curBrowser.register(listenerId);
         }
         // set to true if we updated mainContentId
         mainContent = ((mainContent == true) && (this.curBrowser.mainContentId != null));
@@ -3305,6 +3333,7 @@ function BrowserObj(win, server) {
 
   //register all message listeners
   this.frameManager.addMessageManagerListeners(server.messageManager);
+  this.getIdForBrowser = server.getIdForBrowser.bind(server);
 }
 
 BrowserObj.prototype = {
@@ -3390,25 +3419,21 @@ BrowserObj.prototype = {
    *
    * @param string uid
    *        frame uid for use by marionette
-   * @param number id
-   *        incoming window id assigned by gecko
    */
-  register: function BO_register(uid, id) {
+  register: function BO_register(uid) {
     if (this.curFrameId == null) {
       let currWinId = null;
       if (this.browser) {
         // If we're setting up a new session on Firefox, we only process the
         // registration for this frame if it belongs to the tab we've just
         // created.
-        let winAsCPOW = this.browser.getBrowserForTab(this.tab).contentWindowAsCPOW;
-        currWinId = winAsCPOW.QueryInterface(Ci.nsIInterfaceRequestor)
-                             .getInterface(Ci.nsIDOMWindowUtils)
-                             .outerWindowID;
+        let browser = this.browser.getBrowserForTab(this.tab);
+        currWinId = this.getIdForBrowser(browser);
       }
       if ((!this.newSession) ||
           (this.newSession &&
             ((appName != "Firefox") ||
-             id === currWinId))) {
+             uid === currWinId))) {
         this.curFrameId = uid;
         this.mainContentId = uid;
       }
