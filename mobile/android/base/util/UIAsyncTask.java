@@ -57,7 +57,7 @@ public abstract class UIAsyncTask<Param, Result> {
     /**
      * Creates a new asynchronous task.
      *
-     * @param backgroundThreadHandler the handler to onRun the background task on
+     * @param backgroundThreadHandler the handler to execute the background task on
      */
     public UIAsyncTask(Handler backgroundThreadHandler) {
         mBackgroundThreadHandler = backgroundThreadHandler;

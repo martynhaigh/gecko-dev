@@ -251,7 +251,7 @@ public class BaseResource implements Resource {
       delegate.handleHttpProtocolException(e);
       return;
     } catch (IOException e) {
-      Logger.debug(LOG_TAG, "I/O exception returned from onRun.");
+      Logger.debug(LOG_TAG, "I/O exception returned from execute.");
       if (!retryOnFailedRequest) {
         delegate.handleHttpIOException(e);
       } else {

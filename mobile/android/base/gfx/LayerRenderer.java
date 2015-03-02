@@ -418,7 +418,7 @@ public class LayerRenderer implements Tabs.OnTabsChangedListener {
                 // the run-at time was pushed back, so reschedule
                 mView.postDelayed(this, timeDelta);
             } else {
-                // reached the run-at time, onRun
+                // reached the run-at time, execute
                 mStarted = false;
                 mView.requestRender();
             }

@@ -592,7 +592,7 @@ public class ActivityChooserModel extends DataSetObservable {
         mHistoricalRecordsChanged = false;
         if (!TextUtils.isEmpty(mHistoryFileName)) {
             /**
-             * Mozilla: Converted to a normal task.onRun call so that this works on < ICS phones.
+             * Mozilla: Converted to a normal task.execute call so that this works on < ICS phones.
              */
             new PersistHistoryAsyncTask().execute(new ArrayList<HistoricalRecord>(mHistoricalRecords), mHistoryFileName);
         }

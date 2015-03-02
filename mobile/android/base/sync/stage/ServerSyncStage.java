@@ -76,7 +76,7 @@ public abstract class ServerSyncStage extends AbstractSessionManagingSyncStage i
 
     // We can be disabled by the server's meta/global record, or malformed in the server's meta/global record,
     // or by the user manually in Sync Settings.
-    // We catch the subclasses of MetaGlobalException to trigger various resets and wipes in onRun().
+    // We catch the subclasses of MetaGlobalException to trigger various resets and wipes in execute().
     boolean enabledInMetaGlobal = session.isEngineRemotelyEnabled(this.getEngineName(), engineSettings);
 
     // Check for manual changes to engines by the user.
@@ -473,7 +473,7 @@ public abstract class ServerSyncStage extends AbstractSessionManagingSyncStage i
   @Override
   public void execute() throws NoSuchStageException {
     final String name = getEngineName();
-    Logger.debug(LOG_TAG, "Starting onRun for " + name);
+    Logger.debug(LOG_TAG, "Starting execute for " + name);
 
     stageStartTimestamp = System.currentTimeMillis();
 
@@ -536,7 +536,7 @@ public abstract class ServerSyncStage extends AbstractSessionManagingSyncStage i
         return;
       }
     } catch (MetaGlobalException e) {
-      session.abort(e, "Inappropriate meta/global; refusing to onRun " + name + " stage.");
+      session.abort(e, "Inappropriate meta/global; refusing to execute " + name + " stage.");
       return;
     }
 
@@ -556,7 +556,7 @@ public abstract class ServerSyncStage extends AbstractSessionManagingSyncStage i
 
     Logger.debug(LOG_TAG, "Invoking synchronizer.");
     synchronizer.synchronize(session.getContext(), this);
-    Logger.debug(LOG_TAG, "Reached end of onRun.");
+    Logger.debug(LOG_TAG, "Reached end of execute.");
   }
 
   /**

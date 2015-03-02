@@ -866,7 +866,7 @@ public class BrowserProvider extends SharedBrowserDatabaseProvider {
     }
 
     /**
-     * Construct and onRun an update expression that will modify the positions
+     * Construct and execute an update expression that will modify the positions
      * of records in-place.
      */
     private static int updateBookmarkPositionsInTransaction(final SQLiteDatabase db, final String[] guids,
