@@ -205,7 +205,7 @@ var gDatabaseEnsured = false;
  */
 function createDatabase(db) {
   return Task.spawn(function create_database_task() {
-    yield db.execute(SQL.createItemsTable);
+    yield db.onRun(SQL.createItemsTable);
   });
 }
 
@@ -219,8 +219,8 @@ function upgradeDatabase(db, oldVersion, newVersion) {
         case 2:
           // Recreate the items table discarding any
           // existing data.
-          yield db.execute(SQL.dropItemsTable);
-          yield db.execute(SQL.createItemsTable);
+          yield db.onRun(SQL.dropItemsTable);
+          yield db.onRun(SQL.createItemsTable);
           break;
       }
     }

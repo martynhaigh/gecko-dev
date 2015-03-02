@@ -14,8 +14,13 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
-import android.widget.Toast;
 
+/**
+ * This class takes over external url loads (Intent.VIEW) from the BrowserApp class.  It determines if
+ * the tab queue functionality is enabled and forwards the intent to the TabQueueService to process if it is.
+ *
+ * If the tab queue functionality is not enabled then it forwards the intent to BrowserApp to handle as normal.
+ */
 public class TabQueue extends Locales.LocaleAwareActivity {
     private static final String LOGTAG = "Gecko" + TabQueue.class.getSimpleName();
 
@@ -35,13 +40,14 @@ public class TabQueue extends Locales.LocaleAwareActivity {
         // The URL is usually hiding somewhere in the extra text. Extract it.
         final String dataString = intent.getDataString();
         if (TextUtils.isEmpty(dataString)) {
-            abortDueToNoURL();
+            abortDueToNoURL(dataString);
             return;
         }
 
+        // TODO: This code is shared with ShareDialog - we should extract this to a helper class.
         final String pageUrl = new WebURLFinder(dataString).bestWebURL();
         if (TextUtils.isEmpty(pageUrl)) {
-            abortDueToNoURL();
+            abortDueToNoURL(dataString);
             return;
         }
 
@@ -65,10 +71,11 @@ public class TabQueue extends Locales.LocaleAwareActivity {
 
     /**
      * Abort as we were started with no URL.
+     * @param dataString
      */
-    private void abortDueToNoURL() {
-        // Lets decide what to do here in bug 1134148
-        Log.d(LOGTAG, "Unable to process tab queue insertion. No URL found!");
+    private void abortDueToNoURL(String dataString) {
+        // TODO: Lets decide what to do here in bug 1134148
+        Log.w(LOGTAG, "Unable to process tab queue insertion. No URL found! - passed data string: " + dataString);
         finish();
     }
 }

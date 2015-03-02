@@ -82,7 +82,7 @@ public class SyncClientsEngineStage extends AbstractSessionManagingSyncStage {
 
   /**
    * The following two delegates, ClientDownloadDelegate and ClientUploadDelegate
-   * are both triggered in a chain, starting when execute() calls
+   * are both triggered in a chain, starting when onRun() calls
    * downloadClientRecords().
    *
    * Client records are downloaded using a get() request. Upon success of the

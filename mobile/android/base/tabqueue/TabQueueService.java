@@ -14,6 +14,7 @@ import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.PixelFormat;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.Gravity;
@@ -27,19 +28,25 @@ import android.widget.TextView;
 /**
  * On launch this service displays a view over the currently running activity with an action
  * to open the url in fennec immediately.  If the user takes no action or the service receives another intent, the
- * url is added to a file which is then read in fennec on next launch.  The view is inserted from this service, in
+ * url is added to a file which is then read in fennec on next launch, in order to allow the user to quickly queue
+ * urls to open without having to open Fennec each time.  A View is inserted from this service, in
  * conjunction with the SYSTEM_ALERT_WINDOW permission, to display the view on top of the application in the background
  * whilst still allowing the user to interact with the background application.
+ *
+ * General approach taken is similar to the FB chat heads functionality:
+ *   http://stackoverflow.com/questions/15975988/what-apis-in-android-is-facebook-using-to-create-chat-heads
  */
 public class TabQueueService extends Service {
      private static final String LOGTAG = "Gecko" + TabQueueService.class.getSimpleName();
 
+    public static final long TOAST_TIMEOUT = 3000;
+
     private WindowManager windowManager;
-    private View layout;
+    private View toastLayout;
     private Button openNowButton;
-    private final Handler handler = new Handler();
-    private WindowManager.LayoutParams layoutParams;
-    private HideRunnable hideRunnable;
+    private Handler tabQueueHandler;
+    private WindowManager.LayoutParams toastLayoutParams;
+    private StopServiceRunnable stopServiceRunnable;
 
 
     @Override
@@ -52,104 +59,118 @@ public class TabQueueService extends Service {
     public void onCreate() {
         super.onCreate();
 
+        HandlerThread thread = new HandlerThread("TabQueueToastViewThread");
+        thread.start();
+        tabQueueHandler = new Handler(thread.getLooper());
+
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
         LayoutInflater layoutInflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
-        layout = layoutInflater.inflate(R.layout.button_toast, null);
+        toastLayout = layoutInflater.inflate(R.layout.button_toast, null);
 
         final Resources resources = getResources();
 
-        TextView messageView = (TextView) layout.findViewById(R.id.toast_message);
+        TextView messageView = (TextView) toastLayout.findViewById(R.id.toast_message);
         messageView.setText(resources.getText(R.string.tab_queue_toast_message));
 
-        openNowButton = (Button) layout.findViewById(R.id.toast_button);
-        openNowButton.setEnabled(true);
+        openNowButton = (Button) toastLayout.findViewById(R.id.toast_button);
         openNowButton.setText(resources.getText(R.string.tab_queue_toast_action));
 
-        layoutParams = new WindowManager.LayoutParams(
+        toastLayoutParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_PHONE,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
 
-        layoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        layoutParams.x = 0;
-        layoutParams.y = 0;
+        toastLayoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
     }
 
-    private abstract class HideRunnable implements Runnable {
-        // If true then remove the toast from the view hierarchy when run.
-        private boolean mShouldHide = true;
+    /**
+     * A modified Runnable which additionally removes the view from the window view hierarchy and stops the service
+     * when run, unless explicitly instructed not to.
+     */
+    private abstract class StopServiceRunnable implements Runnable {
 
-        public void shouldHide(boolean hide) {
-            mShouldHide = hide;
+        private boolean shouldStopService = true;
+
+        public void setShouldNotStopService() {
+            this.shouldStopService = false;
         }
 
         public void run() {
-            if (mShouldHide) {
-                hide();
+            onRun();
+
+            if (shouldStopService) {
+                destroy();
             }
-            execute();
         }
 
-        public abstract void execute();
+        public abstract void onRun();
     }
 
     @Override
     public int onStartCommand(final Intent intent, int flags, int startId) {
 
-        if (hideRunnable != null) {
-            // If there's already a runnable then run it but keep the view attached to the window.
-            handler.removeCallbacks(hideRunnable);
-            hideRunnable.shouldHide(false);
-            hideRunnable.run();
+        if (stopServiceRunnable != null) {
+            // If we're already displaying a toast, keep displaying it but store the previous link's url.
+            // The open button will refer to the most recently opened link.
+            tabQueueHandler.removeCallbacks(stopServiceRunnable);
+            stopServiceRunnable.setShouldNotStopService();
+            stopServiceRunnable.run();
         } else {
-            windowManager.addView(layout, layoutParams);
+            windowManager.addView(toastLayout, toastLayoutParams);
         }
 
-        hideRunnable = new HideRunnable() {
+        stopServiceRunnable = new StopServiceRunnable() {
             @Override
-            public void execute() {
-                addUrlToList(intent);
-                hideRunnable = null;
+            public void onRun() {
+                addUrlToTabQueue(intent);
+                stopServiceRunnable = null;
             }
         };
 
         openNowButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                handler.removeCallbacks(hideRunnable);
-                hideRunnable = null;
+                tabQueueHandler.removeCallbacks(stopServiceRunnable);
+                stopServiceRunnable = null;
+
 
                 Intent forwardIntent = new Intent(intent);
                 forwardIntent.setClass(getApplicationContext(), BrowserApp.class);
                 forwardIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(forwardIntent);
-                hide();
+
+                destroy();
             }
         });
 
-        handler.postDelayed(hideRunnable, TabQueueHelper.TOAST_TIMEOUT);
+        tabQueueHandler.postDelayed(stopServiceRunnable, TOAST_TIMEOUT);
 
-        return super.onStartCommand(intent, flags, startId);
+        return START_REDELIVER_INTENT;
     }
 
-    private void hide() {
-        windowManager.removeView(layout);
+    /**
+     * Removes the View from the view hierarchy and stops the service.
+     */
+    private void destroy() {
+        windowManager.removeView(toastLayout);
+        stopSelf();
     }
 
-    private void addUrlToList(Intent intentParam) {
+    private void addUrlToTabQueue(Intent intentParam) {
         if (intentParam == null) {
-            // This should never happen, but lets return silently instead of crash if it does!
+            // This should never happen, but let's return silently instead of crash if it does.
+            Log.w(LOGTAG, "Error adding URL to tab queue - invalid intent passed in.");
             return;
         }
         final ContextUtils.SafeIntent intent = new ContextUtils.SafeIntent(intentParam);
         final String args = intent.getStringExtra("args");
         final String intentData = intent.getDataString();
 
-        // TODO Add url to list here.
-        Log.d(LOGTAG, "Adding URL to list: " + intentData);
+        // TODO Add url to tab queue here.
+        Log.d(LOGTAG, "Adding URL to tab queue: " + intentData);
 
     }
 }

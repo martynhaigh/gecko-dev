@@ -240,7 +240,7 @@ public class GlobalSession implements HttpResponseObserver {
    * Advance and loop around the stages of a sync.
    * @param current
    * @return
-   *        The next stage to execute.
+   *        The next stage to onRun.
    */
   public static Stage nextStage(Stage current) {
     int index = current.ordinal() + 1;

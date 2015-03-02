@@ -14,7 +14,7 @@ import org.mozilla.gecko.background.common.log.Logger;
  *
  * Call WaitHelper.getTestWaiter() to get the unique instance.
  *
- * Call performWait(runnable) to execute runnable synchronously.
+ * Call performWait(runnable) to onRun runnable synchronously.
  * runnable *must* call performNotify() on all exit paths to signal to
  * the TestWaiter that the runnable has completed.
  *

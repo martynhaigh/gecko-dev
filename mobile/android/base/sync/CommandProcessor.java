@@ -31,7 +31,7 @@ import android.net.Uri;
  * <p>
  * We need a command processor at two different times:
  * <ol>
- * <li>We execute commands during the "clients" engine stage of a Sync. Each
+ * <li>We onRun commands during the "clients" engine stage of a Sync. Each
  * command takes a <code>GlobalSession</code> instance as a parameter.</li>
  * <li>We queue commands to be executed or propagated to other Sync clients
  * during an activity completely unrelated to a sync (such as
