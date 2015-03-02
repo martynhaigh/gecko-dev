@@ -730,6 +730,11 @@ let MozLoopServiceInternal = {
       let string = enumerator.getNext().QueryInterface(Ci.nsIPropertyElement);
       gLocalizedStrings.set(string.key, string.value);
     }
+    // Supply the strings from the branding bundle on a per-need basis.
+    let brandBundle =
+      Services.strings.createBundle("chrome://branding/locale/brand.properties");
+    // Unfortunately the `brandShortName` string is used by Loop with a lowercase 'N'.
+    gLocalizedStrings.set("brandShortname", brandBundle.GetStringFromName("brandShortName"));
 
     return gLocalizedStrings;
   },
@@ -843,6 +848,7 @@ let MozLoopServiceInternal = {
       }
 
       chatbox.setAttribute("dark", true);
+      chatbox.setAttribute("large", true);
 
       chatbox.addEventListener("DOMContentLoaded", function loaded(event) {
         if (event.target != chatbox.contentDocument) {

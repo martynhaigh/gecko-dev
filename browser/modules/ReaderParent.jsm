@@ -28,6 +28,8 @@ let ReaderParent = {
     "Reader:Share",
     "Reader:SystemUIVisibility",
     "Reader:UpdateReaderButton",
+    "Reader:SetIntPref",
+    "Reader:SetCharPref",
   ],
 
   init: function() {
@@ -80,6 +82,18 @@ let ReaderParent = {
         this.updateReaderButton(browser);
         break;
       }
+      case "Reader:SetIntPref": {
+        if (message.data && message.data.name !== undefined) {
+          Services.prefs.setIntPref(message.data.name, message.data.value);
+        }
+        break;
+      }
+      case "Reader:SetCharPref": {
+        if (message.data && message.data.name !== undefined) {
+          Services.prefs.setCharPref(message.data.name, message.data.value);
+        }
+        break;
+      }
     }
   },
 
@@ -93,10 +107,10 @@ let ReaderParent = {
     if (browser.currentURI.spec.startsWith("about:reader")) {
       button.setAttribute("readeractive", true);
       button.hidden = false;
-      button.setAttribute("tooltiptext", gStringBundle.GetStringFromName("readerMode.exit"));
+      button.setAttribute("tooltiptext", gStringBundle.GetStringFromName("readerView.exit"));
     } else {
       button.removeAttribute("readeractive");
-      button.setAttribute("tooltiptext", gStringBundle.GetStringFromName("readerMode.enter"));
+      button.setAttribute("tooltiptext", gStringBundle.GetStringFromName("readerView.enter"));
       button.hidden = !browser.isArticle;
     }
   },
@@ -118,10 +132,10 @@ let ReaderParent = {
       if (!originalURL) {
         Cu.reportError("Error finding original URL for about:reader URL: " + url);
       } else {
-        win.openUILinkIn(originalURL, "current");
+        win.openUILinkIn(originalURL, "current", {"allowPinnedTabHostChange": true});
       }
     } else {
-      win.openUILinkIn("about:reader?url=" + encodeURIComponent(url), "current");
+      win.openUILinkIn("about:reader?url=" + encodeURIComponent(url), "current", {"allowPinnedTabHostChange": true});
     }
   },
 
