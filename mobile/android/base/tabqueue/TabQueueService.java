@@ -48,7 +48,6 @@ public class TabQueueService extends Service {
     private WindowManager.LayoutParams toastLayoutParams;
     private StopServiceRunnable stopServiceRunnable;
 
-
     @Override
     public IBinder onBind(Intent intent) {
         // Not used
@@ -59,7 +58,7 @@ public class TabQueueService extends Service {
     public void onCreate() {
         super.onCreate();
 
-        HandlerThread thread = new HandlerThread("TabQueueToastViewThread");
+        HandlerThread thread = new HandlerThread("TabQueueHandlerThread");
         thread.start();
         tabQueueHandler = new Handler(thread.getLooper());
 
@@ -80,7 +79,7 @@ public class TabQueueService extends Service {
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_PHONE,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                0,
                 PixelFormat.TRANSLUCENT);
 
         toastLayoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
