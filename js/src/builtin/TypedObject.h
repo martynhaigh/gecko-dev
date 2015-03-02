@@ -39,7 +39,7 @@
  * Currently, all "globals" related to typed objects are packaged
  * within a single "module" object `TypedObject`. This module has its
  * own js::Class and when that class is initialized, we also create
- * and define all other values (in `js_InitTypedObjectModuleClass()`).
+ * and define all other values (in `js::InitTypedObjectModuleClass()`).
  *
  * - Type objects, meta type objects, and type representations:
  *
@@ -333,7 +333,8 @@ class SimdTypeDescr : public ComplexTypeDescr
     enum Type {
         TYPE_INT32 = JS_SIMDTYPEREPR_INT32,
         TYPE_FLOAT32 = JS_SIMDTYPEREPR_FLOAT32,
-        TYPE_FLOAT64 = JS_SIMDTYPEREPR_FLOAT64
+        TYPE_FLOAT64 = JS_SIMDTYPEREPR_FLOAT64,
+        LAST_TYPE = TYPE_FLOAT64
     };
 
     static const type::Kind Kind = type::Simd;
@@ -1041,10 +1042,10 @@ class LazyArrayBufferTable
     size_t sizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf);
 };
 
-} // namespace js
-
 JSObject *
-js_InitTypedObjectModuleObject(JSContext *cx, JS::HandleObject obj);
+InitTypedObjectModuleObject(JSContext *cx, JS::HandleObject obj);
+
+} // namespace js
 
 template <>
 inline bool

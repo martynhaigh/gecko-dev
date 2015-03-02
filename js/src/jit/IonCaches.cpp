@@ -431,7 +431,7 @@ IonCache::linkAndAttachStub(JSContext *cx, MacroAssembler &masm, StubAttacher &a
     // Add entry to native => bytecode mapping for this stub if needed.
     if (cx->runtime()->jitRuntime()->isProfilerInstrumentationEnabled(cx->runtime())) {
         JitcodeGlobalEntry::IonCacheEntry entry;
-        entry.init(code->raw(), code->rawEnd(), rejoinAddress());
+        entry.init(code, code->raw(), code->rawEnd(), rejoinAddress());
 
         // Add entry to the global table.
         JitcodeGlobalTable *globalTable = cx->runtime()->jitRuntime()->getJitcodeGlobalTable();
@@ -444,7 +444,7 @@ IonCache::linkAndAttachStub(JSContext *cx, MacroAssembler &masm, StubAttacher &a
         code->setHasBytecodeMap();
     } else {
         JitcodeGlobalEntry::DummyEntry entry;
-        entry.init(code->raw(), code->rawEnd());
+        entry.init(code, code->raw(), code->rawEnd());
 
         // Add entry to the global table.
         JitcodeGlobalTable *globalTable = cx->runtime()->jitRuntime()->getJitcodeGlobalTable();
@@ -469,6 +469,20 @@ IonCache::updateBaseAddress(JitCode *code, MacroAssembler &masm)
 void
 IonCache::initializeAddCacheState(LInstruction *ins, AddCacheState *addState)
 {
+}
+
+static void *
+GetReturnAddressToIonCode(JSContext *cx)
+{
+    JitFrameIterator iter(cx);
+    MOZ_ASSERT(iter.type() == JitFrame_Exit);
+
+    void *returnAddr = iter.returnAddress();
+#ifdef DEBUG
+    ++iter;
+    MOZ_ASSERT(iter.isIonJS());
+#endif
+    return returnAddr;
 }
 
 static void
@@ -701,25 +715,16 @@ EmitLoadSlot(MacroAssembler &masm, NativeObject *holder, Shape *shape, Register 
     }
 }
 
+// Callers are expected to have already guarded on the shape of the
+// object, which guarantees the object is a DOM proxy.
 static void
-GenerateDOMProxyChecks(JSContext *cx, MacroAssembler &masm, JSObject *obj,
-                       PropertyName *name, Register object, Label *stubFailure,
-                       bool skipExpandoCheck = false)
+CheckDOMProxyExpandoDoesNotShadow(JSContext *cx, MacroAssembler &masm, JSObject *obj,
+                                  PropertyName *name, Register object, Label *stubFailure)
 {
     MOZ_ASSERT(IsCacheableDOMProxy(obj));
 
-    // Guard the following:
-    //      1. The object is a DOMProxy.
-    //      2. The object does not have expando properties, or has an expando
-    //          which is known to not have the desired property.
-    Address handlerAddr(object, ProxyObject::offsetOfHandler());
-
-    // Check that object is a DOMProxy.
-    masm.branchPtr(Assembler::NotEqual, handlerAddr,
-                   ImmPtr(obj->as<ProxyObject>().handler()), stubFailure);
-
-    if (skipExpandoCheck)
-        return;
+    // Guard that the object does not have expando properties, or has an expando
+    // which is known to not have the desired property.
 
     // For the remaining code, we need to reserve some registers to load a value.
     // This is ugly, but unvaoidable.
@@ -1252,7 +1257,7 @@ IsCacheableArrayLength(JSContext *cx, HandleObject obj, HandlePropertyName name,
 
 template <class GetPropCache>
 static GetPropertyIC::NativeGetPropCacheability
-CanAttachNativeGetProp(typename GetPropCache::Context cx, const GetPropCache &cache,
+CanAttachNativeGetProp(JSContext *cx, const GetPropCache &cache,
                        HandleObject obj, HandlePropertyName name,
                        MutableHandleNativeObject holder, MutableHandleShape shape,
                        bool skipArrayLen = false)
@@ -1320,7 +1325,7 @@ CanAttachNativeGetProp(typename GetPropCache::Context cx, const GetPropCache &ca
 }
 
 bool
-GetPropertyIC::allowArrayLength(Context cx, HandleObject obj) const
+GetPropertyIC::allowArrayLength(JSContext *cx, HandleObject obj) const
 {
     if (!idempotent())
         return true;
@@ -1550,9 +1555,9 @@ GetPropertyIC::tryAttachDOMProxyShadowed(JSContext *cx, HandleScript outerScript
                                    ImmGCPtr(obj->lastProperty()),
                                    &failures);
 
-    // Make sure object is a DOMProxy
-    GenerateDOMProxyChecks(cx, masm, obj, name(), object(), &failures,
-                           /*skipExpandoCheck=*/true);
+    // No need for more guards: we know this is a DOM proxy, since the shape
+    // guard enforces a given JSClass, so just go ahead and emit the call to
+    // ProxyGet.
 
     if (!EmitCallProxyGet(cx, masm, attacher, name(), liveRegs_, object(), output(),
                           pc(), returnAddr))
@@ -1619,8 +1624,8 @@ GetPropertyIC::tryAttachDOMProxyUnshadowed(JSContext *cx, HandleScript outerScri
                                    ImmGCPtr(obj->lastProperty()),
                                    &failures);
 
-    // Make sure object is a DOMProxy proxy
-    GenerateDOMProxyChecks(cx, masm, obj, name, object(), &failures);
+    // Guard that our expando object hasn't started shadowing this property.
+    CheckDOMProxyExpandoDoesNotShadow(cx, masm, obj, name, object(), &failures);
 
     if (holder) {
         // Found the property on the prototype chain. Treat it like a native
@@ -1692,9 +1697,10 @@ GetPropertyIC::tryAttachProxy(JSContext *cx, HandleScript outerScript, IonScript
         DOMProxyShadowsResult shadows = GetDOMProxyShadowsCheck()(cx, obj, id);
         if (shadows == ShadowCheckFailed)
             return false;
-        if (shadows == Shadows)
+        if (DOMProxyIsShadowing(shadows))
             return tryAttachDOMProxyShadowed(cx, outerScript, ion, obj, returnAddr, emitted);
 
+        MOZ_ASSERT(shadows == DoesntShadow || shadows == DoesntShadowUnique);
         return tryAttachDOMProxyUnshadowed(cx, outerScript, ion, obj, name,
                                            shadows == DoesntShadowUnique, returnAddr, emitted);
     }
@@ -1823,8 +1829,7 @@ GetPropertyIC::tryAttachArgumentsLength(JSContext *cx, HandleScript outerScript,
 
 bool
 GetPropertyIC::tryAttachStub(JSContext *cx, HandleScript outerScript, IonScript *ion,
-                             HandleObject obj, HandlePropertyName name,
-                             void *returnAddr, bool *emitted)
+                             HandleObject obj, HandlePropertyName name, bool *emitted)
 {
     MOZ_ASSERT(!*emitted);
 
@@ -1833,6 +1838,8 @@ GetPropertyIC::tryAttachStub(JSContext *cx, HandleScript outerScript, IonScript 
 
     if (!*emitted && !tryAttachArgumentsLength(cx, outerScript, ion, obj, name, emitted))
         return false;
+
+    void *returnAddr = GetReturnAddressToIonCode(cx);
 
     if (!*emitted && !tryAttachProxy(cx, outerScript, ion, obj, name, returnAddr, emitted))
         return false;
@@ -1853,11 +1860,9 @@ GetPropertyIC::tryAttachStub(JSContext *cx, HandleScript outerScript, IonScript 
 }
 
 /* static */ bool
-GetPropertyIC::update(JSContext *cx, size_t cacheIndex,
+GetPropertyIC::update(JSContext *cx, HandleScript outerScript, size_t cacheIndex,
                       HandleObject obj, MutableHandleValue vp)
 {
-    void *returnAddr;
-    RootedScript outerScript(cx, GetTopJitJSScript(cx, &returnAddr));
     IonScript *ion = outerScript->ionScript();
 
     GetPropertyIC &cache = ion->getCache(cacheIndex).toGetProperty();
@@ -1874,7 +1879,7 @@ GetPropertyIC::update(JSContext *cx, size_t cacheIndex,
     // limit. Once we can make calls from within generated stubs, a new call
     // stub will be generated instead and the previous stubs unlinked.
     bool emitted = false;
-    if (!cache.tryAttachStub(cx, outerScript, ion, obj, name, returnAddr, &emitted))
+    if (!cache.tryAttachStub(cx, outerScript, ion, obj, name, &emitted))
         return false;
 
     if (cache.idempotent() && !emitted) {
@@ -2238,9 +2243,9 @@ SetPropertyIC::attachDOMProxyShadowed(JSContext *cx, HandleScript outerScript, I
                    Address(object(), JSObject::offsetOfShape()),
                    ImmGCPtr(obj->lastProperty()), &failures);
 
-    // Make sure object is a DOMProxy
-    GenerateDOMProxyChecks(cx, masm, obj, name(), object(), &failures,
-                           /*skipExpandoCheck=*/true);
+    // No need for more guards: we know this is a DOM proxy, since the shape
+    // guard enforces a given JSClass, so just go ahead and emit the call to
+    // ProxySet.
 
     RootedId propId(cx, AtomToId(name()));
     if (!EmitCallProxySet(cx, masm, attacher, propId, liveRegs_, object(),
@@ -2512,8 +2517,8 @@ SetPropertyIC::attachDOMProxyUnshadowed(JSContext *cx, HandleScript outerScript,
                    Address(object(), JSObject::offsetOfShape()),
                    ImmGCPtr(obj->lastProperty()), &failures);
 
-    // Make sure object is a DOMProxy
-    GenerateDOMProxyChecks(cx, masm, obj, name(), object(), &failures);
+    // Guard that our expando object hasn't started shadowing this property.
+    CheckDOMProxyExpandoDoesNotShadow(cx, masm, obj, name(), object(), &failures);
 
     RootedPropertyName propName(cx, name());
     RootedObject holder(cx);
@@ -2917,7 +2922,7 @@ SetPropertyIC::attachSetUnboxed(JSContext *cx, HandleScript outerScript, IonScri
     MacroAssembler masm(cx, ion, outerScript, profilerLeavePc_);
     RepatchStubAppender attacher(*this);
     GenerateSetUnboxed(cx, masm, attacher, obj, id, unboxedOffset, unboxedType,
-                       object(), value(), needsTypeBarrier());
+                       object(), value(), checkTypeset);
     return linkAndAttachStub(cx, masm, attacher, ion, "set_unboxed");
 }
 
@@ -2942,12 +2947,10 @@ CanAttachSetUnboxed(JSContext *cx, HandleObject obj, HandleId id, ConstantOrRegi
 }
 
 bool
-SetPropertyIC::update(JSContext *cx, size_t cacheIndex, HandleObject obj,
+SetPropertyIC::update(JSContext *cx, HandleScript outerScript, size_t cacheIndex, HandleObject obj,
                       HandleValue value)
 {
-    void *returnAddr;
-    RootedScript script(cx, GetTopJitJSScript(cx, &returnAddr));
-    IonScript *ion = script->ionScript();
+    IonScript *ion = outerScript->ionScript();
     SetPropertyIC &cache = ion->getCache(cacheIndex).toSetProperty();
     RootedPropertyName name(cx, cache.name());
     RootedId id(cx, AtomToId(name));
@@ -2962,26 +2965,27 @@ SetPropertyIC::update(JSContext *cx, size_t cacheIndex, HandleObject obj,
     bool addedSetterStub = false;
     if (cache.canAttachStub() && !obj->watched()) {
         if (!addedSetterStub && obj->is<ProxyObject>()) {
+            void *returnAddr = GetReturnAddressToIonCode(cx);
             if (IsCacheableDOMProxy(obj)) {
                 DOMProxyShadowsResult shadows = GetDOMProxyShadowsCheck()(cx, obj, id);
                 if (shadows == ShadowCheckFailed)
                     return false;
-                if (shadows == Shadows) {
-                    if (!cache.attachDOMProxyShadowed(cx, script, ion, obj, returnAddr))
+                if (DOMProxyIsShadowing(shadows)) {
+                    if (!cache.attachDOMProxyShadowed(cx, outerScript, ion, obj, returnAddr))
                         return false;
                     addedSetterStub = true;
                 } else {
                     MOZ_ASSERT(shadows == DoesntShadow || shadows == DoesntShadowUnique);
                     if (shadows == DoesntShadowUnique)
                         cache.reset();
-                    if (!cache.attachDOMProxyUnshadowed(cx, script, ion, obj, returnAddr))
+                    if (!cache.attachDOMProxyUnshadowed(cx, outerScript, ion, obj, returnAddr))
                         return false;
                     addedSetterStub = true;
                 }
             }
 
             if (!addedSetterStub && !cache.hasGenericProxyStub()) {
-                if (!cache.attachGenericProxy(cx, script, ion, returnAddr))
+                if (!cache.attachGenericProxy(cx, outerScript, ion, returnAddr))
                     return false;
                 addedSetterStub = true;
             }
@@ -2995,13 +2999,14 @@ SetPropertyIC::update(JSContext *cx, size_t cacheIndex, HandleObject obj,
 
         if (!addedSetterStub && canCache == CanAttachSetSlot) {
             RootedNativeObject nobj(cx, &obj->as<NativeObject>());
-            if (!cache.attachSetSlot(cx, script, ion, nobj, shape, checkTypeset))
+            if (!cache.attachSetSlot(cx, outerScript, ion, nobj, shape, checkTypeset))
                 return false;
             addedSetterStub = true;
         }
 
         if (!addedSetterStub && canCache == CanAttachCallSetter) {
-            if (!cache.attachCallSetter(cx, script, ion, obj, holder, shape, returnAddr))
+            void *returnAddr = GetReturnAddressToIonCode(cx);
+            if (!cache.attachCallSetter(cx, outerScript, ion, obj, holder, shape, returnAddr))
                 return false;
             addedSetterStub = true;
         }
@@ -3013,7 +3018,7 @@ SetPropertyIC::update(JSContext *cx, size_t cacheIndex, HandleObject obj,
                                                     cache.needsTypeBarrier(),
                                                     &checkTypeset, &unboxedOffset, &unboxedType))
         {
-            if (!cache.attachSetUnboxed(cx, script, ion, obj, id, unboxedOffset, unboxedType,
+            if (!cache.attachSetUnboxed(cx, outerScript, ion, obj, id, unboxedOffset, unboxedType,
                                         checkTypeset))
             {
                 return false;
@@ -3037,7 +3042,7 @@ SetPropertyIC::update(JSContext *cx, size_t cacheIndex, HandleObject obj,
                                 &checkTypeset))
     {
         RootedNativeObject nobj(cx, &obj->as<NativeObject>());
-        if (!cache.attachAddSlot(cx, script, ion, nobj, oldShape, oldGroup, checkTypeset))
+        if (!cache.attachAddSlot(cx, outerScript, ion, nobj, oldShape, oldGroup, checkTypeset))
             return false;
         addedSetterStub = true;
     }
@@ -3083,8 +3088,7 @@ EqualStringsHelper(JSString *str1, JSString *str2)
 
 bool
 GetElementIC::attachGetProp(JSContext *cx, HandleScript outerScript, IonScript *ion,
-                            HandleObject obj, const Value &idval, HandlePropertyName name,
-                            void *returnAddr)
+                            HandleObject obj, const Value &idval, HandlePropertyName name)
 {
     MOZ_ASSERT(index().reg().hasValue());
 
@@ -3164,7 +3168,9 @@ GetElementIC::attachGetProp(JSContext *cx, HandleScript outerScript, IonScript *
                          &failures);
     } else {
         MOZ_ASSERT(canCache == GetPropertyIC::CanAttachCallGetter);
+
         // Set the frame for bailout safety of the OOL call.
+        void *returnAddr = GetReturnAddressToIonCode(cx);
         if (!GenerateCallGetter(cx, ion, masm, attacher, obj, name, holder, shape, liveRegs_,
                                 object(), output(), returnAddr, &failures))
         {
@@ -3251,6 +3257,160 @@ GetElementIC::attachDenseElement(JSContext *cx, HandleScript outerScript, IonScr
 
     setHasDenseStub();
     return linkAndAttachStub(cx, masm, attacher, ion, "dense array");
+}
+
+
+/* static */ bool
+GetElementIC::canAttachDenseElementHole(JSObject *obj, const Value &idval, TypedOrValueRegister output)
+{
+    if (!idval.isInt32())
+        return false;
+
+    if (!output.hasValue())
+        return false;
+
+    if (!obj->isNative())
+        return false;
+
+    if (obj->as<NativeObject>().getDenseInitializedLength() == 0)
+        return false;
+
+    while (obj) {
+        if (obj->isIndexed())
+            return false;
+
+        if (ClassCanHaveExtraProperties(obj->getClass()))
+            return false;
+
+        JSObject *proto = obj->getProto();
+        if (!proto)
+            break;
+
+        if (!proto->isNative())
+            return false;
+
+        // Make sure objects on the prototype don't have dense elements.
+        if (proto->as<NativeObject>().getDenseInitializedLength() != 0)
+            return false;
+
+        obj = proto;
+    }
+
+    return true;
+}
+
+static bool
+GenerateDenseElementHole(JSContext *cx, MacroAssembler &masm, IonCache::StubAttacher &attacher,
+                         IonScript *ion, JSObject *obj, const Value &idval,
+                         Register object, ConstantOrRegister index, TypedOrValueRegister output)
+{
+    MOZ_ASSERT(GetElementIC::canAttachDenseElementHole(obj, idval, output));
+    MOZ_ASSERT(obj->lastProperty());
+
+    Register scratchReg = output.valueReg().scratchReg();
+
+    // Guard on the shape and group, to prevent non-dense elements from appearing.
+    Label failures;
+    attacher.branchNextStubOrLabel(masm, Assembler::NotEqual,
+                                   Address(object, JSObject::offsetOfShape()),
+                                   ImmGCPtr(obj->lastProperty()), &failures);
+
+
+    if (obj->hasUncacheableProto()) {
+        masm.loadPtr(Address(object, JSObject::offsetOfGroup()), scratchReg);
+        Address proto(scratchReg, ObjectGroup::offsetOfProto());
+        masm.branchPtr(Assembler::NotEqual, proto,
+                       ImmMaybeNurseryPtr(obj->getProto()), &failures);
+    }
+
+    JSObject *pobj = obj->getProto();
+    while (pobj) {
+        MOZ_ASSERT(pobj->lastProperty());
+
+        masm.movePtr(ImmMaybeNurseryPtr(pobj), scratchReg);
+        if (pobj->hasUncacheableProto()) {
+            MOZ_ASSERT(!pobj->isSingleton());
+            Address groupAddr(scratchReg, JSObject::offsetOfGroup());
+            masm.branchPtr(Assembler::NotEqual, groupAddr, ImmGCPtr(pobj->group()), &failures);
+        }
+
+        // Make sure the shape matches, to avoid non-dense elements.
+        masm.branchPtr(Assembler::NotEqual, Address(scratchReg, JSObject::offsetOfShape()),
+                       ImmGCPtr(pobj->lastProperty()), &failures);
+
+        // Load elements vector.
+        masm.loadPtr(Address(scratchReg, NativeObject::offsetOfElements()), scratchReg);
+
+        // Also make sure there are no dense elements.
+        Label hole;
+        Address initLength(scratchReg, ObjectElements::offsetOfInitializedLength());
+        masm.branch32(Assembler::NotEqual, initLength, Imm32(0), &failures);
+
+        pobj = pobj->getProto();
+    }
+
+    // Ensure the index is an int32 value.
+    Register indexReg = InvalidReg;
+    Register elementsReg = InvalidReg;
+
+    if (index.reg().hasValue()) {
+        indexReg = scratchReg;
+        MOZ_ASSERT(indexReg != InvalidReg);
+        ValueOperand val = index.reg().valueReg();
+
+        masm.branchTestInt32(Assembler::NotEqual, val, &failures);
+
+        // Unbox the index.
+        masm.unboxInt32(val, indexReg);
+
+        // Save the object register.
+        masm.push(object);
+        elementsReg = object;
+    } else {
+        MOZ_ASSERT(!index.reg().typedReg().isFloat());
+        indexReg = index.reg().typedReg().gpr();
+        elementsReg = scratchReg;
+    }
+
+    // Load elements vector.
+    masm.loadPtr(Address(object, NativeObject::offsetOfElements()), elementsReg);
+
+    // Guard on the initialized length.
+    Label hole;
+    Address initLength(elementsReg, ObjectElements::offsetOfInitializedLength());
+    masm.branch32(Assembler::BelowOrEqual, initLength, indexReg, &hole);
+
+    // Load the value.
+    Label done;
+    masm.loadValue(BaseObjectElementIndex(elementsReg, indexReg), output.valueReg());
+    masm.branchTestMagic(Assembler::NotEqual, output.valueReg(), &done);
+
+    // Load undefined for the hole.
+    masm.bind(&hole);
+    masm.moveValue(UndefinedValue(), output.valueReg());
+
+    masm.bind(&done);
+    // Restore the object register.
+    if (elementsReg == object)
+        masm.pop(object);
+    attacher.jumpRejoin(masm);
+
+    // All failure flows through here.
+    masm.bind(&failures);
+    attacher.jumpNextStub(masm);
+
+    return true;
+}
+
+bool
+GetElementIC::attachDenseElementHole(JSContext *cx, HandleScript outerScript, IonScript *ion,
+                                     HandleObject obj, const Value &idval)
+{
+    MacroAssembler masm(cx, ion, outerScript, profilerLeavePc_);
+    RepatchStubAppender attacher(*this);
+    GenerateDenseElementHole(cx, masm, attacher, ion, obj, idval, object(), index(), output());
+
+    return linkAndAttachStub(cx, masm, attacher, ion, "dense hole");
 }
 
 /* static */ bool
@@ -3515,11 +3675,9 @@ GetElementIC::attachArgumentsElement(JSContext *cx, HandleScript outerScript, Io
 }
 
 bool
-GetElementIC::update(JSContext *cx, size_t cacheIndex, HandleObject obj,
+GetElementIC::update(JSContext *cx, HandleScript outerScript, size_t cacheIndex, HandleObject obj,
                      HandleValue idval, MutableHandleValue res)
 {
-    void *returnAddr;
-    RootedScript outerScript(cx, GetTopJitJSScript(cx, &returnAddr));
     IonScript *ion = outerScript->ionScript();
     GetElementIC &cache = ion->getCache(cacheIndex).toGetElement();
     RootedScript script(cx);
@@ -3556,12 +3714,19 @@ GetElementIC::update(JSContext *cx, size_t cacheIndex, HandleObject obj,
         }
         if (!attachedStub && cache.monitoredResult() && canAttachGetProp(obj, idval, id)) {
             RootedPropertyName name(cx, JSID_TO_ATOM(id)->asPropertyName());
-            if (!cache.attachGetProp(cx, outerScript, ion, obj, idval, name, returnAddr))
+            if (!cache.attachGetProp(cx, outerScript, ion, obj, idval, name))
                 return false;
             attachedStub = true;
         }
         if (!attachedStub && !cache.hasDenseStub() && canAttachDenseElement(obj, idval)) {
             if (!cache.attachDenseElement(cx, outerScript, ion, obj, idval))
+                return false;
+            attachedStub = true;
+        }
+        if (!attachedStub && cache.monitoredResult() &&
+            canAttachDenseElementHole(obj, idval, cache.output()))
+        {
+            if (!cache.attachDenseElementHole(cx, outerScript, ion, obj, idval))
                 return false;
             attachedStub = true;
         }
@@ -3906,10 +4071,9 @@ SetElementIC::attachTypedArrayElement(JSContext *cx, HandleScript outerScript, I
 }
 
 bool
-SetElementIC::update(JSContext *cx, size_t cacheIndex, HandleObject obj,
+SetElementIC::update(JSContext *cx, HandleScript outerScript, size_t cacheIndex, HandleObject obj,
                      HandleValue idval, HandleValue value)
 {
-    RootedScript outerScript(cx, GetTopJitJSScript(cx));
     IonScript *ion = outerScript->ionScript();
     SetElementIC &cache = ion->getCache(cacheIndex).toSetElement();
 
@@ -4075,9 +4239,9 @@ IsCacheableNonGlobalScopeChain(JSObject *scopeChain, JSObject *holder)
 }
 
 JSObject *
-BindNameIC::update(JSContext *cx, size_t cacheIndex, HandleObject scopeChain)
+BindNameIC::update(JSContext *cx, HandleScript outerScript, size_t cacheIndex,
+                   HandleObject scopeChain)
 {
-    RootedScript outerScript(cx, GetTopJitJSScript(cx));
     IonScript *ion = outerScript->ionScript();
     BindNameIC &cache = ion->getCache(cacheIndex).toBindName();
     HandlePropertyName name = cache.name();
@@ -4225,11 +4389,9 @@ IsCacheableNameCallGetter(HandleObject scopeChain, HandleObject obj, HandleObjec
 }
 
 bool
-NameIC::update(JSContext *cx, size_t cacheIndex, HandleObject scopeChain,
+NameIC::update(JSContext *cx, HandleScript outerScript, size_t cacheIndex, HandleObject scopeChain,
                MutableHandleValue vp)
 {
-    void *returnAddr;
-    RootedScript outerScript(cx, GetTopJitJSScript(cx, &returnAddr));
     IonScript *ion = outerScript->ionScript();
 
     NameIC &cache = ion->getCache(cacheIndex).toName();
@@ -4262,8 +4424,12 @@ NameIC::update(JSContext *cx, size_t cacheIndex, HandleObject scopeChain,
                 return false;
             }
         } else if (IsCacheableNameCallGetter(scopeChain, obj, holder, shape)) {
-            if (!cache.attachCallGetter(cx, outerScript, ion, scopeChain, obj, holder, shape, returnAddr))
+            void *returnAddr = GetReturnAddressToIonCode(cx);
+            if (!cache.attachCallGetter(cx, outerScript, ion, scopeChain, obj, holder, shape,
+                                        returnAddr))
+            {
                 return false;
+            }
         }
     }
 

@@ -805,7 +805,6 @@ TabParent::Show(const nsIntSize& size, bool aParentIsActive)
         return;
     }
 
-    ScrollingBehavior scrolling = UseAsyncPanZoom() ? ASYNC_PAN_ZOOM : DEFAULT_SCROLLING;
     TextureFactoryIdentifier textureFactoryIdentifier;
     uint64_t layersId = 0;
     bool success = false;
@@ -819,7 +818,6 @@ TabParent::Show(const nsIntSize& size, bool aParentIsActive)
         if (frameLoader) {
           renderFrame =
               new RenderFrameParent(frameLoader,
-                                    scrolling,
                                     &textureFactoryIdentifier,
                                     &layersId,
                                     &success);
@@ -842,7 +840,7 @@ TabParent::Show(const nsIntSize& size, bool aParentIsActive)
       info = ShowInfo(name, allowFullscreen, isPrivate, mDPI, mDefaultScale.scale);
     }
 
-    unused << SendShow(size, info, scrolling, textureFactoryIdentifier,
+    unused << SendShow(size, info, textureFactoryIdentifier,
                        layersId, renderFrame, aParentIsActive);
 }
 
@@ -2104,6 +2102,33 @@ TabParent::RecvEndIMEComposition(const bool& aCancel,
 }
 
 bool
+TabParent::RecvStartPluginIME(const WidgetKeyboardEvent& aKeyboardEvent,
+                              const int32_t& aPanelX, const int32_t& aPanelY,
+                              nsString* aCommitted)
+{
+  nsCOMPtr<nsIWidget> widget = GetWidget();
+  if (!widget) {
+    return true;
+  }
+  widget->StartPluginIME(aKeyboardEvent,
+                         (int32_t&)aPanelX, 
+                         (int32_t&)aPanelY,
+                         *aCommitted);
+  return true;
+}
+
+bool
+TabParent::RecvSetPluginFocused(const bool& aFocused)
+{
+  nsCOMPtr<nsIWidget> widget = GetWidget();
+  if (!widget) {
+    return true;
+  }
+  widget->SetPluginFocused((bool&)aFocused);
+  return true;
+}
+
+bool
 TabParent::RecvGetInputContext(int32_t* aIMEEnabled,
                                int32_t* aIMEOpen,
                                intptr_t* aNativeIMEContext)
@@ -2307,14 +2332,12 @@ TabParent::AllocPRenderFrameParent()
 {
   MOZ_ASSERT(ManagedPRenderFrameParent().IsEmpty());
   nsRefPtr<nsFrameLoader> frameLoader = GetFrameLoader();
-  ScrollingBehavior scrolling = UseAsyncPanZoom() ? ASYNC_PAN_ZOOM : DEFAULT_SCROLLING;
   TextureFactoryIdentifier textureFactoryIdentifier;
   uint64_t layersId = 0;
   bool success = false;
   if(frameLoader) {
     PRenderFrameParent* renderFrame = 
       new RenderFrameParent(frameLoader,
-                            scrolling,
                             &textureFactoryIdentifier,
                             &layersId,
                             &success);
@@ -2335,12 +2358,10 @@ TabParent::DeallocPRenderFrameParent(PRenderFrameParent* aFrame)
 
 bool
 TabParent::RecvGetRenderFrameInfo(PRenderFrameParent* aRenderFrame,
-                                  ScrollingBehavior* aScrolling,
                                   TextureFactoryIdentifier* aTextureFactoryIdentifier,
                                   uint64_t* aLayersId)
 {
   RenderFrameParent* renderFrame = static_cast<RenderFrameParent*>(aRenderFrame);
-  *aScrolling = renderFrame->UseAsyncPanZoom() ? ASYNC_PAN_ZOOM : DEFAULT_SCROLLING;
   renderFrame->GetTextureFactoryIdentifier(aTextureFactoryIdentifier);
   *aLayersId = renderFrame->GetLayersId();
   return true;
@@ -2400,14 +2421,6 @@ TabParent::GetWidget() const
 
   nsCOMPtr<nsIWidget> widget = frame->GetNearestWidget();
   return widget.forget();
-}
-
-bool
-TabParent::UseAsyncPanZoom()
-{
-  bool usingOffMainThreadCompositing = !!CompositorParent::CompositorLoop();
-  return (usingOffMainThreadCompositing && gfxPrefs::AsyncPanZoomEnabled() &&
-          GetScrollingBehavior() == ASYNC_PAN_ZOOM);
 }
 
 void
@@ -2591,7 +2604,7 @@ TabParent::InjectTouchEvent(const nsAString& aType,
 NS_IMETHODIMP
 TabParent::GetUseAsyncPanZoom(bool* useAsyncPanZoom)
 {
-  *useAsyncPanZoom = UseAsyncPanZoom();
+  *useAsyncPanZoom = gfxPrefs::AsyncPanZoomEnabled();
   return NS_OK;
 }
 

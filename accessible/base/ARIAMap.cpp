@@ -366,6 +366,16 @@ static nsRoleMapEntry sWAIRoleMaps[] =
     kNoReqStates,
     eARIACheckableBool
   },
+  { // none
+    &nsGkAtoms::none,
+    roles::NOTHING,
+    kUseMapRole,
+    eNoValue,
+    eNoAction,
+    eNoLiveAttr,
+    kGenericAccType,
+    kNoReqStates
+  },
   { // note
     &nsGkAtoms::note_,
     roles::NOTE,
@@ -529,6 +539,17 @@ static nsRoleMapEntry sWAIRoleMaps[] =
     ePoliteLiveAttr,
     kGenericAccType,
     kNoReqStates
+  },
+  { // switch
+    &nsGkAtoms::_switch,
+    roles::SWITCH,
+    kUseMapRole,
+    eNoValue,
+    eCheckUncheckAction,
+    eNoLiveAttr,
+    kGenericAccType,
+    kNoReqStates,
+    eARIACheckableBool
   },
   { // tab
     &nsGkAtoms::tab,

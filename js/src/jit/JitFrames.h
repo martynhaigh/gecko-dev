@@ -289,15 +289,11 @@ MakeFrameDescriptor(uint32_t frameSize, FrameType type)
 
 // Returns the JSScript associated with the topmost JIT frame.
 inline JSScript *
-GetTopJitJSScript(JSContext *cx, void **returnAddrOut = nullptr)
+GetTopJitJSScript(JSContext *cx)
 {
     JitFrameIterator iter(cx);
     MOZ_ASSERT(iter.type() == JitFrame_Exit);
     ++iter;
-
-    MOZ_ASSERT(iter.returnAddressToFp() != nullptr);
-    if (returnAddrOut)
-        *returnAddrOut = (void *) iter.returnAddressToFp();
 
     if (iter.isBaselineStub()) {
         ++iter;
@@ -871,8 +867,8 @@ class BaselineStubFrameLayout : public CommonFrameLayout
 // An invalidation bailout stack is at the stack pointer for the callee frame.
 class InvalidationBailoutStack
 {
-    mozilla::Array<double, FloatRegisters::TotalPhys> fpregs_;
-    mozilla::Array<uintptr_t, Registers::Total> regs_;
+    RegisterDump::FPUArray fpregs_;
+    RegisterDump::GPRArray regs_;
     IonScript   *ionScript_;
     uint8_t       *osiPointReturnAddress_;
 

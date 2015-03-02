@@ -265,7 +265,13 @@ public:
   explicit Fake_DOMMediaStream(Fake_MediaStream *stream = nullptr)
     : mMediaStream(stream ? stream : new Fake_MediaStream())
     , mVideoTrack(new Fake_MediaStreamTrack(true, this))
-    , mAudioTrack(new Fake_MediaStreamTrack(false, this)) {}
+    , mAudioTrack(new Fake_MediaStreamTrack(false, this))
+    {
+      static size_t counter = 0;
+      std::ostringstream os;
+      os << counter++;
+      mID = os.str();
+    }
 
   NS_DECL_THREADSAFE_ISUPPORTS
 
@@ -285,6 +291,8 @@ public:
   virtual void RemoveDirectListener(Fake_MediaStreamListener *aListener) {}
 
   Fake_MediaStream *GetStream() { return mMediaStream; }
+  std::string GetId() const { return mID; }
+  void AssignId(const std::string& id) { mID = id; }
 
   // Hints to tell the SDP generator about whether this
   // MediaStream probably has audio and/or video
@@ -343,6 +351,8 @@ private:
   uint32_t mHintContents;
   nsRefPtr<Fake_MediaStreamTrack> mVideoTrack;
   nsRefPtr<Fake_MediaStreamTrack> mAudioTrack;
+
+  std::string mID;
 };
 
 class Fake_MediaStreamBase : public Fake_MediaStream {

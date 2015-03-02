@@ -200,7 +200,11 @@ NoSuchMethod(JSContext *cx, unsigned argc, Value *vp)
     bool ok = Invoke(cx, args);
     vp[0] = args.rval();
 
-    cx->compartment()->addTelemetry(JSCompartment::DeprecatedNoSuchMethod);
+    if (JSScript *script = cx->currentScript()) {
+        const char *filename = script->filename();
+        cx->compartment()->addTelemetry(filename, JSCompartment::DeprecatedNoSuchMethod);
+    }
+
     return ok;
 }
 
@@ -237,7 +241,7 @@ GetPropertyOperation(JSContext *cx, InterpreterFrame *fp, HandleScript script, j
         NativeObject *proto = GlobalObject::getOrCreateNumberPrototype(cx, global);
         if (!proto)
             return false;
-        if (ClassMethodIsNative(cx, proto, &NumberObject::class_, id, js_num_toString))
+        if (ClassMethodIsNative(cx, proto, &NumberObject::class_, id, num_toString))
             obj = proto;
     }
 
@@ -359,7 +363,7 @@ js::ReportIsNotFunction(JSContext *cx, HandleValue v, int numToSkip, MaybeConstr
     unsigned error = construct ? JSMSG_NOT_CONSTRUCTOR : JSMSG_NOT_FUNCTION;
     int spIndex = numToSkip >= 0 ? -(numToSkip + 1) : JSDVG_SEARCH_STACK;
 
-    js_ReportValueError3(cx, error, spIndex, v, NullPtr(), nullptr, nullptr);
+    ReportValueError3(cx, error, spIndex, v, NullPtr(), nullptr, nullptr);
     return false;
 }
 
@@ -696,7 +700,7 @@ js::HasInstance(JSContext *cx, HandleObject obj, HandleValue v, bool *bp)
         return clasp->hasInstance(cx, obj, &local, bp);
 
     RootedValue val(cx, ObjectValue(*obj));
-    js_ReportValueError(cx, JSMSG_BAD_INSTANCEOF_RHS,
+    ReportValueError(cx, JSMSG_BAD_INSTANCEOF_RHS,
                         JSDVG_SEARCH_STACK, val, NullPtr());
     return false;
 }
@@ -1656,8 +1660,6 @@ CASE(JSOP_UNUSED105)
 CASE(JSOP_UNUSED107)
 CASE(JSOP_UNUSED125)
 CASE(JSOP_UNUSED126)
-CASE(JSOP_UNUSED146)
-CASE(JSOP_UNUSED147)
 CASE(JSOP_UNUSED148)
 CASE(JSOP_BACKPATCH)
 CASE(JSOP_UNUSED150)
@@ -1916,7 +1918,7 @@ CASE(JSOP_IN)
 {
     HandleValue rref = REGS.stackHandleAt(-1);
     if (!rref.isObject()) {
-        js_ReportValueError(cx, JSMSG_IN_NOT_OBJECT, -1, rref, js::NullPtr());
+        ReportValueError(cx, JSMSG_IN_NOT_OBJECT, -1, rref, js::NullPtr());
         goto error;
     }
     RootedObject &obj = rootObject0;
@@ -2407,11 +2409,9 @@ CASE(JSOP_THIS)
 END_CASE(JSOP_THIS)
 
 CASE(JSOP_GETPROP)
-CASE(JSOP_GETXPROP)
 CASE(JSOP_LENGTH)
 CASE(JSOP_CALLPROP)
 {
-
     MutableHandleValue lval = REGS.stackHandleAt(-1);
     if (!GetPropertyOperation(cx, REGS.fp(), script, REGS.pc, lval, lval))
         goto error;
@@ -2420,6 +2420,21 @@ CASE(JSOP_CALLPROP)
     assertSameCompartmentDebugOnly(cx, lval);
 }
 END_CASE(JSOP_GETPROP)
+
+CASE(JSOP_GETXPROP)
+{
+    RootedObject &obj = rootObject0;
+    obj = &REGS.sp[-1].toObject();
+    RootedId &id = rootId0;
+    id = NameToId(script->getName(REGS.pc));
+    MutableHandleValue rval = REGS.stackHandleAt(-1);
+    if (!GetPropertyForNameLookup(cx, obj, id, rval))
+        goto error;
+
+    TypeScript::Monitor(cx, script, REGS.pc, rval);
+    assertSameCompartmentDebugOnly(cx, rval);
+}
+END_CASE(JSOP_GETXPROP)
 
 CASE(JSOP_SETINTRINSIC)
 {
@@ -3216,7 +3231,13 @@ CASE(JSOP_MUTATEPROTO)
 END_CASE(JSOP_MUTATEPROTO)
 
 CASE(JSOP_INITPROP)
+CASE(JSOP_INITLOCKEDPROP)
+CASE(JSOP_INITHIDDENPROP)
 {
+    static_assert(JSOP_INITPROP_LENGTH == JSOP_INITLOCKEDPROP_LENGTH,
+                  "initprop and initlockedprop must be the same size");
+    static_assert(JSOP_INITPROP_LENGTH == JSOP_INITHIDDENPROP_LENGTH,
+                  "initprop and inithiddenprop must be the same size");
     /* Load the property's initial value into rval. */
     MOZ_ASSERT(REGS.stackDepth() >= 2);
     RootedValue &rval = rootValue0;
@@ -3224,14 +3245,16 @@ CASE(JSOP_INITPROP)
 
     /* Load the object being initialized into lval/obj. */
     RootedNativeObject &obj = rootNativeObject0;
-    obj = &REGS.sp[-2].toObject().as<PlainObject>();
+    obj = &REGS.sp[-2].toObject().as<NativeObject>();
+    MOZ_ASSERT(obj->is<PlainObject>() || obj->is<JSFunction>());
 
     PropertyName *name = script->getName(REGS.pc);
 
     RootedId &id = rootId0;
     id = NameToId(name);
 
-    if (!NativeDefineProperty(cx, obj, id, rval, nullptr, nullptr, JSPROP_ENUMERATE))
+    unsigned propAttrs = GetInitDataPropAttrs(JSOp(*REGS.pc));
+    if (!NativeDefineProperty(cx, obj, id, rval, nullptr, nullptr, propAttrs))
         goto error;
 
     REGS.sp--;
@@ -3358,7 +3381,7 @@ CASE(JSOP_INSTANCEOF)
     RootedValue &rref = rootValue0;
     rref = REGS.sp[-1];
     if (rref.isPrimitive()) {
-        js_ReportValueError(cx, JSMSG_BAD_INSTANCEOF_RHS, -1, rref, js::NullPtr());
+        ReportValueError(cx, JSMSG_BAD_INSTANCEOF_RHS, -1, rref, js::NullPtr());
         goto error;
     }
     RootedObject &obj = rootObject0;
@@ -3525,7 +3548,7 @@ DEFAULT()
 {
     char numBuf[12];
     JS_snprintf(numBuf, sizeof numBuf, "%d", *REGS.pc);
-    JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr,
+    JS_ReportErrorNumber(cx, GetErrorMessage, nullptr,
                          JSMSG_BAD_BYTECODE, numBuf);
     goto error;
 }
@@ -3649,7 +3672,7 @@ js::GetScopeName(JSContext *cx, HandleObject scopeChain, HandlePropertyName name
     if (!shape) {
         JSAutoByteString printable;
         if (AtomToPrintableString(cx, name, &printable))
-            js_ReportIsNotDefined(cx, printable.ptr());
+            ReportIsNotDefined(cx, printable.ptr());
         return false;
     }
 
@@ -3785,7 +3808,7 @@ js::DefFunOperation(JSContext *cx, HandleScript script, HandleObject scopeChain,
         if (shape->isAccessorDescriptor() || !shape->writable() || !shape->enumerable()) {
             JSAutoByteString bytes;
             if (AtomToPrintableString(cx, name, &bytes)) {
-                JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_CANT_REDEFINE_PROP,
+                JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_CANT_REDEFINE_PROP,
                                      bytes.ptr());
             }
 
@@ -3807,7 +3830,7 @@ js::DefFunOperation(JSContext *cx, HandleScript script, HandleObject scopeChain,
 bool
 js::SetCallOperation(JSContext *cx)
 {
-    JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_BAD_LEFTSIDE_OF_ASS);
+    JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_BAD_LEFTSIDE_OF_ASS);
     return false;
 }
 
@@ -4004,6 +4027,22 @@ js::RunOnceScriptPrologue(JSContext *cx, HandleScript script)
     return true;
 }
 
+unsigned
+js::GetInitDataPropAttrs(JSOp op)
+{
+    switch (op) {
+      case JSOP_INITPROP:
+        return JSPROP_ENUMERATE;
+      case JSOP_INITLOCKEDPROP:
+        return JSPROP_PERMANENT | JSPROP_READONLY;
+      case JSOP_INITHIDDENPROP:
+        // Non-enumerable, but writable and configurable
+        return 0;
+      default:;
+    }
+    MOZ_CRASH("Unknown data initprop");
+}
+
 bool
 js::InitGetterSetterOperation(JSContext *cx, jsbytecode *pc, HandleObject obj, HandleId id,
                               HandleObject val)
@@ -4058,7 +4097,7 @@ js::SpreadCallOperation(JSContext *cx, HandleScript script, jsbytecode *pc, Hand
     JSOp op = JSOp(*pc);
 
     if (length > ARGS_LENGTH_MAX) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr,
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr,
                              op == JSOP_SPREADNEW ? JSMSG_TOO_MANY_CON_SPREADARGS
                                                   : JSMSG_TOO_MANY_FUN_SPREADARGS);
         return false;
@@ -4117,7 +4156,7 @@ js::ReportUninitializedLexical(JSContext *cx, HandlePropertyName name)
 {
     JSAutoByteString printable;
     if (AtomToPrintableString(cx, name, &printable)) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr, JSMSG_UNINITIALIZED_LEXICAL,
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_UNINITIALIZED_LEXICAL,
                              printable.ptr());
     }
 }

@@ -22,6 +22,7 @@
     _(SimdSplatX4)                  \
     _(Int32x4)                      \
     _(Float32x4)                    \
+    _(SimdReinterpretCast)          \
     _(SimdExtractElementI)          \
     _(SimdExtractElementF)          \
     _(SimdInsertElementI)           \
@@ -223,6 +224,7 @@
     _(StoreElementV)                \
     _(StoreElementT)                \
     _(StoreUnboxedPointer)          \
+    _(ConvertUnboxedObjectToNative) \
     _(ArrayPopShiftV)               \
     _(ArrayPopShiftT)               \
     _(ArrayPushV)                   \

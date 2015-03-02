@@ -512,7 +512,6 @@ protected:
     const nsHTMLReflowState* mReflowState;
     bool mNoWrap;
     mozilla::WritingMode mWritingMode;
-    bool mZeroEffectiveSpanBox;
     bool mContainsFloat;
     bool mHasNonemptyContent;
 
@@ -687,7 +686,6 @@ protected:
                                      nscoord aDeltaISize);
 
   void ApplyLineJustificationToAnnotations(PerFrameData* aPFD,
-                                           PerSpanData* aContainingSpan,
                                            nscoord aDeltaICoord,
                                            nscoord aDeltaISize);
 

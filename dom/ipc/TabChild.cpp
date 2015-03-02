@@ -14,7 +14,6 @@
 #include "mozilla/Preferences.h"
 #include "mozilla/ClearOnShutdown.h"
 #include "mozilla/EventListenerManager.h"
-#include "mozilla/IntentionalCrash.h"
 #include "mozilla/dom/workers/ServiceWorkerManager.h"
 #include "mozilla/dom/indexedDB/PIndexedDBPermissionRequestChild.h"
 #include "mozilla/plugins/PluginWidgetChild.h"
@@ -268,7 +267,7 @@ CSSToParentLayerScale ConvertScaleForRoot(CSSToScreenScale aScale) {
 bool
 TabChildBase::HandlePossibleViewportChange(const ScreenIntSize& aOldScreenSize)
 {
-  if (!IsAsyncPanZoomEnabled()) {
+  if (!gfxPrefs::AsyncPanZoomEnabled()) {
     return false;
   }
 
@@ -555,12 +554,6 @@ TabChildBase::ProcessUpdateFrame(const FrameMetrics& aFrameMetrics)
 
     DispatchMessageManagerMessage(NS_LITERAL_STRING("Viewport:Change"), data);
     return newMetrics;
-}
-
-bool
-TabChildBase::IsAsyncPanZoomEnabled()
-{
-    return mScrolling == ASYNC_PAN_ZOOM;
 }
 
 NS_IMETHODIMP
@@ -908,7 +901,7 @@ TabChild::Observe(nsISupports *aSubject,
       }
     }
   } else if (!strcmp(aTopic, BEFORE_FIRST_PAINT)) {
-    if (IsAsyncPanZoomEnabled()) {
+    if (gfxPrefs::AsyncPanZoomEnabled()) {
       nsCOMPtr<nsIDocument> subject(do_QueryInterface(aSubject));
       nsCOMPtr<nsIDocument> doc(GetDocument());
 
@@ -963,7 +956,7 @@ TabChild::OnLocationChange(nsIWebProgress* aWebProgress,
                            nsIURI *aLocation,
                            uint32_t aFlags)
 {
-  if (!IsAsyncPanZoomEnabled()) {
+  if (!gfxPrefs::AsyncPanZoomEnabled()) {
     return NS_OK;
   }
 
@@ -1438,7 +1431,7 @@ TabChild::ProvideWindowCommon(nsIDOMWindow* aOpener,
   context.opener() = openerTabId;
   context.isBrowserElement() = IsBrowserElement();
 
-  IPCTabContext ipcContext(context, mScrolling);
+  IPCTabContext ipcContext(context);
 
   TabId tabId;
   cc->SendAllocateTabId(openerTabId,
@@ -1456,7 +1449,7 @@ TabChild::ProvideWindowCommon(nsIDOMWindow* aOpener,
   unused << Manager()->SendPBrowserConstructor(
       // We release this ref in DeallocPBrowserChild
       nsRefPtr<TabChild>(newChild).forget().take(),
-      tabId, IPCTabContext(context, mScrolling), aChromeFlags,
+      tabId, IPCTabContext(context), aChromeFlags,
       cc->GetID(), cc->IsForApp(), cc->IsForBrowser());
 
   nsAutoCString spec;
@@ -1518,12 +1511,10 @@ TabChild::ProvideWindowCommon(nsIDOMWindow* aOpener,
     return NS_ERROR_ABORT;
   }
 
-  ScrollingBehavior scrolling = DEFAULT_SCROLLING;
   TextureFactoryIdentifier textureFactoryIdentifier;
   uint64_t layersId = 0;
   PRenderFrameChild* renderFrame = newChild->SendPRenderFrameConstructor();
   newChild->SendGetRenderFrameInfo(renderFrame,
-                                   &scrolling,
                                    &textureFactoryIdentifier,
                                    &layersId);
   if (layersId == 0) { // if renderFrame is invalid.
@@ -1533,7 +1524,7 @@ TabChild::ProvideWindowCommon(nsIDOMWindow* aOpener,
 
   // Unfortunately we don't get a window unless we've shown the frame.  That's
   // pretty bogus; see bug 763602.
-  newChild->DoFakeShow(scrolling, textureFactoryIdentifier, layersId, renderFrame);
+  newChild->DoFakeShow(textureFactoryIdentifier, layersId, renderFrame);
 
   for (size_t i = 0; i < frameScripts.Length(); i++) {
     FrameScriptInfo& info = frameScripts[i];
@@ -1855,13 +1846,12 @@ TabChild::CancelCachedFileDescriptorCallback(
 }
 
 void
-TabChild::DoFakeShow(const ScrollingBehavior& aScrolling,
-                     const TextureFactoryIdentifier& aTextureFactoryIdentifier,
+TabChild::DoFakeShow(const TextureFactoryIdentifier& aTextureFactoryIdentifier,
                      const uint64_t& aLayersId,
                      PRenderFrameChild* aRenderFrame)
 {
   ShowInfo info(EmptyString(), false, false, 0, 0);
-  RecvShow(nsIntSize(0, 0), info, aScrolling, aTextureFactoryIdentifier,
+  RecvShow(nsIntSize(0, 0), info, aTextureFactoryIdentifier,
            aLayersId, aRenderFrame, mParentIsActive);
   mDidFakeShow = true;
 }
@@ -1961,7 +1951,6 @@ TabChild::MaybeRequestPreinitCamera()
 bool
 TabChild::RecvShow(const nsIntSize& aSize,
                    const ShowInfo& aInfo,
-                   const ScrollingBehavior& aScrolling,
                    const TextureFactoryIdentifier& aTextureFactoryIdentifier,
                    const uint64_t& aLayersId,
                    PRenderFrameChild* aRenderFrame,
@@ -1981,7 +1970,7 @@ TabChild::RecvShow(const nsIntSize& aSize,
         return false;
     }
 
-    if (!InitRenderingState(aScrolling, aTextureFactoryIdentifier, aLayersId, aRenderFrame)) {
+    if (!InitRenderingState(aTextureFactoryIdentifier, aLayersId, aRenderFrame)) {
         // We can fail to initialize our widget if the <browser
         // remote> has already been destroyed, and we couldn't hook
         // into the parent-process's layer system.  That's not a fatal
@@ -2178,7 +2167,7 @@ TabChild::RecvMouseWheelEvent(const WidgetWheelEvent& aEvent,
                               const ScrollableLayerGuid& aGuid,
                               const uint64_t& aInputBlockId)
 {
-  if (IsAsyncPanZoomEnabled()) {
+  if (gfxPrefs::AsyncPanZoomEnabled()) {
     nsCOMPtr<nsIDocument> document(GetDocument());
     APZCCallbackHelper::SendSetTargetAPZCNotification(WebWidget(), document, aEvent, aGuid,
         aInputBlockId, mSetTargetAPZCCallback);
@@ -2188,7 +2177,7 @@ TabChild::RecvMouseWheelEvent(const WidgetWheelEvent& aEvent,
   event.widget = mWidget;
   APZCCallbackHelper::DispatchWidgetEvent(event);
 
-  if (IsAsyncPanZoomEnabled()) {
+  if (gfxPrefs::AsyncPanZoomEnabled()) {
     mAPZEventState->ProcessWheelEvent(event, aGuid, aInputBlockId);
   }
   return true;
@@ -2362,7 +2351,7 @@ TabChild::RecvRealTouchEvent(const WidgetTouchEvent& aEvent,
   APZCCallbackHelper::ApplyCallbackTransform(localEvent, aGuid,
       mWidget->GetDefaultScale(), GetPresShellResolution());
 
-  if (localEvent.message == NS_TOUCH_START && IsAsyncPanZoomEnabled()) {
+  if (localEvent.message == NS_TOUCH_START && gfxPrefs::AsyncPanZoomEnabled()) {
     nsCOMPtr<nsIDocument> document = GetDocument();
     APZCCallbackHelper::SendSetTargetAPZCNotification(WebWidget(), document,
         localEvent, aGuid, aInputBlockId, mSetTargetAPZCCallback);
@@ -2371,7 +2360,7 @@ TabChild::RecvRealTouchEvent(const WidgetTouchEvent& aEvent,
   // Dispatch event to content (potentially a long-running operation)
   nsEventStatus status = APZCCallbackHelper::DispatchWidgetEvent(localEvent);
 
-  if (!IsAsyncPanZoomEnabled()) {
+  if (!gfxPrefs::AsyncPanZoomEnabled()) {
     UpdateTapState(localEvent, status);
     return true;
   }
@@ -2618,7 +2607,7 @@ TabChild::RecvLoadRemoteScript(const nsString& aURL, const bool& aRunInGlobalSco
     // error.
     return true;
 
-  LoadFrameScriptInternal(aURL, aRunInGlobalScope);
+  LoadScriptInternal(aURL, aRunInGlobalScope);
   return true;
 }
 
@@ -2769,7 +2758,7 @@ TabChild::InitTabChildGlobal(FrameScriptLoading aScriptLoading)
     nsISupports* scopeSupports = NS_ISUPPORTS_CAST(EventTarget*, scope);
 
     NS_NAMED_LITERAL_CSTRING(globalId, "outOfProcessTabChildGlobal");
-    NS_ENSURE_TRUE(InitTabChildGlobalInternal(scopeSupports, globalId), false);
+    NS_ENSURE_TRUE(InitChildGlobalInternal(scopeSupports, globalId), false);
 
     scope->Init();
 
@@ -2794,8 +2783,7 @@ TabChild::InitTabChildGlobal(FrameScriptLoading aScriptLoading)
 }
 
 bool
-TabChild::InitRenderingState(const ScrollingBehavior& aScrolling,
-                             const TextureFactoryIdentifier& aTextureFactoryIdentifier,
+TabChild::InitRenderingState(const TextureFactoryIdentifier& aTextureFactoryIdentifier,
                              const uint64_t& aLayersId,
                              PRenderFrameChild* aRenderFrame)
 {
@@ -2808,7 +2796,6 @@ TabChild::InitRenderingState(const ScrollingBehavior& aScrolling,
     }
 
     MOZ_ASSERT(aLayersId != 0);
-    mScrolling = aScrolling;
     mTextureFactoryIdentifier = aTextureFactoryIdentifier;
 
     // Pushing layers transactions directly to a separate
@@ -3203,6 +3190,9 @@ NS_IMPL_RELEASE_INHERITED(TabChildGlobal, DOMEventTargetHelper)
 NS_IMETHODIMP_(bool)
 TabChildGlobal::MarkForCC()
 {
+  if (mTabChild) {
+    mTabChild->MarkScopesForCC();
+  }
   return mMessageManager ? mMessageManager->MarkForCC() : false;
 }
 
@@ -3218,13 +3208,6 @@ TabChildGlobal::GetContent(nsIDOMWindow** aContent)
 }
 
 NS_IMETHODIMP
-TabChildGlobal::PrivateNoteIntentionalCrash()
-{
-    mozilla::NoteIntentionalCrash("tab");
-    return NS_OK;
-}
-
-NS_IMETHODIMP
 TabChildGlobal::GetDocShell(nsIDocShell** aDocShell)
 {
   *aDocShell = nullptr;
@@ -3233,20 +3216,6 @@ TabChildGlobal::GetDocShell(nsIDocShell** aDocShell)
   nsCOMPtr<nsIDocShell> docShell = do_GetInterface(mTabChild->WebNavigation());
   docShell.swap(*aDocShell);
   return NS_OK;
-}
-
-NS_IMETHODIMP
-TabChildGlobal::Btoa(const nsAString& aBinaryData,
-                     nsAString& aAsciiBase64String)
-{
-  return nsContentUtils::Btoa(aBinaryData, aAsciiBase64String);
-}
-
-NS_IMETHODIMP
-TabChildGlobal::Atob(const nsAString& aAsciiString,
-                     nsAString& aBinaryData)
-{
-  return nsContentUtils::Atob(aAsciiString, aBinaryData);
 }
 
 JSContext*
