@@ -417,6 +417,25 @@ IonBuilder::canInlineTarget(JSFunction *target, CallInfo &callInfo)
         return DontInline(nullptr, "Non-interpreted target");
     }
 
+    if (info().analysisMode() != Analysis_DefiniteProperties) {
+        // If |this| or an argument has an empty resultTypeSet, don't bother
+        // inlining, as the call is currently unreachable due to incomplete type
+        // information. This does not apply to the definite properties analysis,
+        // in that case we want to inline anyway.
+
+        if (callInfo.thisArg()->emptyResultTypeSet()) {
+            trackOptimizationOutcome(TrackedOutcome::CantInlineUnreachable);
+            return DontInline(nullptr, "Empty TypeSet for |this|");
+        }
+
+        for (size_t i = 0; i < callInfo.argc(); i++) {
+            if (callInfo.getArg(i)->emptyResultTypeSet()) {
+                trackOptimizationOutcome(TrackedOutcome::CantInlineUnreachable);
+                return DontInline(nullptr, "Empty TypeSet for argument");
+            }
+        }
+    }
+
     // Allow constructing lazy scripts when performing the definite properties
     // analysis, as baseline has not been used to warm the caller up yet.
     if (target->isInterpreted() && info().analysisMode() == Analysis_DefiniteProperties) {
@@ -1730,6 +1749,8 @@ IonBuilder::inspectOpcode(JSOp op)
         return jsop_initelem_array();
 
       case JSOP_INITPROP:
+      case JSOP_INITLOCKEDPROP:
+      case JSOP_INITHIDDENPROP:
       {
         PropertyName *name = info().getAtom(pc)->asPropertyName();
         return jsop_initprop(name);
@@ -4432,7 +4453,7 @@ IonBuilder::inlineScriptedCall(CallInfo &callInfo, JSFunction *target)
     callInfo.pushFormals(current);
 
     MResumePoint *outerResumePoint =
-        MResumePoint::New(alloc(), current, pc, callerResumePoint_, MResumePoint::Outer);
+        MResumePoint::New(alloc(), current, pc, MResumePoint::Outer);
     if (!outerResumePoint)
         return false;
     current->setOuterResumePoint(outerResumePoint);
@@ -5089,7 +5110,7 @@ IonBuilder::inlineObjectGroupFallback(CallInfo &callInfo, MBasicBlock *dispatchB
 
     // Capture stack prior to the call operation. This captures the function.
     MResumePoint *preCallResumePoint =
-        MResumePoint::New(alloc(), dispatchBlock, pc, callerResumePoint_, MResumePoint::ResumeAt);
+        MResumePoint::New(alloc(), dispatchBlock, pc, MResumePoint::ResumeAt);
     if (!preCallResumePoint)
         return false;
 
@@ -5638,7 +5659,7 @@ IonBuilder::jsop_funcall(uint32_t argc)
     // If |Function.prototype.call| may be overridden, don't optimize callsite.
     TemporaryTypeSet *calleeTypes = current->peek(calleeDepth)->resultTypeSet();
     JSFunction *native = getSingleCallTarget(calleeTypes);
-    if (!native || !native->isNative() || native->native() != &js_fun_call) {
+    if (!native || !native->isNative() || native->native() != &fun_call) {
         CallInfo callInfo(alloc(), false);
         if (!callInfo.init(current, argc))
             return false;
@@ -5721,7 +5742,7 @@ IonBuilder::jsop_funapply(uint32_t argc)
     }
 
     if ((!native || !native->isNative() ||
-        native->native() != js_fun_apply) &&
+        native->native() != fun_apply) &&
         info().analysisMode() != Analysis_DefiniteProperties)
     {
         return abort("fun.apply speculation failed");
@@ -6381,7 +6402,7 @@ IonBuilder::jsop_initprop(PropertyName *name)
 
     bool useSlowPath = false;
 
-    if (obj->isUnknownValue()) {
+    if (obj->isUnknownValue() || obj->isLambda()) {
         useSlowPath = true;
     } else {
         templateObject = obj->toNewObject()->templateObject();
@@ -6771,7 +6792,7 @@ IonBuilder::resume(MInstruction *ins, jsbytecode *pc, MResumePoint::Mode mode)
 {
     MOZ_ASSERT(ins->isEffectful() || !ins->isMovable());
 
-    MResumePoint *resumePoint = MResumePoint::New(alloc(), ins->block(), pc, callerResumePoint_,
+    MResumePoint *resumePoint = MResumePoint::New(alloc(), ins->block(), pc,
                                                   mode);
     if (!resumePoint)
         return false;
@@ -7112,6 +7133,10 @@ IonBuilder::ensureDefiniteType(MDefinition *def, MIRType definiteType)
 
       default: {
         if (def->type() != MIRType_Value) {
+            if (def->type() == MIRType_Int32 && definiteType == MIRType_Double) {
+                replace = MToDouble::New(alloc(), def);
+                break;
+            }
             MOZ_ASSERT(def->type() == definiteType);
             return def;
         }
@@ -9186,7 +9211,8 @@ IonBuilder::jsop_rest()
 }
 
 uint32_t
-IonBuilder::getDefiniteSlot(TemporaryTypeSet *types, PropertyName *name)
+IonBuilder::getDefiniteSlot(TemporaryTypeSet *types, PropertyName *name, uint32_t *pnfixed,
+                            BaselineInspector::ObjectGroupVector &convertUnboxedGroups)
 {
     if (!types || types->unknownObject()) {
         trackOptimizationOutcome(TrackedOutcome::NoTypeInfo);
@@ -9235,6 +9261,17 @@ IonBuilder::getDefiniteSlot(TemporaryTypeSet *types, PropertyName *name)
             return UINT32_MAX;
         }
 
+        // If we encounter a group for an unboxed property which has a
+        // corresponding native group, look for a definite slot in that native
+        // group, and force conversion of incoming objects to the native group.
+        if (key->isGroup() && key->group()->maybeUnboxedLayout()) {
+            if (ObjectGroup *nativeGroup = key->group()->unboxedLayout().nativeGroup()) {
+                if (!convertUnboxedGroups.append(key->group()))
+                    CrashAtUnhandlableOOM("IonBuilder::getDefiniteSlot");
+                key = TypeSet::ObjectKey::get(nativeGroup);
+            }
+        }
+
         HeapTypeSetKey property = key->property(NameToId(name));
         if (!property.maybeTypes() ||
             !property.maybeTypes()->definiteProperty() ||
@@ -9244,10 +9281,18 @@ IonBuilder::getDefiniteSlot(TemporaryTypeSet *types, PropertyName *name)
             return UINT32_MAX;
         }
 
+        // Definite slots will always be fixed slots when they are in the
+        // allowable range for fixed slots, except for objects which were
+        // converted from unboxed objects and have a smaller allocation size.
+        size_t nfixed = NativeObject::MAX_FIXED_SLOTS;
+        if (ObjectGroup *group = key->group()->maybeOriginalUnboxedGroup())
+            nfixed = gc::GetGCKindSlots(group->unboxedLayout().getAllocKind());
+
         uint32_t propertySlot = property.maybeTypes()->definiteSlot();
         if (slot == UINT32_MAX) {
             slot = propertySlot;
-        } else if (slot != propertySlot) {
+            *pnfixed = nfixed;
+        } else if (slot != propertySlot || nfixed != *pnfixed) {
             trackOptimizationOutcome(TrackedOutcome::InconsistentFixedSlot);
             return UINT32_MAX;
         }
@@ -9292,6 +9337,13 @@ IonBuilder::getUnboxedOffset(TemporaryTypeSet *types, PropertyName *name, JSValu
             trackOptimizationOutcome(TrackedOutcome::StructNoField);
             return UINT32_MAX;
         }
+
+        if (layout->nativeGroup()) {
+            trackOptimizationOutcome(TrackedOutcome::UnboxedConvertedToNative);
+            return UINT32_MAX;
+        }
+
+        key->watchStateChangeForUnboxedConvertedToNative(constraints());
 
         if (offset == UINT32_MAX) {
             offset = property->offset;
@@ -9562,7 +9614,7 @@ IonBuilder::annotateGetPropertyCache(MDefinition *obj, MGetPropertyCache *getPro
     if (inlinePropTable->numEntries() > 0) {
         // Push the object back onto the stack temporarily to capture the resume point.
         current->push(obj);
-        MResumePoint *resumePoint = MResumePoint::New(alloc(), current, pc, callerResumePoint_,
+        MResumePoint *resumePoint = MResumePoint::New(alloc(), current, pc,
                                                       MResumePoint::ResumeAt);
         if (!resumePoint)
             return false;
@@ -10028,13 +10080,27 @@ IonBuilder::getPropTryComplexPropOfTypedObject(bool *emitted,
                                   fieldPrediction, fieldTypeObj);
 }
 
+MDefinition *
+IonBuilder::convertUnboxedObjects(MDefinition *obj,
+                                  const BaselineInspector::ObjectGroupVector &list)
+{
+    for (size_t i = 0; i < list.length(); i++) {
+        obj = MConvertUnboxedObjectToNative::New(alloc(), obj, list[i]);
+        current->add(obj->toInstruction());
+    }
+    return obj;
+}
+
 bool
 IonBuilder::getPropTryDefiniteSlot(bool *emitted, MDefinition *obj, PropertyName *name,
                                    BarrierKind barrier, TemporaryTypeSet *types)
 {
     MOZ_ASSERT(*emitted == false);
 
-    uint32_t slot = getDefiniteSlot(obj->resultTypeSet(), name);
+    BaselineInspector::ObjectGroupVector convertUnboxedGroups(alloc());
+
+    uint32_t nfixed;
+    uint32_t slot = getDefiniteSlot(obj->resultTypeSet(), name, &nfixed, convertUnboxedGroups);
     if (slot == UINT32_MAX)
         return true;
 
@@ -10044,14 +10110,16 @@ IonBuilder::getPropTryDefiniteSlot(bool *emitted, MDefinition *obj, PropertyName
         obj = guard;
     }
 
+    obj = convertUnboxedObjects(obj, convertUnboxedGroups);
+
     MInstruction *load;
-    if (slot < NativeObject::MAX_FIXED_SLOTS) {
+    if (slot < nfixed) {
         load = MLoadFixedSlot::New(alloc(), obj, slot);
     } else {
         MInstruction *slots = MSlots::New(alloc(), obj);
         current->add(slots);
 
-        load = MLoadSlot::New(alloc(), slots, slot - NativeObject::MAX_FIXED_SLOTS);
+        load = MLoadSlot::New(alloc(), slots, slot - nfixed);
     }
 
     if (barrier == BarrierKind::NoBarrier)
@@ -10373,12 +10441,14 @@ IonBuilder::getPropTryInlineAccess(bool *emitted, MDefinition *obj, PropertyName
     }
 
     BaselineInspector::ShapeVector nativeShapes(alloc());
-    BaselineInspector::ObjectGroupVector unboxedGroups(alloc());
-    if (!inspector->maybeInfoForPropertyOp(pc, nativeShapes, unboxedGroups))
+    BaselineInspector::ObjectGroupVector unboxedGroups(alloc()), convertUnboxedGroups(alloc());
+    if (!inspector->maybeInfoForPropertyOp(pc, nativeShapes, unboxedGroups, convertUnboxedGroups))
         return false;
 
     if (!canInlinePropertyOpShapes(nativeShapes, unboxedGroups))
         return true;
+
+    obj = convertUnboxedObjects(obj, convertUnboxedGroups);
 
     MIRType rvalType = types->getKnownMIRType();
     if (barrier != BarrierKind::NoBarrier || IsNullOrUndefined(rvalType))
@@ -10917,7 +10987,10 @@ IonBuilder::setPropTryDefiniteSlot(bool *emitted, MDefinition *obj,
         return true;
     }
 
-    uint32_t slot = getDefiniteSlot(obj->resultTypeSet(), name);
+    BaselineInspector::ObjectGroupVector convertUnboxedGroups(alloc());
+
+    uint32_t nfixed;
+    uint32_t slot = getDefiniteSlot(obj->resultTypeSet(), name, &nfixed, convertUnboxedGroups);
     if (slot == UINT32_MAX)
         return true;
 
@@ -10935,8 +11008,10 @@ IonBuilder::setPropTryDefiniteSlot(bool *emitted, MDefinition *obj,
         writeBarrier |= property.needsBarrier(constraints());
     }
 
+    obj = convertUnboxedObjects(obj, convertUnboxedGroups);
+
     MInstruction *store;
-    if (slot < NativeObject::MAX_FIXED_SLOTS) {
+    if (slot < nfixed) {
         store = MStoreFixedSlot::New(alloc(), obj, slot, value);
         if (writeBarrier)
             store->toStoreFixedSlot()->setNeedsBarrier();
@@ -10944,7 +11019,7 @@ IonBuilder::setPropTryDefiniteSlot(bool *emitted, MDefinition *obj,
         MInstruction *slots = MSlots::New(alloc(), obj);
         current->add(slots);
 
-        store = MStoreSlot::New(alloc(), slots, slot - NativeObject::MAX_FIXED_SLOTS, value);
+        store = MStoreSlot::New(alloc(), slots, slot - nfixed, value);
         if (writeBarrier)
             store->toStoreSlot()->setNeedsBarrier();
     }
@@ -11053,12 +11128,14 @@ IonBuilder::setPropTryInlineAccess(bool *emitted, MDefinition *obj,
     }
 
     BaselineInspector::ShapeVector nativeShapes(alloc());
-    BaselineInspector::ObjectGroupVector unboxedGroups(alloc());
-    if (!inspector->maybeInfoForPropertyOp(pc, nativeShapes, unboxedGroups))
+    BaselineInspector::ObjectGroupVector unboxedGroups(alloc()), convertUnboxedGroups(alloc());
+    if (!inspector->maybeInfoForPropertyOp(pc, nativeShapes, unboxedGroups, convertUnboxedGroups))
         return false;
 
     if (!canInlinePropertyOpShapes(nativeShapes, unboxedGroups))
         return true;
+
+    obj = convertUnboxedObjects(obj, convertUnboxedGroups);
 
     if (nativeShapes.length() == 1 && unboxedGroups.empty()) {
         spew("Inlining monomorphic SETPROP");

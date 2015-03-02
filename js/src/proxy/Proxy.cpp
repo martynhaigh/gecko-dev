@@ -35,16 +35,20 @@ js::AutoEnterPolicy::reportErrorIfExceptionIsNotPending(JSContext *cx, jsid id)
         return;
 
     if (JSID_IS_VOID(id)) {
-        JS_ReportErrorNumber(cx, js_GetErrorMessage, nullptr,
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr,
                              JSMSG_OBJECT_ACCESS_DENIED);
     } else {
-        JSString *str = IdToString(cx, id);
+        RootedValue idVal(cx, IdToValue(id));
+        JSString *str = ValueToSource(cx, idVal);
+        if (!str) {
+            return;
+        }
         AutoStableStringChars chars(cx);
         const char16_t *prop = nullptr;
         if (str->ensureFlat(cx) && chars.initTwoByte(cx, str))
             prop = chars.twoByteChars();
 
-        JS_ReportErrorNumberUC(cx, js_GetErrorMessage, nullptr, JSMSG_PROPERTY_ACCESS_DENIED,
+        JS_ReportErrorNumberUC(cx, GetErrorMessage, nullptr, JSMSG_PROPERTY_ACCESS_DENIED,
                                prop);
     }
 }
@@ -724,15 +728,14 @@ const Class* const js::ProxyClassPtr = &js::ProxyObject::class_;
 
 JS_FRIEND_API(JSObject *)
 js::NewProxyObject(JSContext *cx, const BaseProxyHandler *handler, HandleValue priv, JSObject *proto_,
-                   JSObject *parent_, const ProxyOptions &options)
+                   const ProxyOptions &options)
 {
     if (options.lazyProto()) {
         MOZ_ASSERT(!proto_);
         proto_ = TaggedProto::LazyProto;
     }
 
-    return ProxyObject::New(cx, handler, priv, TaggedProto(proto_), parent_,
-                            options);
+    return ProxyObject::New(cx, handler, priv, TaggedProto(proto_), options);
 }
 
 void
@@ -751,7 +754,7 @@ ProxyObject::renew(JSContext *cx, const BaseProxyHandler *handler, Value priv)
 }
 
 JS_FRIEND_API(JSObject *)
-js_InitProxyClass(JSContext *cx, HandleObject obj)
+js::InitProxyClass(JSContext *cx, HandleObject obj)
 {
     static const JSFunctionSpec static_methods[] = {
         JS_FN("create",         proxy_create,          2, 0),
