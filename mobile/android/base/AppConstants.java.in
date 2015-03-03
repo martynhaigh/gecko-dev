@@ -174,7 +174,7 @@ public class AppConstants {
 //#endif
 
     public static final boolean MOZ_ANDROID_TAB_QUEUE =
-//#ifdef MOZ_ANDROID_TAB_QUEUE
+//#if defined(MOZ_ANDROID_TAB_QUEUE) && defined(NIGHTLY_BUILD)
     true;
 //#else
     false;
