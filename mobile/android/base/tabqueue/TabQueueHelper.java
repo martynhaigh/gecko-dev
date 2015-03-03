@@ -137,7 +137,7 @@ public class TabQueueHelper {
      * @param profile
      * @param url     URL to add
      */
-    public static void queueUrl(GeckoProfile profile, String url) {
+    public static int queueUrl(GeckoProfile profile, String url) {
         ThreadUtils.assertNotOnUiThread();
 
         String readingListContent = "";
@@ -157,6 +157,8 @@ public class TabQueueHelper {
         jsonArray.put(url);
 
         profile.writeFile(FILE_NAME, jsonArray.toString());
+
+        return jsonArray.length();
 
     }
 
