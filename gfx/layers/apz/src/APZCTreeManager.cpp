@@ -114,28 +114,6 @@ APZCTreeManager::MakeAPZCInstance(uint64_t aLayersId,
 }
 
 void
-APZCTreeManager::GetAllowedTouchBehavior(WidgetInputEvent* aEvent,
-                                         nsTArray<TouchBehaviorFlags>& aOutValues)
-{
-  WidgetTouchEvent *touchEvent = aEvent->AsTouchEvent();
-
-  aOutValues.Clear();
-
-  for (size_t i = 0; i < touchEvent->touches.Length(); i++) {
-    // If aEvent wasn't transformed previously we might need to
-    // add transforming of the spt here.
-    mozilla::ScreenIntPoint spt;
-    spt.x = touchEvent->touches[i]->mRefPoint.x;
-    spt.y = touchEvent->touches[i]->mRefPoint.y;
-
-    nsRefPtr<AsyncPanZoomController> apzc = GetTargetAPZC(spt, nullptr);
-    aOutValues.AppendElement(apzc
-      ? apzc->GetAllowedTouchBehavior(spt)
-      : AllowedTouchBehavior::UNKNOWN);
-  }
-}
-
-void
 APZCTreeManager::SetAllowedTouchBehavior(uint64_t aInputBlockId,
                                          const nsTArray<TouchBehaviorFlags> &aValues)
 {
@@ -876,6 +854,13 @@ APZCTreeManager::ProcessWheelEvent(WidgetWheelEvent& aEvent,
   return status;
 }
 
+bool
+APZCTreeManager::WillHandleWheelEvent(WidgetWheelEvent* aEvent)
+{
+  return EventStateManager::WheelEventIsScrollAction(aEvent) &&
+         aEvent->deltaMode == nsIDOMWheelEvent::DOM_DELTA_LINE;
+}
+
 nsEventStatus
 APZCTreeManager::ReceiveInputEvent(WidgetInputEvent& aEvent,
                                    ScrollableLayerGuid* aOutTargetGuid,
@@ -913,9 +898,7 @@ APZCTreeManager::ReceiveInputEvent(WidgetInputEvent& aEvent,
     }
     case eWheelEventClass: {
       WidgetWheelEvent& wheelEvent = *aEvent.AsWheelEvent();
-      if (wheelEvent.deltaMode != nsIDOMWheelEvent::DOM_DELTA_LINE ||
-          !EventStateManager::WheelEventIsScrollAction(&wheelEvent))
-      {
+      if (!WillHandleWheelEvent(&wheelEvent)) {
         // Don't send through APZ if we're not scrolling or if the delta mode
         // is not line-based.
         return ProcessEvent(aEvent, aOutTargetGuid, aOutInputBlockId);
