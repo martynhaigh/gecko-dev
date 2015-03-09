@@ -10,6 +10,7 @@ import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.mozglue.ContextUtils;
 
+import android.app.IntentService;
 import android.app.Service;
 import android.content.Intent;
 import android.content.res.Resources;
@@ -40,7 +41,7 @@ import java.util.concurrent.Executors;
  * General approach taken is similar to the FB chat heads functionality:
  *   http://stackoverflow.com/questions/15975988/what-apis-in-android-is-facebook-using-to-create-chat-heads
  */
-public class TabQueueService extends Service {
+public class TabQueueService extends IntentService {
     private static final String LOGTAG = "Gecko" + TabQueueService.class.getSimpleName();
 
     public static final long TOAST_TIMEOUT = 3000;
@@ -54,11 +55,16 @@ public class TabQueueService extends Service {
     private ExecutorService executorService;
     private StopServiceRunnable stopServiceRunnable;
 
+    public TabQueueService(final String name) {
+        super(name);
+    }
+
     @Override
     public IBinder onBind(Intent intent) {
         // Not used
         return null;
     }
+
 
     @Override
     public void onCreate() {
@@ -92,31 +98,9 @@ public class TabQueueService extends Service {
         toastLayoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
     }
 
-    /**
-     * A modified Runnable which additionally removes the view from the window view hierarchy and stops the service
-     * when run, unless explicitly instructed not to.
-     */
-    private abstract class StopServiceRunnable implements Runnable {
-
-        private boolean shouldStopService = true;
-
-        public void setShouldNotStopService() {
-            this.shouldStopService = false;
-        }
-
-        public void run() {
-            onRun();
-
-            if (shouldStopService) {
-                destroy();
-            }
-        }
-
-        public abstract void onRun();
-    }
 
     @Override
-    public int onStartCommand(final Intent intent, int flags, int startId) {
+    protected void onHandleIntent(final Intent intent) {
 
         if (stopServiceRunnable != null) {
             // If we're already displaying a toast, keep displaying it but store the previous link's url.
@@ -153,8 +137,29 @@ public class TabQueueService extends Service {
         });
 
         tabQueueHandler.postDelayed(stopServiceRunnable, TOAST_TIMEOUT);
+    }
 
-        return START_REDELIVER_INTENT;
+    /**
+     * A modified Runnable which additionally removes the view from the window view hierarchy and stops the service
+     * when run, unless explicitly instructed not to.
+     */
+    private abstract class StopServiceRunnable implements Runnable {
+
+        private boolean shouldStopService = true;
+
+        public void setShouldNotStopService() {
+            this.shouldStopService = false;
+        }
+
+        public void run() {
+            onRun();
+
+            if (shouldStopService) {
+                destroy();
+            }
+        }
+
+        public abstract void onRun();
     }
 
     /**
@@ -162,7 +167,7 @@ public class TabQueueService extends Service {
      */
     private void destroy() {
         windowManager.removeView(toastLayout);
-        stopSelf();
+        //stopSelf();
     }
 
     private void addUrlToTabQueue(Intent intentParam) {
