@@ -7,9 +7,11 @@ package org.mozilla.gecko.tabqueue;
 
 import org.mozilla.gecko.AppConstants;
 import org.mozilla.gecko.BrowserApp;
+import org.mozilla.gecko.GeckoSharedPrefs;
 import org.mozilla.gecko.Locales;
 import org.mozilla.gecko.Telemetry;
 import org.mozilla.gecko.TelemetryContract;
+import org.mozilla.gecko.preferences.GeckoPreferences;
 import org.mozilla.gecko.sync.setup.activities.WebURLFinder;
 
 import android.content.Intent;
@@ -52,8 +54,15 @@ public class TabQueue extends Locales.LocaleAwareActivity {
             abortDueToNoURL(dataString);
             return;
         }
+        boolean showOpenInBackgroundToast = GeckoSharedPrefs.forApp(this).getBoolean(GeckoPreferences.PREFS_TAB_QUEUE, false);
 
-        showToast(intent);
+        // Don't inflate a layout - we're using this activity to simply decide if we want to show the overlay toast
+        // which happens in the service, or to open fennec as normal.
+        if (showOpenInBackgroundToast) {
+            showToast(intent);
+        } else {
+            loadNormally(intent);
+        }
     }
 
     private void showToast(Intent intent) {
